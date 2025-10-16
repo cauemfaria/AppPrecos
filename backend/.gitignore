@@ -5,6 +5,8 @@
 *.db-journal
 *.sqlite
 *.sqlite3
+markets_main.db
+market_databases/
 
 # Python
 __pycache__/

@@ -15,6 +15,53 @@ from playwright.sync_api import sync_playwright
 import re
 import time
 
+
+def extract_market_info(html):
+    """
+    Extract market information from NFCe HTML
+    
+    Returns:
+        dict with: name, endereco, cep, address (combined)
+    """
+    
+    def clean_text(text):
+        """Remove HTML entities and normalize whitespace"""
+        if not text:
+            return ""
+        # Remove HTML entities
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&amp;', '&')
+        text = text.replace('&lt;', '<')
+        text = text.replace('&gt;', '>')
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+    
+    market_info = {}
+    
+    # Extract Nome / Razão Social
+    nome_pattern = r'<label>Nome / Razão Social</label>\s*<span>([^<]+)</span>'
+    nome_match = re.search(nome_pattern, html)
+    market_info['name'] = clean_text(nome_match.group(1)) if nome_match else ""
+    
+    # Extract Endereço
+    endereco_pattern = r'<label>Endereço</label>\s*<span>([^<]+)</span>'
+    endereco_match = re.search(endereco_pattern, html)
+    endereco = clean_text(endereco_match.group(1)) if endereco_match else ""
+    
+    # Extract CEP
+    cep_pattern = r'<label>CEP</label>\s*<span>([^<]+)</span>'
+    cep_match = re.search(cep_pattern, html)
+    cep = clean_text(cep_match.group(1)) if cep_match else ""
+    
+    # Combine Endereço + CEP as address
+    market_info['endereco'] = endereco
+    market_info['cep'] = cep
+    market_info['address'] = f"{endereco}, CEP: {cep}" if endereco and cep else endereco
+    
+    return market_info
+
+
 def extract_ncm_from_url(url, headless=True):
     """
     Extract NCM codes from NFCe URL
@@ -89,13 +136,20 @@ def extract_ncm_from_url(url, headless=True):
 
 def extract_full_nfce_data(url, headless=True):
     """
-    Extract complete NFCe data including prices and quantities
+    Extract complete NFCe data including market info and products
     
     Returns:
-        List of dictionaries with complete product data
+        Dictionary with:
+        {
+            'market_info': {'name': '...', 'address': '...', 'cep': '...'},
+            'products': [{'ncm': '...', 'quantity': ..., ...}, ...]
+        }
     """
     
-    products = []
+    result = {
+        'market_info': {},
+        'products': []
+    }
     
     try:
         with sync_playwright() as p:
@@ -117,7 +171,10 @@ def extract_full_nfce_data(url, headless=True):
                 # Get HTML
                 html = page.content()
                 
-                # Extract all data using regex patterns
+                # Extract market information
+                result['market_info'] = extract_market_info(html)
+                
+                # Extract all product data using regex patterns
                 # Pattern for NCM codes
                 ncm_pattern = r'Código NCM</label>\s*<span>(\d{8})</span>'
                 ncm_codes = re.findall(ncm_pattern, html)
@@ -145,7 +202,7 @@ def extract_full_nfce_data(url, headless=True):
                         quantity = float(quantities[i].replace(',', '.')) if i < len(quantities) else 0
                         price = float(prices[i].replace(',', '.')) if i < len(prices) else 0
                         
-                        products.append({
+                        result['products'].append({
                             'number': i + 1,
                             'product': product_names[i].strip() if i < len(product_names) else '',
                             'ncm': ncm_codes[i],
@@ -160,11 +217,11 @@ def extract_full_nfce_data(url, headless=True):
             finally:
                 browser.close()
         
-        return products
+        return result
         
     except Exception as e:
         print(f"Error extracting full NFCe data: {e}")
-        return []
+        return {'market_info': {}, 'products': []}
 
 
 # For testing
@@ -172,7 +229,15 @@ if __name__ == "__main__":
     test_url = "https://www.nfce.fazenda.sp.gov.br/NFCeConsultaPublica/Paginas/ConsultaQRCode.aspx?p=35250948093892001030653080000310101000606075%7C2%7C1%7C1%7Ca9ee07ab1d3a169800dc587738bc26ef7ffbc8db"
     
     print("Testing full data extraction...")
-    products = extract_full_nfce_data(test_url, headless=False)
+    result = extract_full_nfce_data(test_url, headless=False)
+    
+    market_info = result.get('market_info', {})
+    products = result.get('products', [])
+    
+    if market_info:
+        print(f"\n✓ Extracted market info:")
+        print(f"  Name: {market_info.get('name', 'N/A')}")
+        print(f"  Address: {market_info.get('address', 'N/A')}")
     
     if products:
         print(f"\n✓ Extracted {len(products)} products:")

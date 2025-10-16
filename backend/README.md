@@ -1,14 +1,15 @@
 # AppPrecos Backend API
 
-Flask REST API with NFCe crawler integration and SQLAlchemy ORM.
+Flask REST API with NFCe crawler integration and multi-database architecture.
 
 ## Features
 
 - REST API for market and product management
 - Automatic NFCe receipt data extraction
-- SQLite (dev) / PostgreSQL (prod) support
-- Price comparison across markets
-- Automatic product deduplication
+- **Multi-database architecture** (one database per market)
+- Automatic market matching by name + address
+- Random market ID generation
+- Product data isolation per market
 
 ## Quick Start
 
@@ -30,12 +31,15 @@ Server runs at: `http://localhost:5000`
 
 ```
 backend/
-├── app.py                    # Main Flask app (models + routes)
-├── nfce_extractor.py         # NFCe crawler module
+├── app.py                    # Main Flask app (multi-database architecture)
+├── nfce_extractor.py         # NFCe crawler module with market extraction
 ├── nfce_crawler_ultimate.py  # Standalone crawler (with Excel export)
 ├── config.py                 # Configuration
 ├── requirements.txt          # Python dependencies
-├── appprecos.db             # SQLite database (generated)
+├── markets_main.db          # Main database (market metadata)
+├── market_databases/        # Market-specific databases
+│   ├── MKT*******.db        # One database per market
+│   └── ...
 └── .gitignore
 ```
 
@@ -43,14 +47,22 @@ backend/
 
 See `../docs/API_REFERENCE.md` for complete API documentation.
 
-## Database
+## Database Architecture
 
-See `../docs/DATABASE_SCHEMA.md` for database schema details.
+**Multi-Database Design:**
+- **Main Database** (`markets_main.db`) - Stores market metadata
+  - Table: `markets` (id, market_id, name, address, created_at)
+  
+- **Market Databases** (`market_databases/{MARKET_ID}.db`) - One per market
+  - Table: `products` (id, ncm, quantity, unidade_comercial, price, nfce_url, purchase_date, created_at)
 
-**Tables:**
-- `markets` - Store information
-- `purchases` - Complete purchase history
-- `unique_products` - Latest price per product per market
+**Benefits:**
+- Data isolation per market
+- Scalability (distributed storage)
+- Easy to backup individual markets
+- No cross-market data pollution
+
+See `../docs/DATABASE_SCHEMA.md` for complete schema details.
 
 ## NFCe Extraction
 
