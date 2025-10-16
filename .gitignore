@@ -1,3 +1,5 @@
+# ==================== Android ====================
+
 # Built application files
 *.apk
 *.ap_
@@ -43,35 +45,26 @@ captures/
 .idea/dictionaries
 .idea/libraries
 .idea/jarRepositories.xml
-# Android Studio 3 in .gitignore file.
 .idea/caches
 .idea/modules.xml
-# Comment next line if keeping position of elements in Navigation Editor is relevant for you
 .idea/navEditor.xml
 
 # Keystore files
-# Uncomment the following lines if you do not want to check your keystore files in.
 #*.jks
 #*.keystore
 
-# External native build folder generated in Android Studio 2.2 and later
+# External native build folder
 .externalNativeBuild
 .cxx/
 
-# Google Services (e.g. APIs or Firebase)
+# Google Services
 # google-services.json
-
-# Freeline
-freeline.py
-freeline/
-freeline_project_description.json
 
 # fastlane
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots
 fastlane/test_output
-fastlane/readme.md
 
 # Version control
 vcs.xml
@@ -81,16 +74,116 @@ lint/intermediates/
 lint/generated/
 lint/outputs/
 lint/tmp/
-# lint/reports/
 
 # Android Profiling
 *.hprof
 
+# ==================== Backend/Python ====================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+appprecos*.db
+
+# Environment files
+.env
+.env.local
+
+# Flask
+instance/
+.webassets-cache
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ==================== Temporary Files ====================
+
+# Screenshots and test outputs
+*.png
+*.jpg
+*.jpeg
+screenshot*.png
+debug*.png
+page_state.png
+before_click.png
+after_click.png
+
+# Excel outputs
+ncm_codes.xlsx
+*.xlsx
+
+# XML test files
+nfce_xml_*.xml
+
+# Logs
+*.log
+
+# ==================== OS ====================
+
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
 
 # Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ==================== IDEs ====================
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ==================== Documentation ====================
+
+# Keep documentation
+!docs/
+!*.md
 

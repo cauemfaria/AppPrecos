@@ -1,0 +1,60 @@
+# Backend specific ignores
+
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment
+.env
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Playwright
+debug_screenshot.png
+page_state.png
+before_click.png
+after_click.png
+products_tab.png
+before_tab_click.png
+error_state.png
+
+# Test files
+ncm_codes.xlsx
+nfce_xml_attempt_*.xml
+

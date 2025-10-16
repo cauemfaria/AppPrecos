@@ -1,0 +1,108 @@
+AppPrecos/                                  # Monorepo Root
+│
+├── android/                                # Android Application (Kotlin)
+│   ├── app/
+│   │   ├── src/main/
+│   │   │   ├── java/com/appprecos/
+│   │   │   │   └── MainActivity.kt        # Main activity
+│   │   │   ├── res/                       # Resources (layouts, values)
+│   │   │   └── AndroidManifest.xml
+│   │   ├── build.gradle.kts               # App-level Gradle
+│   │   └── proguard-rules.pro
+│   ├── gradle/wrapper/                     # Gradle wrapper files
+│   ├── build.gradle.kts                    # Project-level Gradle
+│   ├── settings.gradle.kts
+│   ├── gradle.properties
+│   ├── gradlew, gradlew.bat
+│   └── README.md                           # Android documentation
+│
+├── backend/                                # Flask REST API (Python)
+│   ├── app.py                              # Main Flask app (400+ lines)
+│   │                                       #   - Database models (Market, Purchase, UniqueProduct)
+│   │                                       #   - All API endpoints
+│   │                                       #   - Business logic
+│   ├── nfce_extractor.py                   # NFCe crawler module
+│   │                                       #   - extract_ncm_from_url()
+│   │                                       #   - extract_full_nfce_data()
+│   ├── nfce_crawler_ultimate.py            # Standalone crawler
+│   │                                       #   - Can run independently
+│   │                                       #   - Exports to Excel
+│   ├── config.py                           # Configuration (dev/prod/test)
+│   ├── requirements.txt                    # Python dependencies
+│   ├── appprecos.db                        # SQLite database (generated)
+│   └── README.md                           # Backend documentation
+│
+├── docs/                                   # Documentation
+│   ├── API_REFERENCE.md                    # Complete API docs
+│   ├── DATABASE_SCHEMA.md                  # Database structure
+│   ├── ARCHITECTURE.md                     # System architecture
+│   ├── DEPLOYMENT.md                       # Production deployment
+│   ├── ANDROID_INTEGRATION.md              # Android integration guide
+│   └── PROJECT_SUMMARY.md                  # Project overview
+│
+├── scripts/                                # Helper Scripts
+│   ├── setup_dev.bat                       # Development environment setup
+│   ├── run_backend.bat                     # Start Flask server
+│   └── test_crawler.bat                    # Test NFCe crawler
+│
+├── .gitignore                              # Comprehensive git ignores
+│                                           #   - Android build files
+│                                           #   - Python cache
+│                                           #   - Database files
+│                                           #   - Temporary files
+│
+├── README.md                               # Main project README
+├── GETTING_STARTED.md                      # Quick start guide
+├── LICENSE                                 # MIT License
+└── PROJECT_STRUCTURE.txt                   # This file
+
+================================================================================
+ KEY FILES
+================================================================================
+
+BACKEND:
+  → app.py                 - Flask API (start here for backend)
+  → nfce_extractor.py      - NFCe crawler logic
+  → config.py              - Configuration settings
+
+ANDROID:
+  → android/app/src/main/java/com/appprecos/MainActivity.kt
+  → android/app/build.gradle.kts
+
+DOCUMENTATION:
+  → GETTING_STARTED.md     - Read this first!
+  → docs/API_REFERENCE.md  - API endpoints
+  → docs/ARCHITECTURE.md   - System design
+
+SCRIPTS:
+  → scripts/setup_dev.bat  - Run this first!
+  → scripts/run_backend.bat
+
+================================================================================
+ QUICK COMMANDS
+================================================================================
+
+Setup:          scripts\setup_dev.bat
+Start Backend:  scripts\run_backend.bat
+Test Crawler:   scripts\test_crawler.bat
+Open Android:   Android Studio → Open → android/
+
+================================================================================
+ DATABASE TABLES
+================================================================================
+
+markets           (id, name, address, created_at)
+purchases         (id, market_id, ncm, quantity, unit, price, url, date)
+unique_products   (id, market_id, ncm, unit, price, url, last_updated)
+
+================================================================================
+ TECHNOLOGY STACK
+================================================================================
+
+Frontend:  Kotlin, Material Design 3, AndroidX, Retrofit
+Backend:   Python, Flask, SQLAlchemy, Playwright
+Database:  SQLite (dev) / PostgreSQL (prod)
+Scraping:  Playwright browser automation
+
+================================================================================
+
