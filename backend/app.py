@@ -69,18 +69,34 @@ def get_market_db_path(market_id):
 
 
 def create_market_database(market_id):
-    """Create a new database for a market with proper schema"""
+    """Create TWO databases for a market: main and unique"""
     db_path = get_market_db_path(market_id)
     
-    # Create engine for new database
+    # Create main database (all purchases - history)
     engine = create_engine(f'sqlite:///{db_path}')
-    
-    # Create schema
     with engine.connect() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ncm VARCHAR(8) NOT NULL,
+                quantity FLOAT NOT NULL,
+                unidade_comercial VARCHAR(10) NOT NULL,
+                price FLOAT NOT NULL,
+                nfce_url VARCHAR(1000),
+                purchase_date DATETIME NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.commit()
+    
+    # Create unique database (unique NCM codes - latest data only)
+    unique_db_path = db_path.replace('.db', '_unique.db')
+    engine_unique = create_engine(f'sqlite:///{unique_db_path}')
+    with engine_unique.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ncm VARCHAR(8) NOT NULL UNIQUE,
                 quantity FLOAT NOT NULL,
                 unidade_comercial VARCHAR(10) NOT NULL,
                 price FLOAT NOT NULL,
@@ -105,15 +121,27 @@ def get_market_db_connection(market_id):
 
 
 def save_products_to_market_db(market_id, products, nfce_url, purchase_date=None):
-    """Save products to market-specific database"""
-    engine = get_market_db_connection(market_id)
-    
+    """
+    Save products to TWO market-specific databases:
+    1. {MARKET_ID}.db - All purchases (history)
+    2. {MARKET_ID}_unique.db - Unique NCM codes (latest data only)
+    """
     if purchase_date is None:
         purchase_date = datetime.utcnow()
     
-    saved_count = 0
+    # Get both database connections
+    db_path = get_market_db_path(market_id)
+    unique_db_path = db_path.replace('.db', '_unique.db')
     
-    with engine.connect() as conn:
+    engine_main = create_engine(f'sqlite:///{db_path}')
+    engine_unique = create_engine(f'sqlite:///{unique_db_path}')
+    
+    saved_count = 0
+    updated_unique_count = 0
+    created_unique_count = 0
+    
+    # Save to MAIN database (all purchases - always INSERT)
+    with engine_main.connect() as conn:
         for product in products:
             conn.execute(text("""
                 INSERT INTO products (ncm, quantity, unidade_comercial, price, nfce_url, purchase_date)
@@ -127,10 +155,61 @@ def save_products_to_market_db(market_id, products, nfce_url, purchase_date=None
                 'date': purchase_date
             })
             saved_count += 1
+        conn.commit()
+    
+    # Save/Update to UNIQUE database (unique NCM codes - UPSERT)
+    with engine_unique.connect() as conn:
+        for product in products:
+            ncm = product['ncm']
+            
+            # Check if NCM already exists
+            result = conn.execute(text("""
+                SELECT id FROM products WHERE ncm = :ncm
+            """), {'ncm': ncm})
+            
+            existing = result.fetchone()
+            
+            if existing:
+                # UPDATE existing row
+                conn.execute(text("""
+                    UPDATE products 
+                    SET quantity = :quantity,
+                        unidade_comercial = :unit,
+                        price = :price,
+                        nfce_url = :url,
+                        purchase_date = :date
+                    WHERE ncm = :ncm
+                """), {
+                    'ncm': ncm,
+                    'quantity': product.get('quantity', 0),
+                    'unit': product.get('unidade_comercial', 'UN'),
+                    'price': product.get('price', 0),
+                    'url': nfce_url,
+                    'date': purchase_date
+                })
+                updated_unique_count += 1
+            else:
+                # INSERT new row
+                conn.execute(text("""
+                    INSERT INTO products (ncm, quantity, unidade_comercial, price, nfce_url, purchase_date)
+                    VALUES (:ncm, :quantity, :unit, :price, :url, :date)
+                """), {
+                    'ncm': ncm,
+                    'quantity': product.get('quantity', 0),
+                    'unit': product.get('unidade_comercial', 'UN'),
+                    'price': product.get('price', 0),
+                    'url': nfce_url,
+                    'date': purchase_date
+                })
+                created_unique_count += 1
         
         conn.commit()
     
-    return saved_count
+    return {
+        'saved_to_main': saved_count,
+        'updated_unique': updated_unique_count,
+        'created_unique': created_unique_count
+    }
 
 
 # ==================== API ENDPOINTS ====================
@@ -272,8 +351,8 @@ def extract_nfce():
             # Save to main database
             db.session.commit()
             
-            # Save products to market-specific database
-            products_saved = save_products_to_market_db(
+            # Save products to market-specific databases
+            save_result = save_products_to_market_db(
                 market.market_id,
                 products,
                 data['url']
@@ -287,11 +366,16 @@ def extract_nfce():
                     'name': market.name,
                     'address': market.address,
                     'action': market_action,
-                    'database_file': f"{market.market_id}.db"
+                    'database_files': {
+                        'main': f"{market.market_id}.db",
+                        'unique': f"{market.market_id}_unique.db"
+                    }
                 },
                 'products': products,
                 'statistics': {
-                    'products_saved': products_saved,
+                    'products_saved_to_main': save_result['saved_to_main'],
+                    'unique_products_updated': save_result['updated_unique'],
+                    'unique_products_created': save_result['created_unique'],
                     'market_action': market_action,
                     'database_location': get_market_db_path(market.market_id)
                 }
