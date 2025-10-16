@@ -267,15 +267,17 @@ def get_market(market_id):
 
 @app.route('/api/markets/<string:market_id>/products', methods=['GET'])
 def get_market_products(market_id):
-    """Get all products for a specific market from its database"""
+    """Get unique products for a specific market from its UNIQUE database"""
     # Verify market exists
     market = Market.query.filter_by(market_id=market_id).first_or_404()
     
-    # Get products from market-specific database
-    engine = get_market_db_connection(market_id)
+    # Get products from market-specific UNIQUE database (not main)
+    db_path = get_market_db_path(market_id)
+    unique_db_path = db_path.replace('.db', '_unique.db')
+    engine_unique = create_engine(f'sqlite:///{unique_db_path}')
     
-    with engine.connect() as conn:
-        result = conn.execute(text("SELECT * FROM products ORDER BY created_at DESC"))
+    with engine_unique.connect() as conn:
+        result = conn.execute(text("SELECT * FROM products ORDER BY ncm"))
         products = []
         for row in result:
             products.append({
