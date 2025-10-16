@@ -1,7 +1,7 @@
 # Backend specific ignores
 
 # Database files
-*.db
+# *.db
 *.db-journal
 *.sqlite
 *.sqlite3

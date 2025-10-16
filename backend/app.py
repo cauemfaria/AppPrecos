@@ -25,7 +25,27 @@ app.config['JSON_AS_ASCII'] = False
 db = SQLAlchemy(app)
 
 
-# ==================== MAIN DATABASE MODEL (Market Metadata) ====================
+# ==================== MAIN DATABASE MODELS ====================
+
+class ProcessedURL(db.Model):
+    """Tracks processed NFCe URLs to prevent duplicates"""
+    __tablename__ = 'processed_urls'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    nfce_url = db.Column(db.String(1000), unique=True, nullable=False, index=True)
+    market_id = db.Column(db.String(20), nullable=False)
+    processed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    products_count = db.Column(db.Integer, default=0)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nfce_url': self.nfce_url,
+            'market_id': self.market_id,
+            'processed_at': self.processed_at.isoformat(),
+            'products_count': self.products_count
+        }
+
 
 class Market(db.Model):
     """Stores market metadata in main database"""
@@ -296,6 +316,18 @@ def extract_nfce():
     if not data.get('url'):
         return jsonify({'error': 'NFCe URL is required'}), 400
     
+    # CHECK: Has this URL been processed before?
+    if data.get('save'):
+        existing_url = ProcessedURL.query.filter_by(nfce_url=data['url']).first()
+        if existing_url:
+            return jsonify({
+                'error': 'This NFCe has already been processed',
+                'message': 'URL already exists in database',
+                'processed_at': existing_url.processed_at.isoformat(),
+                'market_id': existing_url.market_id,
+                'products_count': existing_url.products_count
+            }), 409
+    
     try:
         # Import crawler
         import sys
@@ -357,6 +389,15 @@ def extract_nfce():
                 products,
                 data['url']
             )
+            
+            # Record this URL as processed
+            processed_url = ProcessedURL(
+                nfce_url=data['url'],
+                market_id=market.market_id,
+                products_count=len(products)
+            )
+            db.session.add(processed_url)
+            db.session.commit()
             
             return jsonify({
                 'message': 'NFCe data extracted and saved successfully',
