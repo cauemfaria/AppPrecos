@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/navigation_scanner"
+        android:icon="@drawable/ic_scan"
+        android:title="@string/nav_scanner"
+        android:contentDescription="@string/nav_scanner_description" />
+    
+    <item
+        android:id="@+id/navigation_markets"
+        android:icon="@drawable/ic_storefront"
+        android:title="@string/nav_markets"
+        android:contentDescription="@string/nav_markets_description" />
+</menu>
+

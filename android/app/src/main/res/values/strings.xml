@@ -2,5 +2,81 @@
 <resources>
     <string name="app_name">AppPrecos</string>
     <string name="welcome_message">Welcome to AppPrecos!</string>
+    
+    <!-- Navigation -->
+    <string name="nav_scanner">Scanner</string>
+    <string name="nav_markets">Markets</string>
+    <string name="nav_scanner_description">Scan NFCe receipts</string>
+    <string name="nav_markets_description">View markets and prices</string>
+    
+    <!-- Scanner Screen -->
+    <string name="scanner_title">Scan NFCe Receipt</string>
+    <string name="scanner_scan_button">Scan QR Code</string>
+    <string name="scanner_or">OR</string>
+    <string name="scanner_manual_label">Enter NFCe URL manually:</string>
+    <string name="scanner_url_hint">https://www.nfce.fazenda.sp.gov.br/...</string>
+    <string name="scanner_submit">Process URL</string>
+    <string name="scanner_status_idle">Scan QR code or enter URL</string>
+    <string name="scanner_status_processing">Processing NFCe…</string>
+    <string name="scanner_camera_permission_required">Camera permission is required to scan QR codes</string>
+    <string name="scanner_enter_url">Please enter a URL</string>
+    <string name="scanner_coming_soon">Camera scanning - Coming soon!\nUse manual input for now</string>
+    
+    <!-- Markets Screen -->
+    <string name="markets_title">Markets</string>
+    <string name="markets_refresh">Refresh</string>
+    <string name="markets_search_hint">Search markets…</string>
+    <string name="markets_error_loading">Error loading markets</string>
+    <string name="markets_empty_title">No Markets Found</string>
+    <string name="markets_empty_message">Scan a receipt to add your first market</string>
+    <string name="markets_products_title">%1$s\n%2$d Unique Products</string>
+    
+    <!-- Product Dialog -->
+    <string name="dialog_close">Close</string>
+    <string name="dialog_search_products">Search products…</string>
+    
+    <!-- Card Items -->
+    <string name="market_tap_hint">Tap to view products →</string>
+    <string name="market_id_label">ID: %1$s</string>
+    <string name="product_ncm_label">NCM: %1$s</string>
+    <string name="product_updated_label">Updated: %1$s</string>
+    <string name="product_price_format">R$ %1$.2f</string>
+    
+    <!-- Success Messages -->
+    <string name="success_qr_processed">✓ QR Code Successfully Processed!</string>
+    <string name="success_market_label">Market: %1$s</string>
+    <string name="success_products_label">Products: %1$d</string>
+    <string name="success_status_label">Status: %1$s</string>
+    <string name="success_new_market">NEW market created!</string>
+    <string name="success_existing_market">Existing market updated</string>
+    <string name="success_message">✓ Success!\n%1$s\n%2$d products saved</string>
+    
+    <!-- Duplicate Messages -->
+    <string name="duplicate_qr_title">⚠ QR Code Already Used</string>
+    <string name="duplicate_qr_message">✗ This QR Code Was Already Used!</string>
+    <string name="duplicate_processed_label">Processed: %1$s</string>
+    <string name="duplicate_market_id_label">Market ID: %1$s</string>
+    <string name="duplicate_products_label">Products: %1$d</string>
+    
+    <!-- Error Messages -->
+    <string name="error_label">Error: %1$s</string>
+    
+    <!-- Content Descriptions -->
+    <string name="cd_refresh_markets">Refresh markets list</string>
+    <string name="cd_search_markets">Search markets</string>
+    <string name="cd_scan_qr">Scan QR code</string>
+    <string name="cd_close_dialog">Close dialog</string>
+    <string name="cd_market_card">Market card</string>
+    <string name="cd_product_card">Product card</string>
+    
+    <!-- Empty States -->
+    <string name="empty_state_no_markets">No markets yet</string>
+    <string name="empty_state_no_products">No products found</string>
+    <string name="empty_state_search_no_results">No results found</string>
+    
+    <!-- Loading States -->
+    <string name="loading_markets">Loading markets…</string>
+    <string name="loading_products">Loading products…</string>
+    <string name="loading_processing">Processing…</string>
 </resources>
 

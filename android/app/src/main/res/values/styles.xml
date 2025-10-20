@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Custom Component Styles -->
+    
+    <!-- Card Styles -->
+    <style name="Widget.AppPrecos.Card.Elevated" parent="Widget.Material3.CardView.Elevated">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/elevation_low</item>
+        <item name="rippleColor">?attr/colorPrimary</item>
+    </style>
+    
+    <style name="Widget.AppPrecos.Card.Filled" parent="Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/elevation_none</item>
+    </style>
+    
+    <style name="Widget.AppPrecos.Card.Outlined" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+    
+    <!-- Button Styles -->
+    <style name="Widget.AppPrecos.Button" parent="Widget.Material3.Button">
+        <item name="cornerRadius">@dimen/spacing_lg</item>
+        <item name="android:minHeight">@dimen/button_height_large</item>
+    </style>
+    
+    <style name="Widget.AppPrecos.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="cornerRadius">@dimen/spacing_lg</item>
+        <item name="android:minHeight">@dimen/button_height_large</item>
+    </style>
+    
+    <style name="Widget.AppPrecos.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="cornerRadius">@dimen/spacing_lg</item>
+    </style>
+    
+    <!-- FAB Styles -->
+    <style name="Widget.AppPrecos.ExtendedFloatingActionButton" parent="Widget.Material3.ExtendedFloatingActionButton.Primary">
+        <item name="shapeAppearance">@style/ShapeAppearance.AppPrecos.Large</item>
+        <item name="elevation">@dimen/elevation_high</item>
+    </style>
+    
+    <style name="Widget.AppPrecos.FloatingActionButton" parent="Widget.Material3.FloatingActionButton.Primary">
+        <item name="shapeAppearance">@style/ShapeAppearance.AppPrecos.Large</item>
+        <item name="elevation">@dimen/elevation_high</item>
+    </style>
+    
+    <!-- Text Input Styles -->
+    <style name="Widget.AppPrecos.TextInputLayout.OutlinedBox" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="shapeAppearance">@style/ShapeAppearance.AppPrecos.Small</item>
+        <item name="boxStrokeWidth">2dp</item>
+        <item name="boxStrokeWidthFocused">3dp</item>
+        <item name="hintTextColor">?attr/colorPrimary</item>
+    </style>
+    
+    <!-- Progress Indicator Styles -->
+    <style name="Widget.AppPrecos.CircularProgressIndicator" parent="Widget.Material3.CircularProgressIndicator">
+        <item name="indicatorSize">48dp</item>
+        <item name="trackThickness">4dp</item>
+    </style>
+    
+    <!-- Bottom Navigation Style -->
+    <style name="Widget.AppPrecos.BottomNavigationView" parent="Widget.Material3.BottomNavigationView">
+        <item name="itemIconSize">@dimen/icon_size_medium</item>
+        <item name="itemTextAppearanceActive">?attr/textAppearanceLabelMedium</item>
+        <item name="itemTextAppearanceInactive">?attr/textAppearanceLabelSmall</item>
+        <item name="itemTextAppearanceActiveBoldEnabled">true</item>
+    </style>
+    
+    <!-- Navigation Rail Style -->
+    <style name="Widget.AppPrecos.NavigationRailView" parent="Widget.Material3.NavigationRailView">
+        <item name="itemIconSize">@dimen/icon_size_medium</item>
+        <item name="itemTextAppearanceActive">?attr/textAppearanceLabelMedium</item>
+        <item name="itemTextAppearanceInactive">?attr/textAppearanceLabelSmall</item>
+    </style>
+</resources>
+

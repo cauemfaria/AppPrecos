@@ -8,6 +8,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.appprecos.databinding.FragmentMarketsBinding
 import kotlinx.coroutines.launch
 
@@ -32,12 +33,29 @@ class MarketsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         
         setupRecyclerView()
+        setupUI()
         observeViewModel()
-        
+    }
+    
+    private fun setupUI() {
         // Refresh button
-        binding.buttonRefresh?.setOnClickListener {
+        binding.buttonRefresh.setOnClickListener {
             viewModel.refreshMarkets()
         }
+        
+        // FAB for refresh
+        binding.fab.setOnClickListener {
+            viewModel.refreshMarkets()
+        }
+        
+        // Search input - filter markets as user types
+        binding.editTextSearch.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                viewModel.searchMarkets(s.toString())
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
     }
     
     override fun onResume() {
@@ -56,6 +74,19 @@ class MarketsFragment : Fragment() {
         binding.recyclerViewMarkets.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = marketsAdapter
+            
+            // Hide FAB on scroll down, show on scroll up
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    if (dy > 0) {
+                        // Scrolling down
+                        binding.fab.hide()
+                    } else if (dy < 0) {
+                        // Scrolling up
+                        binding.fab.show()
+                    }
+                }
+            })
         }
     }
     
@@ -64,18 +95,39 @@ class MarketsFragment : Fragment() {
             viewModel.marketsState.collect { state ->
                 when (state) {
                     is MarketsState.Loading -> {
-                        binding.progressBar.visibility = View.VISIBLE
+                        binding.progressIndicator.visibility = View.VISIBLE
                         binding.recyclerViewMarkets.visibility = View.GONE
+                        binding.emptyState.visibility = View.GONE
+                        binding.textError.visibility = View.GONE
                     }
                     is MarketsState.Success -> {
-                        binding.progressBar.visibility = View.GONE
-                        binding.recyclerViewMarkets.visibility = View.VISIBLE
-                        marketsAdapter.submitList(state.markets)
+                        binding.progressIndicator.visibility = View.GONE
+                        binding.textError.visibility = View.GONE
+                        
+                        if (state.markets.isEmpty()) {
+                            binding.recyclerViewMarkets.visibility = View.GONE
+                            binding.emptyState.visibility = View.VISIBLE
+                        } else {
+                            binding.recyclerViewMarkets.visibility = View.VISIBLE
+                            binding.emptyState.visibility = View.GONE
+                            marketsAdapter.submitList(state.markets)
+                        }
                     }
                     is MarketsState.Error -> {
-                        binding.progressBar.visibility = View.GONE
+                        binding.progressIndicator.visibility = View.GONE
+                        binding.recyclerViewMarkets.visibility = View.GONE
+                        binding.emptyState.visibility = View.GONE
                         binding.textError.visibility = View.VISIBLE
                         binding.textError.text = state.message
+                        
+                        // Show Snackbar for error
+                        com.google.android.material.snackbar.Snackbar.make(
+                            binding.root,
+                            state.message,
+                            com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+                        ).setAction("Retry") {
+                            viewModel.refreshMarkets()
+                        }.show()
                     }
                 }
             }
@@ -92,39 +144,60 @@ class MarketsFragment : Fragment() {
     }
     
     private fun showProductsDialog(response: com.appprecos.data.model.MarketProductsResponse) {
-        val dialog = android.app.AlertDialog.Builder(requireContext())
-            .setTitle(response.market.name)
-            .setMessage("Loading products...")
-            .create()
-        
         val dialogView = layoutInflater.inflate(
             com.appprecos.R.layout.dialog_products,
             null
         )
         
-        dialog.setView(dialogView)
+        // Setup dialog using MaterialAlertDialogBuilder
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setView(dialogView)
+            .create()
         
-        // Setup RecyclerView in dialog
+        // Setup views
         val recyclerView = dialogView.findViewById<androidx.recyclerview.widget.RecyclerView>(
             com.appprecos.R.id.recyclerViewProducts
         )
-        val titleText = dialogView.findViewById<android.widget.TextView>(
+        val titleText = dialogView.findViewById<com.google.android.material.textview.MaterialTextView>(
             com.appprecos.R.id.textDialogTitle
         )
-        val closeButton = dialogView.findViewById<android.widget.Button>(
+        val closeButton = dialogView.findViewById<com.google.android.material.button.MaterialButton>(
             com.appprecos.R.id.buttonClose
         )
+        val searchInput = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(
+            com.appprecos.R.id.editTextSearch
+        )
         
-        titleText.text = "${response.market.name}\n${response.total} Unique Products"
+        // Set title with market info
+        titleText.text = getString(
+            com.appprecos.R.string.markets_products_title,
+            response.market.name,
+            response.total
+        )
         
+        // Setup RecyclerView
         val productsAdapter = ProductsAdapter()
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
         recyclerView.adapter = productsAdapter
         productsAdapter.submitList(response.products)
         
+        // Close button
         closeButton.setOnClickListener {
             dialog.dismiss()
         }
+        
+        // Search functionality (basic filter)
+        searchInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val query = s.toString().lowercase()
+                val filtered = response.products.filter {
+                    it.ncm.contains(query)
+                }
+                productsAdapter.submitList(filtered)
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
         
         dialog.show()
     }

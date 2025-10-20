@@ -2,11 +2,91 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.AppPrecos" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryDark">@color/primary_dark</item>
-        <item name="colorAccent">@color/accent</item>
-        <item name="android:statusBarColor">@color/primary</item>
+        <!-- Material 3 Color System -->
+        <item name="colorPrimary">@color/md_theme_light_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_light_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_light_onPrimaryContainer</item>
+        
+        <item name="colorSecondary">@color/md_theme_light_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_light_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_light_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_light_onSecondaryContainer</item>
+        
+        <item name="colorTertiary">@color/md_theme_light_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_light_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_light_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_light_onTertiaryContainer</item>
+        
+        <item name="colorError">@color/md_theme_light_error</item>
+        <item name="colorOnError">@color/md_theme_light_onError</item>
+        <item name="colorErrorContainer">@color/md_theme_light_errorContainer</item>
+        <item name="colorOnErrorContainer">@color/md_theme_light_onErrorContainer</item>
+        
+        <item name="android:colorBackground">@color/md_theme_light_background</item>
+        <item name="colorOnBackground">@color/md_theme_light_onBackground</item>
+        <item name="colorSurface">@color/md_theme_light_surface</item>
+        <item name="colorOnSurface">@color/md_theme_light_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_light_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_light_onSurfaceVariant</item>
+        
+        <item name="colorSurfaceContainer">@color/md_theme_light_surfaceContainer</item>
+        <item name="colorSurfaceContainerLow">@color/md_theme_light_surfaceContainerLow</item>
+        <item name="colorSurfaceContainerLowest">@color/md_theme_light_surfaceContainerLowest</item>
+        <item name="colorSurfaceContainerHigh">@color/md_theme_light_surfaceContainerHigh</item>
+        <item name="colorSurfaceContainerHighest">@color/md_theme_light_surfaceContainerHighest</item>
+        
+        <item name="colorOutline">@color/md_theme_light_outline</item>
+        <item name="colorOutlineVariant">@color/md_theme_light_outlineVariant</item>
+        
+        <item name="colorSurfaceInverse">@color/md_theme_light_inverseSurface</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_light_inverseOnSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_light_inversePrimary</item>
+        
+        <!-- Material 3 Typography System -->
+        <item name="textAppearanceDisplayLarge">@style/TextAppearance.AppPrecos.DisplayLarge</item>
+        <item name="textAppearanceDisplayMedium">@style/TextAppearance.AppPrecos.DisplayMedium</item>
+        <item name="textAppearanceDisplaySmall">@style/TextAppearance.AppPrecos.DisplaySmall</item>
+        
+        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.AppPrecos.HeadlineLarge</item>
+        <item name="textAppearanceHeadlineMedium">@style/TextAppearance.AppPrecos.HeadlineMedium</item>
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.AppPrecos.HeadlineSmall</item>
+        
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.AppPrecos.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.AppPrecos.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.AppPrecos.TitleSmall</item>
+        
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.AppPrecos.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.AppPrecos.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.AppPrecos.BodySmall</item>
+        
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.AppPrecos.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.AppPrecos.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.AppPrecos.LabelSmall</item>
+        
+        <!-- Material 3 Shape System -->
+        <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.AppPrecos.ExtraSmall</item>
+        <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.AppPrecos.Small</item>
+        <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.AppPrecos.Medium</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.AppPrecos.Large</item>
+        <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.AppPrecos.ExtraLarge</item>
+        
+        <!-- Status Bar & Navigation Bar -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        
+        <!-- Enable edge-to-edge -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        
+        <!-- Component Default Styles -->
+        <item name="materialCardViewStyle">@style/Widget.AppPrecos.Card.Elevated</item>
+        <item name="materialButtonStyle">@style/Widget.AppPrecos.Button</item>
+        <item name="textInputStyle">@style/Widget.AppPrecos.TextInputLayout.OutlinedBox</item>
+        <item name="bottomNavigationStyle">@style/Widget.AppPrecos.BottomNavigationView</item>
+        <item name="extendedFloatingActionButtonStyle">@style/Widget.AppPrecos.ExtendedFloatingActionButton</item>
+        <item name="floatingActionButtonStyle">@style/Widget.AppPrecos.FloatingActionButton</item>
     </style>
 
     <style name="Theme.AppPrecos" parent="Base.Theme.AppPrecos" />

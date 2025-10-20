@@ -32,7 +32,10 @@ class MarketsAdapter(
         fun bind(market: Market, onClick: (Market) -> Unit) {
             binding.textMarketName.text = market.name
             binding.textMarketAddress.text = market.address
-            binding.textMarketId.text = "ID: ${market.market_id}"
+            binding.textMarketId.text = binding.root.context.getString(
+                com.appprecos.R.string.market_id_label,
+                market.market_id
+            )
             
             binding.root.setOnClickListener {
                 onClick(market)

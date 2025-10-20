@@ -30,17 +30,31 @@ class ProductsAdapter : ListAdapter<ProductDetail, ProductsAdapter.ProductViewHo
     ) : RecyclerView.ViewHolder(binding.root) {
         
         fun bind(product: ProductDetail) {
-            binding.textProductNcm.text = "NCM: ${product.ncm}"
-            binding.textProductPrice.text = "R$ ${"%.2f".format(product.price)}"
+            val context = binding.root.context
+            
+            binding.textProductNcm.text = context.getString(
+                com.appprecos.R.string.product_ncm_label,
+                product.ncm
+            )
+            binding.textProductPrice.text = context.getString(
+                com.appprecos.R.string.product_price_format,
+                product.price
+            )
             
             // Format date
             try {
                 val inputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                 val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
                 val date = inputFormat.parse(product.purchase_date.replace("T", " ").substring(0, 19))
-                binding.textProductUpdated.text = "Updated: ${outputFormat.format(date)}"
+                binding.textProductUpdated.text = context.getString(
+                    com.appprecos.R.string.product_updated_label,
+                    outputFormat.format(date)
+                )
             } catch (e: Exception) {
-                binding.textProductUpdated.text = "Updated: ${product.purchase_date}"
+                binding.textProductUpdated.text = context.getString(
+                    com.appprecos.R.string.product_updated_label,
+                    product.purchase_date
+                )
             }
         }
     }

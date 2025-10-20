@@ -2,53 +2,83 @@
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="8dp"
-    app:cardElevation="4dp"
-    app:cardCornerRadius="8dp">
+    android:layout_marginStart="@dimen/spacing_sm"
+    android:layout_marginEnd="@dimen/spacing_sm"
+    android:layout_marginTop="@dimen/spacing_sm"
+    android:layout_marginBottom="@dimen/spacing_sm"
+    android:clickable="true"
+    android:focusable="true"
+    android:contentDescription="@string/cd_market_card"
+    style="?attr/materialCardViewElevatedStyle"
+    app:cardElevation="@dimen/elevation_low"
+    app:cardCornerRadius="@dimen/card_corner_radius">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="@dimen/spacing_lg">
 
-        <TextView
+        <!-- Market Name -->
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/textMarketName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Market Name"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="@color/primary_text"/>
+            android:textAppearance="?attr/textAppearanceTitleLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:maxLines="2"
+            android:ellipsize="end"
+            tools:text="Supermercado Example" />
 
-        <TextView
+        <!-- Market Address -->
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/textMarketAddress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Market Address"
-            android:textSize="14sp"
-            android:textColor="@color/secondary_text"
-            android:layout_marginTop="4dp"/>
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="@dimen/spacing_sm"
+            android:maxLines="2"
+            android:ellipsize="end"
+            tools:text="Rua Example, 123, Bairro, Cidade - SP" />
 
-        <TextView
-            android:id="@+id/textMarketId"
+        <!-- Divider -->
+        <com.google.android.material.divider.MaterialDivider
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:layout_marginBottom="@dimen/spacing_md" />
+
+        <!-- Market ID with Icon -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="ID: MKT********"
-            android:textSize="12sp"
-            android:textColor="@color/secondary_text"
-            android:layout_marginTop="4dp"
-            android:fontFamily="monospace"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Tap to view products →"
-            android:textSize="12sp"
-            android:textColor="@color/primary"
-            android:layout_marginTop="8dp"/>
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/textMarketId"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:fontFamily="monospace"
+                tools:text="ID: MKT7Y3JALQC" />
+
+            <!-- Tap Hint with Icon -->
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/market_tap_hint"
+                android:textAppearance="?attr/textAppearanceLabelMedium"
+                android:textColor="?attr/colorPrimary"
+                android:textStyle="bold" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
