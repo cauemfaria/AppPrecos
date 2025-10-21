@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     fun switchToMarketsTab() {
-        binding.bottomNavigation.selectedItemId = R.id.navigation_markets
+        binding.bottomNavigation?.selectedItemId = R.id.navigation_markets
     }
     
     private fun refreshCurrentFragment() {
