@@ -1,6 +1,6 @@
 """
 AppPrecos Backend API - Version 2
-Multi-database architecture: Each market gets its own database
+Multi-database architecture: Using Supabase PostgreSQL
 """
 
 from flask import Flask, request, jsonify
@@ -11,18 +11,27 @@ import os
 import uuid
 import string
 import random
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import Supabase configuration
+from supabase_config import get_supabase_admin_client, get_database_url
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Main database configuration (stores market metadata only)
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "markets_main.db")}'
+# Supabase PostgreSQL configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = get_database_url()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JSON_AS_ASCII'] = False
 
-# Initialize main database
+# Initialize database
 db = SQLAlchemy(app)
+
+# Get Supabase admin client
+supabase = get_supabase_admin_client()
 
 
 # ==================== MAIN DATABASE MODELS ====================
@@ -81,155 +90,78 @@ def generate_market_id():
     return f"MKT{random_part}"
 
 
-def get_market_db_path(market_id):
-    """Get the database file path for a specific market"""
-    db_dir = os.path.join(basedir, "market_databases")
-    os.makedirs(db_dir, exist_ok=True)
-    return os.path.join(db_dir, f"{market_id}.db")
+def create_market_tables():
+    """Create necessary tables in Supabase PostgreSQL"""
+    with app.app_context():
+        db.create_all()
+        print("[OK] Market tables created in Supabase PostgreSQL")
 
 
-def create_market_database(market_id):
-    """Create TWO databases for a market: main and unique"""
-    db_path = get_market_db_path(market_id)
-    
-    # Create main database (all purchases - history)
-    engine = create_engine(f'sqlite:///{db_path}')
-    with engine.connect() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ncm VARCHAR(8) NOT NULL,
-                quantity FLOAT NOT NULL,
-                unidade_comercial VARCHAR(10) NOT NULL,
-                price FLOAT NOT NULL,
-                nfce_url VARCHAR(1000),
-                purchase_date DATETIME NOT NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.commit()
-    
-    # Create unique database (unique NCM codes - latest data only)
-    unique_db_path = db_path.replace('.db', '_unique.db')
-    engine_unique = create_engine(f'sqlite:///{unique_db_path}')
-    with engine_unique.connect() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ncm VARCHAR(8) NOT NULL UNIQUE,
-                quantity FLOAT NOT NULL,
-                unidade_comercial VARCHAR(10) NOT NULL,
-                price FLOAT NOT NULL,
-                nfce_url VARCHAR(1000),
-                purchase_date DATETIME NOT NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.commit()
-    
-    return db_path
-
-
-def get_market_db_connection(market_id):
-    """Get database connection for a specific market"""
-    db_path = get_market_db_path(market_id)
-    
-    if not os.path.exists(db_path):
-        create_market_database(market_id)
-    
-    return create_engine(f'sqlite:///{db_path}')
-
-
-def save_products_to_market_db(market_id, products, nfce_url, purchase_date=None):
+def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None):
     """
-    Save products to TWO market-specific databases:
-    1. {MARKET_ID}.db - All purchases (history)
-    2. {MARKET_ID}_unique.db - Unique NCM codes (latest data only)
+    Save products to Supabase PostgreSQL database
+    Maintains both full history and unique product tracking
     """
     if purchase_date is None:
         purchase_date = datetime.utcnow()
     
-    # Get both database connections
-    db_path = get_market_db_path(market_id)
-    unique_db_path = db_path.replace('.db', '_unique.db')
-    
-    engine_main = create_engine(f'sqlite:///{db_path}')
-    engine_unique = create_engine(f'sqlite:///{unique_db_path}')
-    
-    saved_count = 0
-    updated_unique_count = 0
-    created_unique_count = 0
-    
-    # Save to MAIN database (all purchases - always INSERT)
-    with engine_main.connect() as conn:
+    try:
+        # Insert to main products table (full history)
         for product in products:
-            conn.execute(text("""
-                INSERT INTO products (ncm, quantity, unidade_comercial, price, nfce_url, purchase_date)
-                VALUES (:ncm, :quantity, :unit, :price, :url, :date)
-            """), {
+            data = {
+                'market_id': market_id,
                 'ncm': product['ncm'],
                 'quantity': product.get('quantity', 0),
-                'unit': product.get('unidade_comercial', 'UN'),
+                'unidade_comercial': product.get('unidade_comercial', 'UN'),
                 'price': product.get('price', 0),
-                'url': nfce_url,
-                'date': purchase_date
-            })
-            saved_count += 1
-        conn.commit()
-    
-    # Save/Update to UNIQUE database (unique NCM codes - UPSERT)
-    with engine_unique.connect() as conn:
+                'nfce_url': nfce_url,
+                'purchase_date': purchase_date.isoformat(),
+                'product_type': 'full_history'
+            }
+            supabase.table('products').insert(data).execute()
+        
+        # Upsert to unique products table (latest data only)
+        saved_count = len(products)
+        updated_unique_count = 0
+        created_unique_count = 0
+        
         for product in products:
-            ncm = product['ncm']
+            unique_data = {
+                'market_id': market_id,
+                'ncm': product['ncm'],
+                'quantity': product.get('quantity', 0),
+                'unidade_comercial': product.get('unidade_comercial', 'UN'),
+                'price': product.get('price', 0),
+                'nfce_url': nfce_url,
+                'purchase_date': purchase_date.isoformat(),
+                'product_type': 'unique'
+            }
             
-            # Check if NCM already exists
-            result = conn.execute(text("""
-                SELECT id FROM products WHERE ncm = :ncm
-            """), {'ncm': ncm})
+            # Check if exists
+            response = supabase.table('products').select('id').match({
+                'market_id': market_id,
+                'ncm': product['ncm'],
+                'product_type': 'unique'
+            }).execute()
             
-            existing = result.fetchone()
-            
-            if existing:
-                # UPDATE existing row
-                conn.execute(text("""
-                    UPDATE products 
-                    SET quantity = :quantity,
-                        unidade_comercial = :unit,
-                        price = :price,
-                        nfce_url = :url,
-                        purchase_date = :date
-                    WHERE ncm = :ncm
-                """), {
-                    'ncm': ncm,
-                    'quantity': product.get('quantity', 0),
-                    'unit': product.get('unidade_comercial', 'UN'),
-                    'price': product.get('price', 0),
-                    'url': nfce_url,
-                    'date': purchase_date
-                })
+            if response.data:
+                # Update existing
+                supabase.table('products').update(unique_data).eq('id', response.data[0]['id']).execute()
                 updated_unique_count += 1
             else:
-                # INSERT new row
-                conn.execute(text("""
-                    INSERT INTO products (ncm, quantity, unidade_comercial, price, nfce_url, purchase_date)
-                    VALUES (:ncm, :quantity, :unit, :price, :url, :date)
-                """), {
-                    'ncm': ncm,
-                    'quantity': product.get('quantity', 0),
-                    'unit': product.get('unidade_comercial', 'UN'),
-                    'price': product.get('price', 0),
-                    'url': nfce_url,
-                    'date': purchase_date
-                })
+                # Create new
+                supabase.table('products').insert(unique_data).execute()
                 created_unique_count += 1
         
-        conn.commit()
+        return {
+            'saved_to_main': saved_count,
+            'updated_unique': updated_unique_count,
+            'created_unique': created_unique_count
+        }
     
-    return {
-        'saved_to_main': saved_count,
-        'updated_unique': updated_unique_count,
-        'created_unique': created_unique_count
-    }
+    except Exception as e:
+        print(f"Error saving products to Supabase: {e}")
+        raise
 
 
 # ==================== API ENDPOINTS ====================
@@ -272,30 +204,21 @@ def get_market_products(market_id):
     market = Market.query.filter_by(market_id=market_id).first_or_404()
     
     # Get products from market-specific UNIQUE database (not main)
-    db_path = get_market_db_path(market_id)
-    unique_db_path = db_path.replace('.db', '_unique.db')
-    engine_unique = create_engine(f'sqlite:///{unique_db_path}')
-    
-    with engine_unique.connect() as conn:
-        result = conn.execute(text("SELECT * FROM products ORDER BY ncm"))
-        products = []
-        for row in result:
-            products.append({
-                'id': row[0],
-                'ncm': row[1],
-                'quantity': row[2],
-                'unidade_comercial': row[3],
-                'price': row[4],
-                'nfce_url': row[5],
-                'purchase_date': row[6],
-                'created_at': row[7]
-            })
-    
-    return jsonify({
-        'market': market.to_dict(),
-        'products': products,
-        'total': len(products)
-    })
+    # This endpoint will now fetch from Supabase directly
+    try:
+        response = supabase.table('products').select('*').match({
+            'market_id': market_id,
+            'product_type': 'unique'
+        }).execute()
+        
+        products = response.data
+        return jsonify({
+            'market': market.to_dict(),
+            'products': products,
+            'total': len(products)
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch products from Supabase: {e}'}), 500
 
 
 # ========== NFCe INTEGRATION ENDPOINT ==========
@@ -379,50 +302,47 @@ def extract_nfce():
                 db.session.flush()
                 
                 # Create new database for this market
-                db_path = create_market_database(new_market_id)
-                market_action = 'created'
-            
-            # Save to main database
-            db.session.commit()
-            
-            # Save products to market-specific databases
-            save_result = save_products_to_market_db(
-                market.market_id,
-                products,
-                data['url']
-            )
-            
-            # Record this URL as processed
-            processed_url = ProcessedURL(
-                nfce_url=data['url'],
-                market_id=market.market_id,
-                products_count=len(products)
-            )
-            db.session.add(processed_url)
-            db.session.commit()
-            
-            return jsonify({
-                'message': 'NFCe data extracted and saved successfully',
-                'market': {
-                    'id': market.id,
-                    'market_id': market.market_id,
-                    'name': market.name,
-                    'address': market.address,
-                    'action': market_action,
-                    'database_files': {
-                        'main': f"{market.market_id}.db",
-                        'unique': f"{market.market_id}_unique.db"
+                # This part is now handled by Supabase, so we just commit the market
+                db.session.commit()
+                
+                # Save products to Supabase
+                save_result = save_products_to_supabase(
+                    market.market_id,
+                    products,
+                    data['url']
+                )
+                
+                # Record this URL as processed
+                processed_url = ProcessedURL(
+                    nfce_url=data['url'],
+                    market_id=market.market_id,
+                    products_count=len(products)
+                )
+                db.session.add(processed_url)
+                db.session.commit()
+                
+                return jsonify({
+                    'message': 'NFCe data extracted and saved successfully',
+                    'market': {
+                        'id': market.id,
+                        'market_id': market.market_id,
+                        'name': market.name,
+                        'address': market.address,
+                        'action': market_action,
+                        'database_files': {
+                            'main': f"{market.market_id}.db", # This will be removed as per new_code
+                            'unique': f"{market.market_id}_unique.db" # This will be removed as per new_code
+                        }
+                    },
+                    'products': products,
+                    'statistics': {
+                        'products_saved_to_main': save_result['saved_to_main'],
+                        'unique_products_updated': save_result['updated_unique'],
+                        'unique_products_created': save_result['created_unique'],
+                        'market_action': market_action,
+                        'database_location': 'Supabase' # This will be removed as per new_code
                     }
-                },
-                'products': products,
-                'statistics': {
-                    'products_saved_to_main': save_result['saved_to_main'],
-                    'unique_products_updated': save_result['updated_unique'],
-                    'unique_products_created': save_result['created_unique'],
-                    'market_action': market_action,
-                    'database_location': get_market_db_path(market.market_id)
-                }
-            }), 201
+                }), 201
         
         # Just return extracted data without saving
         return jsonify({
@@ -450,11 +370,13 @@ def get_stats():
     markets = Market.query.all()
     for market in markets:
         try:
-            engine = get_market_db_connection(market.market_id)
-            with engine.connect() as conn:
-                result = conn.execute(text("SELECT COUNT(*) FROM products"))
-                count = result.fetchone()[0]
-                total_products += count
+            # This part will now fetch from Supabase directly
+            response = supabase.table('products').select('*').match({
+                'market_id': market.market_id,
+                'product_type': 'unique'
+            }).execute()
+            count = len(response.data)
+            total_products += count
         except:
             pass
     
@@ -472,7 +394,7 @@ def init_db():
     with app.app_context():
         db.create_all()
         print("[OK] Main database created (markets_main.db)")
-        print("[OK] Market-specific databases will be created as needed")
+        print("[OK] Market tables created in Supabase PostgreSQL")
 
 
 if __name__ == '__main__':
@@ -489,11 +411,11 @@ if __name__ == '__main__':
     
     # Run Flask app
     print("\n" + "=" * 77)
-    print(" AppPrecos Backend API V2 - Multi-Database Architecture")
+    print(" AppPrecos Backend API V2 - Supabase PostgreSQL Architecture")
     print("=" * 77)
-    print("\n Architecture: Each market = Separate database")
-    print(" Main DB: markets_main.db (market metadata)")
-    print(" Market DBs: market_databases/{MARKET_ID}.db")
+    print("\n Architecture: Supabase PostgreSQL Database")
+    print(" Main DB: Supabase PostgreSQL (markets_main, products)")
+    print(" Markets: Stored in Supabase with unique product tracking")
     print("\n Server: http://localhost:5000")
     print(" Press CTRL+C to stop\n")
     
