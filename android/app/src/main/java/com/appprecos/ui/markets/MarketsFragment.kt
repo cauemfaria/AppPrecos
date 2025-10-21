@@ -202,6 +202,19 @@ class MarketsFragment : Fragment() {
         dialog.show()
     }
     
+    fun refresh() {
+        viewModel.loadMarkets()
+        
+        // Show refresh feedback with Snackbar
+        view?.let {
+            com.google.android.material.snackbar.Snackbar.make(
+                it,
+                "Refreshing markets...",
+                com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
+            ).show()
+        }
+    }
+    
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
