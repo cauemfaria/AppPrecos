@@ -78,5 +78,11 @@
     <string name="loading_markets">Loading markets…</string>
     <string name="loading_products">Loading products…</string>
     <string name="loading_processing">Processing…</string>
+    
+    <!-- Actions -->
+    <string name="action_search">Search</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_view">View</string>
+    <string name="action_details">Details</string>
 </resources>
 

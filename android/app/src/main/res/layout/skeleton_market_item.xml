@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="@dimen/spacing_sm"
+    app:cardElevation="@dimen/elevation_sm"
+    app:cardCornerRadius="@dimen/corner_radius_md">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_md"
+        android:alpha="0.5">
+
+        <!-- Skeleton for market name -->
+        <View
+            android:layout_width="200dp"
+            android:layout_height="20dp"
+            android:background="@color/md_theme_light_surfaceVariant" />
+
+        <!-- Skeleton for address -->
+        <View
+            android:layout_width="280dp"
+            android:layout_height="16dp"
+            android:layout_marginTop="@dimen/spacing_sm"
+            android:background="@color/md_theme_light_surfaceVariant" />
+
+        <!-- Skeleton for market ID -->
+        <View
+            android:layout_width="120dp"
+            android:layout_height="14dp"
+            android:layout_marginTop="@dimen/spacing_sm"
+            android:background="@color/md_theme_light_surfaceVariant" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
+

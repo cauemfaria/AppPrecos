@@ -47,6 +47,21 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupNavigation() {
+        // Setup TopAppBar
+        binding.topAppBar.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.action_search -> {
+                    // TODO: Open search
+                    true
+                }
+                R.id.action_refresh -> {
+                    refreshCurrentFragment()
+                    true
+                }
+                else -> false
+            }
+        }
+        
         // Get the navigation view (either BottomNavigationView or NavigationRailView)
         val navigationView = getNavigationView()
         
@@ -55,6 +70,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.navigation_scanner -> {
                     if (currentNavigationItemId != R.id.navigation_scanner) {
                         showFragment(ScannerFragment())
+                        binding.topAppBar.title = getString(R.string.scanner_title)
                         currentNavigationItemId = R.id.navigation_scanner
                     }
                     true
@@ -62,6 +78,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.navigation_markets -> {
                     if (currentNavigationItemId != R.id.navigation_markets) {
                         showFragment(MarketsFragment())
+                        binding.topAppBar.title = getString(R.string.markets_title)
                         currentNavigationItemId = R.id.navigation_markets
                     }
                     true
@@ -72,6 +89,18 @@ class MainActivity : AppCompatActivity() {
         
         // Set initial selected item
         navigationView?.selectedItemId = R.id.navigation_scanner
+    }
+    
+    fun switchToMarketsTab() {
+        binding.bottomNavigation.selectedItemId = R.id.navigation_markets
+    }
+    
+    private fun refreshCurrentFragment() {
+        supportFragmentManager.fragments.firstOrNull()?.let { fragment ->
+            if (fragment is MarketsFragment) {
+                fragment.refresh()
+            }
+        }
     }
     
     private fun getNavigationView(): NavigationBarView? {
