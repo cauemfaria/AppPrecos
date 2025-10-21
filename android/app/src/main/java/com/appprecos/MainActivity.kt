@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
     
     private fun setupNavigation() {
         // Setup TopAppBar
-        binding.topAppBar.setOnMenuItemClickListener { menuItem ->
+        binding.topAppBar?.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.action_search -> {
                     // TODO: Open search
@@ -70,7 +70,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.navigation_scanner -> {
                     if (currentNavigationItemId != R.id.navigation_scanner) {
                         showFragment(ScannerFragment())
-                        binding.topAppBar.title = getString(R.string.scanner_title)
+                        binding.topAppBar?.title = getString(R.string.scanner_title)
                         currentNavigationItemId = R.id.navigation_scanner
                     }
                     true
@@ -78,7 +78,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.navigation_markets -> {
                     if (currentNavigationItemId != R.id.navigation_markets) {
                         showFragment(MarketsFragment())
-                        binding.topAppBar.title = getString(R.string.markets_title)
+                        binding.topAppBar?.title = getString(R.string.markets_title)
                         currentNavigationItemId = R.id.navigation_markets
                     }
                     true
