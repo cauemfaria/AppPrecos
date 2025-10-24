@@ -7,7 +7,8 @@ Can be imported by Flask API
 import sys
 import io
 
-if sys.platform == 'win32':
+# Only set encoding when running as standalone script, not when imported
+if sys.platform == 'win32' and __name__ == '__main__':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
@@ -191,24 +192,32 @@ def extract_full_nfce_data(url, headless=True):
                 unit_pattern = r'class="fixo-prod-serv-uc">\s*<span>([^<]+)</span>'
                 units = re.findall(unit_pattern, html)
                 
-                # Pattern for prices
-                price_pattern = r'class="fixo-prod-serv-vb">\s*<span>([^<]+)</span>'
-                prices = re.findall(price_pattern, html)
+                # Pattern for total prices (valor total)
+                total_price_pattern = r'class="fixo-prod-serv-vb">\s*<span>([^<]+)</span>'
+                total_prices = re.findall(total_price_pattern, html)
+                
+                # Pattern for unit prices (valor unitário de comercialização)
+                unit_price_pattern = r'<label>Valor unitário de comercialização</label>\s*<span>([^<]+)</span>'
+                unit_prices = re.findall(unit_price_pattern, html)
                 
                 # Combine all data
                 for i in range(len(ncm_codes)):
                     try:
                         # Convert Brazilian number format to float
                         quantity = float(quantities[i].replace(',', '.')) if i < len(quantities) else 0
-                        price = float(prices[i].replace(',', '.')) if i < len(prices) else 0
+                        total_price = float(total_prices[i].replace(',', '.')) if i < len(total_prices) else 0
+                        unit_price = float(unit_prices[i].replace(',', '.')) if i < len(unit_prices) else 0
+                        unit = units[i].strip() if i < len(units) else 'UN'
                         
                         result['products'].append({
                             'number': i + 1,
                             'product': product_names[i].strip() if i < len(product_names) else '',
                             'ncm': ncm_codes[i],
                             'quantity': quantity,
-                            'unidade_comercial': units[i].strip() if i < len(units) else 'UN',
-                            'price': price
+                            'unidade_comercial': unit,
+                            'total_price': total_price,      # Total paid for this quantity
+                            'unit_price': unit_price,        # Price per KG or per UN
+                            'price': unit_price              # For compatibility (use unit price)
                         })
                     except Exception as e:
                         print(f"Error processing product {i+1}: {e}")

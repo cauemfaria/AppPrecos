@@ -6,4 +6,9 @@ requests==2.32.3
 supabase==2.3.5
 psycopg2-binary==2.9.9
 python-dotenv==1.0.0
-
+httpx==0.24.1
+realtime==1.0.6
+gotrue==2.0.0
+postgrest==0.13.2
+storage3==0.7.0
+supafunc==0.3.1

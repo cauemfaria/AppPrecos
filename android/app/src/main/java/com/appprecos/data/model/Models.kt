@@ -25,13 +25,7 @@ data class MarketInfo(
     val market_id: String,
     val name: String,
     val address: String,
-    val action: String,
-    val database_files: DatabaseFiles
-)
-
-data class DatabaseFiles(
-    val main: String,
-    val unique: String
+    val action: String
 )
 
 data class Product(
