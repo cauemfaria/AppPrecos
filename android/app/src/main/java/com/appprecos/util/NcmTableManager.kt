@@ -10,6 +10,12 @@ data class NcmEntry(
     val Descricao: String
 )
 
+data class NcmTableRoot(
+    val Data_Ultima_Atualizacao_NCM: String,
+    val Ato: String,
+    val Nomenclaturas: List<NcmEntry>
+)
+
 object NcmTableManager {
     private var ncmTable: Map<String, String>? = null
     private var isInitialized = false
@@ -26,8 +32,8 @@ object NcmTableManager {
             val reader = InputStreamReader(inputStream, Charsets.UTF_8)
             
             val gson = Gson()
-            val listType = object : TypeToken<List<NcmEntry>>() {}.type
-            val entries: List<NcmEntry> = gson.fromJson(reader, listType)
+            val ncmRoot: NcmTableRoot = gson.fromJson(reader, NcmTableRoot::class.java)
+            val entries: List<NcmEntry> = ncmRoot.Nomenclaturas
             
             // Create a map for fast lookup: NCM code -> Description
             ncmTable = entries.associate { it.Codigo to it.Descricao }
@@ -35,10 +41,11 @@ object NcmTableManager {
             reader.close()
             isInitialized = true
             
-            android.util.Log.d("NcmTableManager", "Loaded ${ncmTable?.size} NCM entries")
+            android.util.Log.d("NcmTableManager", "Loaded ${ncmTable?.size} NCM entries from ${ncmRoot.Data_Ultima_Atualizacao_NCM}")
         } catch (e: Exception) {
             android.util.Log.e("NcmTableManager", "Error loading NCM table", e)
             ncmTable = emptyMap()
+            isInitialized = true // Mark as initialized even if failed, to prevent repeated attempts
         }
     }
 
@@ -56,27 +63,36 @@ object NcmTableManager {
         // Try exact match first
         ncmTable?.get(ncmCode)?.let { return cleanDescription(it) }
         
-        // If not found, try progressive truncation (e.g., "1234.56.78" -> "1234.56.7" -> "1234.56")
-        var code = ncmCode
+        // NCM codes from backend are 8 digits without dots (e.g., "07099300")
+        // NCM codes in table may have dots (e.g., "0709.93.00")
+        // Try formatting the code with dots: "07099300" -> "0709.93.00"
+        if (ncmCode.length == 8 && !ncmCode.contains(".")) {
+            val formatted = "${ncmCode.substring(0, 4)}.${ncmCode.substring(4, 6)}.${ncmCode.substring(6, 8)}"
+            ncmTable?.get(formatted)?.let { return cleanDescription(it) }
+        }
+        
+        // If not found, try progressive truncation
+        // Start from the full code and progressively remove trailing zeros and segments
+        var code = if (ncmCode.contains(".")) ncmCode else {
+            // Format without dots to with dots for lookup
+            if (ncmCode.length >= 8) {
+                "${ncmCode.substring(0, 4)}.${ncmCode.substring(4, 6)}.${ncmCode.substring(6, 8)}"
+            } else ncmCode
+        }
+        
         while (code.isNotEmpty()) {
             ncmTable?.get(code)?.let { return cleanDescription(it) }
             
-            // Remove last character/segment
+            // Remove trailing zeros and dots progressively
             code = when {
+                code.endsWith(".00") -> code.dropLast(3)
+                code.endsWith(".0") -> code.dropLast(2)
+                code.endsWith("00") && code.length > 2 -> code.dropLast(2)
                 code.endsWith("0") && code.length > 1 -> code.dropLast(1)
+                code.endsWith(".") -> code.dropLast(1)
                 code.contains(".") -> {
                     val lastDot = code.lastIndexOf(".")
-                    if (lastDot > 0) {
-                        val beforeDot = code.substring(0, lastDot)
-                        val afterDot = code.substring(lastDot + 1)
-                        if (afterDot.length > 1) {
-                            "$beforeDot.${afterDot.dropLast(1)}"
-                        } else {
-                            beforeDot
-                        }
-                    } else {
-                        ""
-                    }
+                    code.substring(0, lastDot)
                 }
                 else -> code.dropLast(1)
             }
