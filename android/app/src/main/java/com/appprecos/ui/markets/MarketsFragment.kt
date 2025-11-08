@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.appprecos.databinding.FragmentMarketsBinding
+import com.appprecos.util.NcmTableManager
 import kotlinx.coroutines.launch
 
 class MarketsFragment : Fragment() {
@@ -186,13 +187,14 @@ class MarketsFragment : Fragment() {
             dialog.dismiss()
         }
         
-        // Search functionality (basic filter)
+        // Search functionality - filter by both NCM code and description
         searchInput.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val query = s.toString().lowercase()
                 val filtered = response.products.filter {
-                    it.ncm.contains(query)
+                    val ncmDescription = NcmTableManager.getDescription(it.ncm).lowercase()
+                    it.ncm.lowercase().contains(query) || ncmDescription.contains(query)
                 }
                 productsAdapter.submitList(filtered)
             }

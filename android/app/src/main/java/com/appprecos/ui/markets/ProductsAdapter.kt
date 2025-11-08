@@ -7,6 +7,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.appprecos.data.model.ProductDetail
 import com.appprecos.databinding.ItemProductBinding
+import com.appprecos.util.NcmTableManager
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -32,10 +33,10 @@ class ProductsAdapter : ListAdapter<ProductDetail, ProductsAdapter.ProductViewHo
         fun bind(product: ProductDetail) {
             val context = binding.root.context
             
-            binding.textProductNcm.text = context.getString(
-                com.appprecos.R.string.product_ncm_label,
-                product.ncm
-            )
+            // Get NCM description from the table
+            val ncmDescription = NcmTableManager.getDescription(product.ncm)
+            
+            binding.textProductNcm.text = ncmDescription
             binding.textProductPrice.text = context.getString(
                 com.appprecos.R.string.product_price_format,
                 product.price
