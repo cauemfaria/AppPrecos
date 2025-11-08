@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: appprecos-backend
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: "./render-build.sh"
+    startCommand: "gunicorn --config gunicorn_config.py app:app"
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: FLASK_ENV
+        value: production
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/project/.playwright
+

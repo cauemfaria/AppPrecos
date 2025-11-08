@@ -7,20 +7,33 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    // Change this to your backend URL
-    // For emulator: http://10.0.2.2:5000/api/
-    // For physical device: http://YOUR_COMPUTER_IP:5000/api/
-    private const val BASE_URL = "http://10.0.2.2:5000/api/"
+    // Production backend URL (Render)
+    // TODO: Replace with your actual Render URL after deployment
+    private const val PRODUCTION_URL = "https://appprecos-backend.onrender.com/api/"
+    
+    // Development URLs
+    private const val EMULATOR_URL = "http://10.0.2.2:5000/api/"
+    private const val LOCALHOST_URL = "http://YOUR_COMPUTER_IP:5000/api/"
+    
+    // Switch between development and production
+    // Set to true for production, false for local development
+    private const val USE_PRODUCTION = true
+    
+    private val BASE_URL = if (USE_PRODUCTION) PRODUCTION_URL else EMULATOR_URL
     
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (USE_PRODUCTION) {
+            HttpLoggingInterceptor.Level.BASIC  // Less verbose in production
+        } else {
+            HttpLoggingInterceptor.Level.BODY   // Full logging in development
+        }
     }
     
     private val client = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
-        .connectTimeout(60, TimeUnit.SECONDS)  // NFCe extraction takes time
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(120, TimeUnit.SECONDS)  // Increased for Playwright operations
+        .readTimeout(120, TimeUnit.SECONDS)     // Increased for NFCe extraction
+        .writeTimeout(120, TimeUnit.SECONDS)
         .build()
     
     val retrofit: Retrofit = Retrofit.Builder()

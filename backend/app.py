@@ -5,6 +5,7 @@ Using Supabase REST API
 """
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from datetime import datetime
 import os
 import string
@@ -21,9 +22,24 @@ load_dotenv()
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
+# Validate required environment variables
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    raise ValueError("Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
+
 # Initialize Flask app
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max request size
+
+# Enable CORS for Android app
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "max_age": 3600
+    }
+})
 
 # Get Supabase admin client
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
@@ -180,6 +196,7 @@ def index():
         'version': '2.0',
         'architecture': 'Supabase PostgreSQL - 3-Table Design',
         'status': 'running',
+        'environment': os.getenv('FLASK_ENV', 'development'),
         'tables': ['markets', 'purchases', 'unique_products', 'processed_urls'],
         'endpoints': {
             'markets': '/api/markets',
@@ -187,9 +204,30 @@ def index():
             'market_products': '/api/markets/{market_id}/products',
             'nfce_extract': '/api/nfce/extract',
             'nfce_status': '/api/nfce/status/{url}',
-            'stats': '/api/stats'
+            'stats': '/api/stats',
+            'health': '/health'
         }
     })
+
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for monitoring"""
+    try:
+        # Test Supabase connection
+        supabase.table('markets').select('id').limit(1).execute()
+        return jsonify({
+            'status': 'healthy',
+            'database': 'connected',
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 503
 
 
 # ========== MARKET ENDPOINTS ==========

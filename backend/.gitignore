@@ -1,13 +1,3 @@
-# Backend specific ignores
-
-# Database files
-# *.db
-*.db-journal
-*.sqlite
-*.sqlite3
-markets_main.db
-market_databases/
-
 # Python
 __pycache__/
 *.py[cod]
@@ -33,30 +23,29 @@ wheels/
 .installed.cfg
 *.egg
 
-# Environment
+# Environment variables
 .env
-.venv
+.env.local
+.env.*.local
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
+# Playwright
+.playwright/
+
 # Logs
 *.log
+logs/
 
-# Playwright
-debug_screenshot.png
-page_state.png
-before_click.png
-after_click.png
-products_tab.png
-before_tab_click.png
-error_state.png
+# OS
+.DS_Store
+Thumbs.db
 
 # Test files
-ncm_codes.xlsx
-nfce_xml_attempt_*.xml
-
+test_*.py
+*_test.py

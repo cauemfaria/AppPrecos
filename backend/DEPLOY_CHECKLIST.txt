@@ -1,0 +1,153 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    RENDER DEPLOYMENT CHECKLIST                           ║
+║              Production-Ready Backend for AppPrecos                      ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+📋 STEP 1: PREPARE GIT REPOSITORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] Run these commands:
+    cd backend
+    chmod +x render-build.sh
+    git add .
+    git commit -m "Add Render deployment configuration"
+    git push origin main
+
+
+📋 STEP 2: GET SUPABASE CREDENTIALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] Go to: https://supabase.com/dashboard
+[ ] Select your project
+[ ] Go to: Settings → API
+    [ ] Copy Project URL → SUPABASE_URL
+    [ ] Copy service_role key → SUPABASE_SERVICE_ROLE_KEY
+    [ ] Copy anon public key → SUPABASE_ANON_KEY
+[ ] Go to: Settings → Database
+    [ ] Copy Connection String (URI) → DATABASE_URL
+    [ ] Add your password to the connection string
+
+
+📋 STEP 3: CREATE WEB SERVICE ON RENDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] Go to: https://dashboard.render.com
+[ ] Click: "New +" → "Web Service"
+[ ] Connect your GitHub repository
+[ ] Fill in configuration:
+    [ ] Name: appprecos-backend
+    [ ] Region: Oregon (or closest to your users)
+    [ ] Branch: main
+    [ ] Root Directory: backend
+    [ ] Environment: Python 3
+    [ ] Build Command: ./render-build.sh
+    [ ] Start Command: gunicorn --config gunicorn_config.py app:app
+    [ ] Plan: Starter ($7/month) ⭐ RECOMMENDED
+
+
+📋 STEP 4: ADD ENVIRONMENT VARIABLES IN RENDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Click "Add Environment Variable" for each:
+
+[ ] SUPABASE_URL
+    Value: https://xxxxx.supabase.co
+
+[ ] SUPABASE_SERVICE_ROLE_KEY
+    Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+[ ] SUPABASE_ANON_KEY
+    Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+[ ] DATABASE_URL
+    Value: postgresql://postgres:password@db.xxxxx.supabase.co:5432/postgres
+
+[ ] FLASK_ENV
+    Value: production
+
+[ ] PLAYWRIGHT_BROWSERS_PATH
+    Value: /opt/render/project/.playwright
+
+
+📋 STEP 5: DEPLOY!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] Click: "Create Web Service"
+[ ] Wait for deployment (5-10 minutes first time)
+[ ] Check logs for errors
+[ ] Note your URL: https://appprecos-backend.onrender.com
+
+
+📋 STEP 6: VERIFY DEPLOYMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Test these endpoints:
+
+[ ] Health check:
+    curl https://your-app.onrender.com/health
+    Expected: {"status":"healthy","database":"connected"}
+
+[ ] API info:
+    curl https://your-app.onrender.com/
+    Expected: {"name":"AppPrecos API v2","status":"running"}
+
+[ ] Stats:
+    curl https://your-app.onrender.com/api/stats
+    Expected: {"total_markets":...,"total_purchases":...}
+
+
+📋 STEP 7: UPDATE ANDROID APP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] Open: android/app/src/main/java/com/appprecos/api/ApiClient.kt
+[ ] Update line 12:
+    private const val PRODUCTION_URL = "https://your-actual-url.onrender.com/api/"
+[ ] Verify line 20:
+    private const val USE_PRODUCTION = true
+[ ] Rebuild Android app:
+    cd android
+    ./gradlew clean build
+
+
+📋 STEP 8: TEST END-TO-END
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] Install updated APK on Android device
+[ ] Test scanning NFCe QR code
+[ ] Verify data appears in app
+[ ] Check data in Supabase dashboard
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                              DONE! 🎉                                    ║
+║                                                                          ║
+║  Your backend is now production-ready and serving multiple users!       ║
+║                                                                          ║
+║  📊 Monitor: https://dashboard.render.com                                ║
+║  📈 Database: https://supabase.com/dashboard                             ║
+║  🏥 Health: https://your-app.onrender.com/health                         ║
+║                                                                          ║
+║  💰 Cost: $7/month (Render Starter + Supabase Free)                     ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+
+🔧 TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Build fails?
+→ Check logs in Render dashboard
+→ Verify render-build.sh has execute permissions
+
+Database connection fails?
+→ Verify DATABASE_URL has password included
+→ Check Supabase dashboard for connection issues
+
+NFCe extraction times out?
+→ Already configured with 120s timeout - should work
+→ Check Playwright installation in logs
+
+CORS errors?
+→ Already configured - should work automatically
+
+First request takes 30+ seconds?
+→ You're on Free tier - upgrade to Starter ($7/mo)
+
+
+📚 MORE INFO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+→ backend/QUICK_START.md - 5-minute quick guide
+→ backend/DEPLOYMENT.md - Detailed deployment guide
+→ RENDER_SETUP_COMPLETE.md - Complete overview
+
