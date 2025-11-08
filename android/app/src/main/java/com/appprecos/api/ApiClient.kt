@@ -8,8 +8,7 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
     // Production backend URL (Render)
-    // TODO: Replace with your actual Render URL after deployment
-    private const val PRODUCTION_URL = "https://appprecos-backend.onrender.com/api/"
+    private const val PRODUCTION_URL = "https://appprecos.onrender.com/api/"
     
     // Development URLs
     private const val EMULATOR_URL = "http://10.0.2.2:5000/api/"
