@@ -37,19 +37,34 @@ class ProductsAdapter : ListAdapter<ProductDetail, ProductsAdapter.ProductViewHo
             val ncmDescription = NcmTableManager.getDescription(product.ncm)
             binding.textProductNcm.text = ncmDescription
             
-            // Display unit type
+            // Display quantity with unit type
             val unitText = when (product.unidade_comercial.uppercase()) {
-                "UN" -> context.getString(com.appprecos.R.string.product_unit_unidade)
-                "KG" -> context.getString(com.appprecos.R.string.product_unit_kg)
-                else -> product.unidade_comercial
+                "UN" -> if (product.quantity == 1.0) {
+                    context.getString(com.appprecos.R.string.product_unit_unidade)
+                } else {
+                    "${product.quantity.toInt()} ${context.getString(com.appprecos.R.string.product_unit_unidade)}s"
+                }
+                "KG" -> "${String.format("%.2f", product.quantity)} ${context.getString(com.appprecos.R.string.product_unit_kg)}"
+                else -> "${product.quantity} ${product.unidade_comercial}"
             }
-            binding.textProductUnit.text = unitText
+            binding.textProductQuantity.text = unitText
             
-            // Display price
-            binding.textProductPrice.text = context.getString(
-                com.appprecos.R.string.product_price_format,
-                product.price
-            )
+            // Display total price
+            binding.textProductPrice.text = String.format("R$ %.2f", product.price)
+            
+            // Calculate and display unit price if quantity > 1
+            if (product.quantity > 1.0 || product.unidade_comercial.uppercase() == "KG") {
+                val unitPrice = product.price / product.quantity
+                val unitPriceText = when (product.unidade_comercial.uppercase()) {
+                    "UN" -> String.format("R$ %.2f/un", unitPrice)
+                    "KG" -> String.format("R$ %.2f/Kg", unitPrice)
+                    else -> String.format("R$ %.2f/${product.unidade_comercial}", unitPrice)
+                }
+                binding.textProductUnitPrice.text = unitPriceText
+                binding.textProductUnitPrice.visibility = android.view.View.VISIBLE
+            } else {
+                binding.textProductUnitPrice.visibility = android.view.View.GONE
+            }
             
             // Format and display last_updated date (or fall back to purchase_date)
             val dateToDisplay = product.last_updated ?: product.purchase_date
@@ -57,25 +72,16 @@ class ProductsAdapter : ListAdapter<ProductDetail, ProductsAdapter.ProductViewHo
                 val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
                 val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
                 val date = inputFormat.parse(dateToDisplay.replace(" ", "T").substring(0, 19))
-                binding.textProductUpdated.text = context.getString(
-                    com.appprecos.R.string.product_updated_label,
-                    outputFormat.format(date ?: Date())
-                )
+                binding.textProductUpdated.text = "Updated: ${outputFormat.format(date ?: Date())}"
             } catch (e: Exception) {
                 // Try alternative format
                 try {
                     val inputFormat2 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                     val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
                     val date = inputFormat2.parse(dateToDisplay.substring(0, 19))
-                    binding.textProductUpdated.text = context.getString(
-                        com.appprecos.R.string.product_updated_label,
-                        outputFormat.format(date ?: Date())
-                    )
+                    binding.textProductUpdated.text = "Updated: ${outputFormat.format(date ?: Date())}"
                 } catch (e2: Exception) {
-                    binding.textProductUpdated.text = context.getString(
-                        com.appprecos.R.string.product_updated_label,
-                        dateToDisplay
-                    )
+                    binding.textProductUpdated.text = "Updated: $dateToDisplay"
                 }
             }
         }
