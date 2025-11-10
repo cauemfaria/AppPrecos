@@ -61,17 +61,18 @@
     
     <!-- Bottom Navigation Style -->
     <style name="Widget.AppPrecos.BottomNavigationView" parent="Widget.Material3.BottomNavigationView">
-        <item name="itemIconSize">24dp</item>
+        <item name="itemIconSize">22dp</item>
         <item name="itemIconTint">@color/bottom_nav_color</item>
-        <item name="itemTextAppearanceActive">?attr/textAppearanceLabelMedium</item>
+        <item name="itemTextAppearanceActive">?attr/textAppearanceLabelSmall</item>
         <item name="itemTextAppearanceInactive">?attr/textAppearanceLabelSmall</item>
         <item name="itemTextAppearanceActiveBoldEnabled">true</item>
         <item name="itemTextColor">@color/bottom_nav_color</item>
         <item name="itemActiveIndicatorStyle">@style/Widget.AppPrecos.BottomNavigationView.ActiveIndicator</item>
-        <item name="itemPaddingTop">4dp</item>
-        <item name="itemPaddingBottom">4dp</item>
-        <item name="android:paddingTop">0dp</item>
-        <item name="android:paddingBottom">0dp</item>
+        <item name="itemPaddingTop">0dp</item>
+        <item name="itemPaddingBottom">0dp</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingBottom">4dp</item>
+        <item name="android:minHeight">56dp</item>
     </style>
     
     <!-- Active Indicator Style for Bottom Navigation -->
