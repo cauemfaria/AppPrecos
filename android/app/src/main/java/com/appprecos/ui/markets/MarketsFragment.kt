@@ -39,11 +39,6 @@ class MarketsFragment : Fragment() {
     }
     
     private fun setupUI() {
-        // Refresh button
-        binding.buttonRefresh.setOnClickListener {
-            viewModel.refreshMarkets()
-        }
-        
         // FAB for refresh
         binding.fab.setOnClickListener {
             viewModel.refreshMarkets()

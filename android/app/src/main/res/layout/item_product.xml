@@ -34,10 +34,9 @@
                 android:id="@+id/textProductNcm"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
                 android:textColor="?attr/colorOnSurface"
                 android:fontFamily="monospace"
-                android:textStyle="bold"
                 tools:text="NCM: 07099300" />
 
             <!-- Updated Date -->
@@ -45,7 +44,7 @@
                 android:id="@+id/textProductUpdated"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textAppearance="?attr/textAppearanceLabelMedium"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginTop="@dimen/spacing_xs"
                 tools:text="Updated: 16/10/2025 05:54" />
@@ -69,7 +68,6 @@
                 android:layout_height="wrap_content"
                 android:textAppearance="?attr/textAppearanceTitleMedium"
                 android:textColor="?attr/colorOnPrimaryContainer"
-                android:textStyle="bold"
                 android:paddingStart="@dimen/spacing_md"
                 android:paddingEnd="@dimen/spacing_md"
                 android:paddingTop="@dimen/spacing_sm"

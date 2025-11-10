@@ -11,5 +11,11 @@
         android:icon="@drawable/ic_storefront"
         android:title="@string/nav_markets"
         android:contentDescription="@string/nav_markets_description" />
+    
+    <item
+        android:id="@+id/navigation_settings"
+        android:icon="@drawable/ic_settings"
+        android:title="Settings"
+        android:contentDescription="App settings" />
 </menu>
 

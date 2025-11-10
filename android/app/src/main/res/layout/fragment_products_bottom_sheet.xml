@@ -22,10 +22,11 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Market Products"
-        android:textAppearance="?attr/textAppearanceHeadlineSmall"
-        android:paddingBottom="@dimen/spacing_md"/>
+        android:textAppearance="?attr/textAppearanceTitleLarge"
+        android:textColor="?attr/colorOnSurface"
+        android:paddingBottom="@dimen/spacing_sm"/>
 
-    <!-- Search (optional for Phase 1.5) -->
+    <!-- Search -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchInputLayout"
         android:layout_width="match_parent"
@@ -33,7 +34,10 @@
         android:hint="Search products..."
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         app:startIconDrawable="@drawable/ic_search"
+        app:startIconTint="?attr/colorOnSurfaceVariant"
         app:endIconMode="clear_text"
+        app:boxStrokeWidth="1dp"
+        app:boxStrokeWidthFocused="2dp"
         android:layout_marginBottom="@dimen/spacing_md">
 
         <com.google.android.material.textfield.TextInputEditText
@@ -41,7 +45,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="text"
-            android:maxLines="1" />
+            android:maxLines="1"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
 
     </com.google.android.material.textfield.TextInputLayout>
 
@@ -58,8 +63,9 @@
     <com.google.android.material.button.MaterialButton
         android:id="@+id/buttonClose"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="@dimen/button_height_large"
         android:text="@string/dialog_close"
+        android:textAppearance="?attr/textAppearanceLabelLarge"
         android:layout_marginTop="@dimen/spacing_md"
         style="@style/Widget.Material3.Button.TextButton" />
 

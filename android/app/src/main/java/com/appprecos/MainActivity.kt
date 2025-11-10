@@ -9,6 +9,7 @@ import androidx.fragment.app.Fragment
 import com.appprecos.databinding.ActivityMainBinding
 import com.appprecos.ui.markets.MarketsFragment
 import com.appprecos.ui.scanner.ScannerFragment
+import com.appprecos.ui.settings.SettingsFragment
 import com.google.android.material.badge.BadgeDrawable
 import com.google.android.material.navigation.NavigationBarView
 
@@ -80,6 +81,14 @@ class MainActivity : AppCompatActivity() {
                         showFragment(MarketsFragment())
                         binding.topAppBar?.title = getString(R.string.markets_title)
                         currentNavigationItemId = R.id.navigation_markets
+                    }
+                    true
+                }
+                R.id.navigation_settings -> {
+                    if (currentNavigationItemId != R.id.navigation_settings) {
+                        showFragment(SettingsFragment())
+                        binding.topAppBar?.title = "Settings"
+                        currentNavigationItemId = R.id.navigation_settings
                     }
                     true
                 }
