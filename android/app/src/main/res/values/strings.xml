@@ -11,12 +11,13 @@
     
     <!-- Scanner Screen -->
     <string name="scanner_title">Scan NFCe Receipt</string>
+    <string name="scanner_scan_qr_button">Scan QR Code</string>
     <string name="scanner_scan_button">Scan QR Code</string>
     <string name="scanner_or">OR</string>
-    <string name="scanner_manual_label">Enter NFCe URL manually:</string>
+    <string name="scanner_manual_label">Enter NFCe URL manually</string>
     <string name="scanner_url_hint">https://www.nfce.fazenda.sp.gov.br/...</string>
     <string name="scanner_submit">Process URL</string>
-    <string name="scanner_status_idle">Scan QR code or enter URL</string>
+    <string name="scanner_status_idle">Ready to scan</string>
     <string name="scanner_status_processing">Processing NFCe…</string>
     <string name="scanner_camera_permission_required">Camera permission is required to scan QR codes</string>
     <string name="scanner_enter_url">Please enter a URL</string>
@@ -42,7 +43,7 @@
     <string name="product_ncm_label">NCM: %1$s</string>
     <string name="product_updated_label">Updated: %1$s</string>
     <string name="product_price_format">R$ %1$.2f</string>
-    <string name="product_unit_unidade">Unidade</string>
+    <string name="product_unit_unidade">Por unidade</string>
     <string name="product_unit_kg">Kg</string>
     
     <!-- Success Messages -->

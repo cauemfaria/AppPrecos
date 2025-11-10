@@ -37,31 +37,32 @@ class ProductsAdapter : ListAdapter<ProductDetail, ProductsAdapter.ProductViewHo
             val ncmDescription = NcmTableManager.getDescription(product.ncm)
             binding.textProductNcm.text = ncmDescription
             
-            // Display quantity with unit type
+            // Display unit type (simple text, no quantity numbers)
             val unitText = when (product.unidade_comercial.uppercase()) {
-                "UN" -> if (product.quantity == 1.0) {
-                    context.getString(com.appprecos.R.string.product_unit_unidade)
-                } else {
-                    "${product.quantity.toInt()} ${context.getString(com.appprecos.R.string.product_unit_unidade)}s"
-                }
-                "KG" -> "${String.format("%.2f", product.quantity)} ${context.getString(com.appprecos.R.string.product_unit_kg)}"
-                else -> "${product.quantity} ${product.unidade_comercial}"
+                "UN" -> context.getString(com.appprecos.R.string.product_unit_unidade)
+                "KG" -> context.getString(com.appprecos.R.string.product_unit_kg)
+                else -> product.unidade_comercial
             }
             binding.textProductQuantity.text = unitText
             
             // Display total price
             binding.textProductPrice.text = String.format("R$ %.2f", product.price)
             
-            // Calculate and display unit price if quantity > 1
-            if (product.quantity > 1.0 || product.unidade_comercial.uppercase() == "KG") {
+            // Calculate and display unit price (only if quantity is valid and > 0)
+            if (product.quantity > 0 && product.quantity.isFinite()) {
                 val unitPrice = product.price / product.quantity
-                val unitPriceText = when (product.unidade_comercial.uppercase()) {
-                    "UN" -> String.format("R$ %.2f/un", unitPrice)
-                    "KG" -> String.format("R$ %.2f/Kg", unitPrice)
-                    else -> String.format("R$ %.2f/${product.unidade_comercial}", unitPrice)
+                // Check if unitPrice is valid (not infinity or NaN)
+                if (unitPrice.isFinite() && !unitPrice.isNaN()) {
+                    val unitPriceText = when (product.unidade_comercial.uppercase()) {
+                        "UN" -> String.format("R$ %.2f/un", unitPrice)
+                        "KG" -> String.format("R$ %.2f/Kg", unitPrice)
+                        else -> String.format("R$ %.2f/${product.unidade_comercial}", unitPrice)
+                    }
+                    binding.textProductUnitPrice.text = unitPriceText
+                    binding.textProductUnitPrice.visibility = android.view.View.VISIBLE
+                } else {
+                    binding.textProductUnitPrice.visibility = android.view.View.GONE
                 }
-                binding.textProductUnitPrice.text = unitPriceText
-                binding.textProductUnitPrice.visibility = android.view.View.VISIBLE
             } else {
                 binding.textProductUnitPrice.visibility = android.view.View.GONE
             }

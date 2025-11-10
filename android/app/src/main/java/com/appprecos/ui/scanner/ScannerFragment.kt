@@ -56,8 +56,8 @@ class ScannerFragment : Fragment() {
     }
     
     private fun setupUI() {
-        // Extended FAB to start camera scanning
-        binding.fabScan.setOnClickListener {
+        // Scan QR Code button (primary action)
+        binding.buttonScanQr.setOnClickListener {
             checkCameraPermissionAndStart()
         }
         
@@ -82,14 +82,16 @@ class ScannerFragment : Fragment() {
                 when (state) {
                     is ScanState.Idle -> {
                         binding.progressIndicator.visibility = View.GONE
-                        binding.textStatus.text = getString(com.appprecos.R.string.scanner_status_idle)
+                        binding.textStatus.visibility = View.GONE
                     }
                     is ScanState.Processing -> {
                         binding.progressIndicator.visibility = View.VISIBLE
+                        binding.textStatus.visibility = View.VISIBLE
                         binding.textStatus.text = getString(com.appprecos.R.string.scanner_status_processing)
                     }
                     is ScanState.Success -> {
                         binding.progressIndicator.visibility = View.GONE
+                        binding.textStatus.visibility = View.VISIBLE
                         val actionText = if (state.action == "created") 
                             getString(com.appprecos.R.string.success_new_market) 
                         else 
@@ -106,15 +108,14 @@ class ScannerFragment : Fragment() {
                             com.google.android.material.snackbar.Snackbar.LENGTH_LONG
                         ).setAction("View") {
                             // Switch to markets tab
-                            (activity as? MainActivity)?.findViewById<com.google.android.material.navigation.NavigationBarView>(
-                                com.appprecos.R.id.bottomNavigation
-                            )?.selectedItemId = com.appprecos.R.id.navigation_markets
+                            (activity as? MainActivity)?.switchToMarketsTab()
                         }.show()
                         
                         binding.editTextUrl.text?.clear()
                     }
                     is ScanState.Duplicate -> {
                         binding.progressIndicator.visibility = View.GONE
+                        binding.textStatus.visibility = View.VISIBLE
                         binding.textStatus.text = getString(com.appprecos.R.string.duplicate_qr_title)
                         com.google.android.material.snackbar.Snackbar.make(
                             binding.root,
@@ -124,6 +125,7 @@ class ScannerFragment : Fragment() {
                     }
                     is ScanState.Error -> {
                         binding.progressIndicator.visibility = View.GONE
+                        binding.textStatus.visibility = View.VISIBLE
                         binding.textStatus.text = getString(com.appprecos.R.string.error_label, state.message)
                         com.google.android.material.snackbar.Snackbar.make(
                             binding.root,
