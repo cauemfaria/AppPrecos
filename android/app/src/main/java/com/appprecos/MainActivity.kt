@@ -101,7 +101,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     fun switchToMarketsTab() {
-        binding.bottomNavigation?.selectedItemId = R.id.navigation_markets
+        getNavigationView()?.selectedItemId = R.id.navigation_markets
     }
     
     private fun refreshCurrentFragment() {
@@ -113,17 +113,8 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun getNavigationView(): NavigationBarView? {
-        // Try to get BottomNavigationView first (compact/medium screens)
-        return try {
-            binding.bottomNavigation
-        } catch (e: Exception) {
-            // If not found, try NavigationRailView (large screens)
-            try {
-                binding.navigationRail
-            } catch (e: Exception) {
-                null
-            }
-        }
+        // Return BottomNavigationView for compact screens or NavigationRailView for large screens
+        return binding.bottomNavigation ?: binding.navigationRail
     }
     
     private fun showFragment(fragment: Fragment) {
