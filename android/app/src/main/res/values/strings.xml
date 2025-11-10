@@ -22,6 +22,9 @@
     <string name="scanner_camera_permission_required">Camera permission is required to scan QR codes</string>
     <string name="scanner_enter_url">Please enter a URL</string>
     <string name="scanner_coming_soon">Camera scanning - Coming soon!\nUse manual input for now</string>
+    <string name="scanner_instruction">Position the QR code within the frame</string>
+    <string name="scanner_close">Close</string>
+    <string name="scanner_qr_detected">QR Code detected!</string>
     
     <!-- Markets Screen -->
     <string name="markets_title">Markets</string>

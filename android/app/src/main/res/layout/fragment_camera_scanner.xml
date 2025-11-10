@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <!-- Camera Preview -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Overlay with scanning frame -->
+    <View
+        android:id="@+id/overlayTop"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#99000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/scanningFrame" />
+
+    <View
+        android:id="@+id/overlayLeft"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#99000000"
+        app:layout_constraintTop_toTopOf="@id/scanningFrame"
+        app:layout_constraintBottom_toBottomOf="@id/scanningFrame"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/scanningFrame" />
+
+    <View
+        android:id="@+id/overlayRight"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#99000000"
+        app:layout_constraintTop_toTopOf="@id/scanningFrame"
+        app:layout_constraintBottom_toBottomOf="@id/scanningFrame"
+        app:layout_constraintStart_toEndOf="@id/scanningFrame"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <View
+        android:id="@+id/overlayBottom"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#99000000"
+        app:layout_constraintTop_toBottomOf="@id/scanningFrame"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Scanning Frame -->
+    <View
+        android:id="@+id/scanningFrame"
+        android:layout_width="280dp"
+        android:layout_height="280dp"
+        android:background="@drawable/scanner_frame"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Instructions -->
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/textInstructions"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/scanner_instruction"
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textColor="@android:color/white"
+        android:textAlignment="center"
+        android:padding="16dp"
+        android:background="#99000000"
+        app:layout_constraintTop_toBottomOf="@id/scanningFrame"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="32dp" />
+
+    <!-- Close Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonClose"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/scanner_close"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:textColor="@android:color/white"
+        app:icon="@android:drawable/ic_menu_close_clear_cancel"
+        app:iconTint="@android:color/white"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_margin="16dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+
