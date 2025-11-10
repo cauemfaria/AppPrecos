@@ -9,8 +9,6 @@
     android:layout_marginEnd="@dimen/spacing_sm"
     android:layout_marginTop="@dimen/spacing_sm"
     android:layout_marginBottom="@dimen/spacing_sm"
-    android:clickable="true"
-    android:focusable="true"
     android:contentDescription="@string/cd_market_card"
     style="?attr/materialCardViewElevatedStyle"
     app:cardElevation="@dimen/elevation_low"
@@ -45,39 +43,18 @@
             android:ellipsize="end"
             tools:text="Rua Example, 123, Bairro, Cidade - SP" />
 
-        <!-- Divider -->
-        <com.google.android.material.divider.MaterialDivider
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="@dimen/spacing_md"
-            android:layout_marginBottom="@dimen/spacing_sm" />
-
-        <!-- Market ID with Tap Hint -->
-        <LinearLayout
+        <!-- View Products Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonViewProducts"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/textMarketId"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textAppearance="?attr/textAppearanceLabelSmall"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:fontFamily="monospace"
-                tools:text="ID: MKT7Y3JALQC" />
-
-            <!-- Tap Hint -->
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/market_tap_hint"
-                android:textAppearance="?attr/textAppearanceLabelMedium"
-                android:textColor="?attr/colorPrimary" />
-
-        </LinearLayout>
+            android:text="@string/market_view_products"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            style="@style/Widget.Material3.Button.TonalButton"
+            app:icon="@drawable/ic_storefront"
+            app:iconGravity="textStart"
+            app:cornerRadius="@dimen/spacing_sm"
+            android:layout_marginTop="@dimen/spacing_md" />
 
     </LinearLayout>
 

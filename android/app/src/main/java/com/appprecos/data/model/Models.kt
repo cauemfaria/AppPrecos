@@ -66,7 +66,8 @@ data class ProductDetail(
     val price: Double,
     val nfce_url: String?,
     val purchase_date: String,
-    val created_at: String
+    val created_at: String,
+    val last_updated: String? = null
 )
 
 data class Stats(

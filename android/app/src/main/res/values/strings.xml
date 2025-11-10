@@ -36,11 +36,14 @@
     <string name="dialog_search_products">Search products…</string>
     
     <!-- Card Items -->
+    <string name="market_view_products">View Products</string>
     <string name="market_tap_hint">Tap to view products →</string>
     <string name="market_id_label">ID: %1$s</string>
     <string name="product_ncm_label">NCM: %1$s</string>
     <string name="product_updated_label">Updated: %1$s</string>
     <string name="product_price_format">R$ %1$.2f</string>
+    <string name="product_unit_unidade">Unidade</string>
+    <string name="product_unit_kg">Kg</string>
     
     <!-- Success Messages -->
     <string name="success_qr_processed">✓ QR Code Successfully Processed!</string>

@@ -35,27 +35,48 @@ class ProductsAdapter : ListAdapter<ProductDetail, ProductsAdapter.ProductViewHo
             
             // Get NCM description from the table
             val ncmDescription = NcmTableManager.getDescription(product.ncm)
-            
             binding.textProductNcm.text = ncmDescription
+            
+            // Display unit type
+            val unitText = when (product.unidade_comercial.uppercase()) {
+                "UN" -> context.getString(com.appprecos.R.string.product_unit_unidade)
+                "KG" -> context.getString(com.appprecos.R.string.product_unit_kg)
+                else -> product.unidade_comercial
+            }
+            binding.textProductUnit.text = unitText
+            
+            // Display price
             binding.textProductPrice.text = context.getString(
                 com.appprecos.R.string.product_price_format,
                 product.price
             )
             
-            // Format date
+            // Format and display last_updated date (or fall back to purchase_date)
+            val dateToDisplay = product.last_updated ?: product.purchase_date
             try {
-                val inputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
                 val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-                val date = inputFormat.parse(product.purchase_date.replace("T", " ").substring(0, 19))
+                val date = inputFormat.parse(dateToDisplay.replace(" ", "T").substring(0, 19))
                 binding.textProductUpdated.text = context.getString(
                     com.appprecos.R.string.product_updated_label,
-                    outputFormat.format(date)
+                    outputFormat.format(date ?: Date())
                 )
             } catch (e: Exception) {
-                binding.textProductUpdated.text = context.getString(
-                    com.appprecos.R.string.product_updated_label,
-                    product.purchase_date
-                )
+                // Try alternative format
+                try {
+                    val inputFormat2 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                    val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                    val date = inputFormat2.parse(dateToDisplay.substring(0, 19))
+                    binding.textProductUpdated.text = context.getString(
+                        com.appprecos.R.string.product_updated_label,
+                        outputFormat.format(date ?: Date())
+                    )
+                } catch (e2: Exception) {
+                    binding.textProductUpdated.text = context.getString(
+                        com.appprecos.R.string.product_updated_label,
+                        dateToDisplay
+                    )
+                }
             }
         }
     }

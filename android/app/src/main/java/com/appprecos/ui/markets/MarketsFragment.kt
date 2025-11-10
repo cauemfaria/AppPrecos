@@ -39,11 +39,6 @@ class MarketsFragment : Fragment() {
     }
     
     private fun setupUI() {
-        // FAB for refresh
-        binding.fab.setOnClickListener {
-            viewModel.refreshMarkets()
-        }
-        
         // Search input - filter markets as user types
         binding.editTextSearch.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -70,19 +65,6 @@ class MarketsFragment : Fragment() {
         binding.recyclerViewMarkets.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = marketsAdapter
-            
-            // Hide FAB on scroll down, show on scroll up
-            addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                    if (dy > 0) {
-                        // Scrolling down
-                        binding.fab.hide()
-                    } else if (dy < 0) {
-                        // Scrolling up
-                        binding.fab.show()
-                    }
-                }
-            })
         }
     }
     
@@ -197,19 +179,6 @@ class MarketsFragment : Fragment() {
         })
         
         dialog.show()
-    }
-    
-    fun refresh() {
-        viewModel.loadMarkets()
-        
-        // Show refresh feedback with Snackbar
-        view?.let {
-            com.google.android.material.snackbar.Snackbar.make(
-                it,
-                "Refreshing markets...",
-                com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
-            ).show()
-        }
     }
     
     override fun onDestroyView() {

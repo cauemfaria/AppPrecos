@@ -77,7 +77,7 @@
             android:layout_height="0dp"
             android:clipToPadding="false"
             android:paddingTop="@dimen/spacing_sm"
-            android:paddingBottom="88dp"
+            android:paddingBottom="@dimen/spacing_md"
             app:layout_constraintTop_toBottomOf="@id/searchInputLayout"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -144,20 +144,6 @@
             app:layout_constraintEnd_toEndOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <!-- Floating Action Button -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_margin="@dimen/spacing_lg"
-        android:contentDescription="@string/cd_refresh_markets"
-        app:srcCompat="@drawable/ic_refresh"
-        app:elevation="@dimen/elevation_high"
-        app:shapeAppearance="@style/ShapeAppearance.AppPrecos.Large"
-        app:fabSize="normal"
-        style="@style/Widget.Material3.FloatingActionButton.Primary" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
 

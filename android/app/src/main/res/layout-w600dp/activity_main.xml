@@ -9,27 +9,10 @@
     android:fitsSystemWindows="true"
     tools:context=".MainActivity">
 
-    <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/appBarLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fitsSystemWindows="true">
-
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/topAppBar"
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            app:title="@string/app_name"
-            app:menu="@menu/top_app_bar_menu"
-            style="@style/Widget.Material3.Toolbar.OnSurface" />
-
-    </com.google.android.material.appbar.AppBarLayout>
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="horizontal"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        android:orientation="horizontal">
 
         <!-- Navigation Rail for Large Screens (≥600dp) -->
         <com.google.android.material.navigationrail.NavigationRailView
@@ -38,9 +21,10 @@
             android:layout_height="match_parent"
             app:menu="@menu/bottom_navigation_menu"
             app:labelVisibilityMode="labeled"
-            app:elevation="@dimen/elevation_none"
+            app:elevation="4dp"
             app:itemIconSize="@dimen/icon_size_medium"
-            style="@style/Widget.Material3.NavigationRailView" />
+            android:background="?attr/colorSurface"
+            style="@style/Widget.AppPrecos.NavigationRailView" />
 
         <!-- Fragment Container -->
         <FrameLayout

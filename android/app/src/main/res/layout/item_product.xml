@@ -29,15 +29,26 @@
             android:layout_gravity="center_vertical"
             android:orientation="vertical">
 
-            <!-- NCM Code -->
+            <!-- Product Description -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/textProductNcm"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="?attr/textAppearanceTitleSmall"
                 android:textColor="?attr/colorOnSurface"
-                android:fontFamily="monospace"
-                tools:text="NCM: 07099300" />
+                android:maxLines="2"
+                android:ellipsize="end"
+                tools:text="Tomate" />
+
+            <!-- Unit Type -->
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/textProductUnit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginTop="@dimen/spacing_xs"
+                tools:text="Unidade" />
 
             <!-- Updated Date -->
             <com.google.android.material.textview.MaterialTextView
