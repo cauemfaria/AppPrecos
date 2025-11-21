@@ -180,6 +180,10 @@ def extract_full_nfce_data(url, headless=True):
                 ncm_pattern = r'Código NCM</label>\s*<span>(\d{8})</span>'
                 ncm_codes = re.findall(ncm_pattern, html)
                 
+                # Pattern for EAN codes (Código EAN Comercial)
+                ean_pattern = r'<label>Código EAN Comercial</label>\s*<span>([^<]+)</span>'
+                ean_codes = re.findall(ean_pattern, html)
+                
                 # Pattern for product names
                 product_pattern = r'class="fixo-prod-serv-descricao">\s*<span>([^<]+)</span>'
                 product_names = re.findall(product_pattern, html)
@@ -209,10 +213,14 @@ def extract_full_nfce_data(url, headless=True):
                         unit_price = float(unit_prices[i].replace(',', '.')) if i < len(unit_prices) else 0
                         unit = units[i].strip() if i < len(units) else 'UN'
                         
+                        # Get EAN code, clean and store as "SEM GTIN" if not available
+                        ean = ean_codes[i].strip() if i < len(ean_codes) else 'SEM GTIN'
+                        
                         result['products'].append({
                             'number': i + 1,
                             'product': product_names[i].strip() if i < len(product_names) else '',
                             'ncm': ncm_codes[i],
+                            'ean': ean,                      # EAN code or "SEM GTIN"
                             'quantity': quantity,
                             'unidade_comercial': unit,
                             'total_price': total_price,      # Total paid for this quantity
@@ -251,7 +259,7 @@ if __name__ == "__main__":
     if products:
         print(f"\n✓ Extracted {len(products)} products:")
         for p in products[:5]:
-            print(f"  {p['number']}. {p['product']} - NCM: {p['ncm']} - {p['quantity']} {p['unidade_comercial']} - R$ {p['price']}")
+            print(f"  {p['number']}. {p['product']} - NCM: {p['ncm']} - EAN: {p['ean']} - {p['quantity']} {p['unidade_comercial']} - R$ {p['price']}")
         if len(products) > 5:
             print(f"  ... and {len(products) - 5} more")
     else:

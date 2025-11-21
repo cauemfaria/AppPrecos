@@ -58,7 +58,7 @@ AppPrecos/
 - Click "Visualizar em Abas" button to expand details
 - Extract from HTML:
   - **Market:** Name, address, CEP
-  - **Products:** NCM code, quantity, unit, price
+  - **Products:** NCM code, EAN code, quantity, unit, price
 - Returns all extracted data
 
 ### 5. Market Matching
@@ -100,6 +100,7 @@ Stores every product from every receipt - unlimited entries
 - `id` - Auto-increment
 - `market_id` - Foreign key to markets
 - `ncm` - 8-digit product code
+- `ean` - EAN/GTIN barcode (or "SEM GTIN")
 - `quantity` - Amount purchased
 - `unidade_comercial` - Unit (KG, UN, L, etc.)
 - `price` - Product price
@@ -116,6 +117,7 @@ Stores the most recent price for each product per market
 - `id` - Auto-increment
 - `market_id` - Foreign key to markets
 - `ncm` - Product code
+- `ean` - EAN/GTIN barcode (or "SEM GTIN")
 - `unidade_comercial` - Unit
 - `price` - Latest price
 - `nfce_url` - Latest receipt URL
@@ -315,8 +317,9 @@ Return Success
 
 ---
 
-## NCM Codes
+## Product Codes
 
+### NCM Codes
 **NCM** (Nomenclatura Comum do Mercosul) is an 8-digit product classification code used throughout South America.
 
 **Examples:**
@@ -325,6 +328,16 @@ Return Success
 - `04012010` - Leite (milk)
 
 Used for accurate price comparison across markets.
+
+### EAN Codes
+**EAN** (European Article Number), also known as GTIN (Global Trade Item Number), is a barcode standard used worldwide for product identification.
+
+**Examples:**
+- `7898083580716` - Alface Americana (packaged lettuce)
+- `7896102000122` - Ketchup Heinz
+- `SEM GTIN` - Products without EAN (fresh produce sold by weight)
+
+**Note:** Packaged products have EAN codes, while fresh produce (vegetables, fruits sold by weight) typically show "SEM GTIN".
 
 ---
 
