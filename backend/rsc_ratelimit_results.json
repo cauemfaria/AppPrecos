@@ -1,0 +1,110 @@
+{
+  "found": [
+    {
+      "name": "KETCHUP HEINZ 1,033KG",
+      "ean": "7896102000122",
+      "info": {
+        "ean": "7896102000122",
+        "ean_tipo": "EAN13",
+        "cest": null,
+        "ncm": "2103.20.90",
+        "nome": "CATCHUP HEINZ 1033G SACHE",
+        "nome_acento": "",
+        "unid_abr": "",
+        "unid_desc": "",
+        "marca": "Desconhecido ",
+        "pais": "Brasil",
+        "categoria": null,
+        "dh_update": "2024-05-12 14:57:26",
+        "link_foto": "https://gtin.rscsistemas.com.br/api/gtin/img/7896102000122"
+      },
+      "has_image": true
+    },
+    {
+      "name": "COENTRO MACO",
+      "ean": "7898083580167",
+      "info": {
+        "ean": "7898083580167",
+        "ean_tipo": "EAN13",
+        "cest": null,
+        "ncm": "7069000",
+        "nome": "COENTRO C/CEBOLINHA UND",
+        "nome_acento": "",
+        "unid_abr": "",
+        "unid_desc": "",
+        "marca": "Desconhecido ",
+        "pais": "Brasil",
+        "categoria": null,
+        "dh_update": "2023-05-22 07:05:02",
+        "link_foto": "https://gtin.rscsistemas.com.br/api/gtin/img/7898083580167"
+      },
+      "has_image": true
+    },
+    {
+      "name": "RUCULA HIDROP MACO",
+      "ean": "7898558680026",
+      "info": {
+        "ean": "7898558680026",
+        "ean_tipo": "EAN13",
+        "cest": null,
+        "ncm": "7099990",
+        "nome": "RUCULA HIDROPONICA SEMPRE VERDE",
+        "nome_acento": "",
+        "unid_abr": "",
+        "unid_desc": "",
+        "marca": "Desconhecido ",
+        "pais": "Brasil",
+        "categoria": null,
+        "dh_update": "2023-05-22 07:05:02",
+        "link_foto": "https://gtin.rscsistemas.com.br/api/gtin/img/7898558680026"
+      },
+      "has_image": true
+    },
+    {
+      "name": "CANJICA OKOSHI SAL M 40G",
+      "ean": "7896639800325",
+      "info": {
+        "ean": "7896639800325",
+        "ean_tipo": "EAN13",
+        "cest": "",
+        "ncm": "1904.90.00",
+        "nome": "CANJICA MILHO OKOSHI 50G C/SAL MARINHO",
+        "nome_acento": "",
+        "unid_abr": "",
+        "unid_desc": "",
+        "marca": null,
+        "pais": "Brasil",
+        "categoria": null,
+        "dh_update": "2024-05-12 14:57:26",
+        "link_foto": "https://gtin.rscsistemas.com.br/api/gtin/img/7896639800325"
+      },
+      "has_image": true
+    },
+    {
+      "name": "POLPA D.MARCHI ACER.100G",
+      "ean": "7896519210206",
+      "info": {
+        "ean": "7896519210206",
+        "ean_tipo": "EAN13",
+        "cest": "1709500",
+        "ncm": "2008.99.00",
+        "nome": "POLPA DE FRUTA ACEROLA DEMARCHI",
+        "nome_acento": "",
+        "unid_abr": "",
+        "unid_desc": "",
+        "marca": "DEMARCHI ",
+        "pais": "Brasil",
+        "categoria": null,
+        "dh_update": "2024-05-12 14:57:26",
+        "link_foto": "https://gtin.rscsistemas.com.br/api/gtin/img/7896519210206"
+      },
+      "has_image": true
+    }
+  ],
+  "not_found": [
+    {
+      "name": "ALFACE AMER BOLA 200G",
+      "ean": "7898083580716"
+    }
+  ]
+}

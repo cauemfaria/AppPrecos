@@ -139,6 +139,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 'market_id': market_id,
                 'ncm': product['ncm'],
                 'ean': product.get('ean', 'SEM GTIN'),
+                'product_name': product.get('product', ''),        # Product description
                 'quantity': product.get('quantity', 0),
                 'unidade_comercial': product.get('unidade_comercial', 'UN'),
                 'total_price': product.get('total_price', 0),      # Total paid for this quantity
@@ -156,6 +157,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 'market_id': market_id,
                 'ncm': product['ncm'],
                 'ean': product.get('ean', 'SEM GTIN'),
+                'product_name': product.get('product', ''),        # Product description
                 'unidade_comercial': product.get('unidade_comercial', 'UN'),
                 'price': product.get('unit_price', 0),  # Unit price (per KG or per UN)
                 'nfce_url': nfce_url,

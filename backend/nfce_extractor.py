@@ -159,15 +159,19 @@ def extract_full_nfce_data(url, headless=True):
             
             try:
                 # Load and navigate
-                page.goto(url, wait_until="networkidle", timeout=30000)
+                page.goto(url, wait_until="load", timeout=60000)
+                time.sleep(4)
+                
+                # Scroll to make button visible
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 time.sleep(2)
                 
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(1)
-                page.click('#btnVisualizarAbas', timeout=10000)
-                time.sleep(4)
-                page.wait_for_load_state("networkidle")
-                time.sleep(2)
+                # Wait for button to be present and click it with force
+                page.wait_for_selector('#btnVisualizarAbas', state='attached', timeout=20000)
+                page.evaluate("document.getElementById('btnVisualizarAbas').click()")
+                time.sleep(6)
+                page.wait_for_load_state("load", timeout=60000)
+                time.sleep(3)
                 
                 # Get HTML
                 html = page.content()

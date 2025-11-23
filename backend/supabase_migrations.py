@@ -47,6 +47,7 @@ CREATE TABLE purchases (
     market_id VARCHAR(20) NOT NULL REFERENCES markets(market_id),
     ncm VARCHAR(8) NOT NULL,
     ean VARCHAR(50),
+    product_name VARCHAR(200),
     quantity FLOAT NOT NULL,
     unidade_comercial VARCHAR(10),
     total_price FLOAT NOT NULL,
@@ -59,6 +60,7 @@ CREATE TABLE purchases (
 CREATE INDEX idx_purchases_market_id ON purchases(market_id);
 CREATE INDEX idx_purchases_ncm ON purchases(ncm);
 CREATE INDEX idx_purchases_date ON purchases(purchase_date);
+CREATE INDEX idx_purchases_product_name ON purchases(product_name);
 
 -- TABLE 3: Unique Products (Latest Prices)
 CREATE TABLE unique_products (
@@ -66,6 +68,7 @@ CREATE TABLE unique_products (
     market_id VARCHAR(20) NOT NULL REFERENCES markets(market_id),
     ncm VARCHAR(8) NOT NULL,
     ean VARCHAR(50),
+    product_name VARCHAR(200),
     unidade_comercial VARCHAR(10),
     price FLOAT NOT NULL,
     nfce_url VARCHAR(1000),
@@ -75,6 +78,7 @@ CREATE TABLE unique_products (
 
 CREATE INDEX idx_unique_products_market_id ON unique_products(market_id);
 CREATE INDEX idx_unique_products_ncm ON unique_products(ncm);
+CREATE INDEX idx_unique_products_product_name ON unique_products(product_name);
 
 -- TABLE 4: Processed URLs (with Status Tracking)
 CREATE TABLE processed_urls (

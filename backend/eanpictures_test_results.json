@@ -1,0 +1,31 @@
+{
+  "with_description": [],
+  "with_image": [],
+  "not_found": [
+    {
+      "nfce_name": "ALFACE AMER BOLA 200G",
+      "ean": "7898083580716"
+    },
+    {
+      "nfce_name": "KETCHUP HEINZ 1,033KG",
+      "ean": "7896102000122"
+    },
+    {
+      "nfce_name": "COENTRO MACO",
+      "ean": "7898083580167"
+    },
+    {
+      "nfce_name": "RUCULA HIDROP MACO",
+      "ean": "7898558680026"
+    },
+    {
+      "nfce_name": "CANJICA OKOSHI SAL M 40G",
+      "ean": "7896639800325"
+    },
+    {
+      "nfce_name": "POLPA D.MARCHI ACER.100G",
+      "ean": "7896519210206"
+    }
+  ],
+  "errors": []
+}
