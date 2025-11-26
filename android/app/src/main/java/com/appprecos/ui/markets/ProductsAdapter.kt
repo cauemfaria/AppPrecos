@@ -33,9 +33,13 @@ class ProductsAdapter : ListAdapter<ProductDetail, ProductsAdapter.ProductViewHo
         fun bind(product: ProductDetail) {
             val context = binding.root.context
             
-            // Get NCM description from the table
-            val ncmDescription = NcmTableManager.getDescription(product.ncm)
-            binding.textProductNcm.text = ncmDescription
+            // Display product name from NFCe if available, otherwise fallback to NCM description
+            val displayName = if (!product.product_name.isNullOrBlank()) {
+                product.product_name
+            } else {
+                NcmTableManager.getDescription(product.ncm)
+            }
+            binding.textProductNcm.text = displayName
             
             // Display unit type (simple text, no quantity numbers)
             val unitText = when (product.unidade_comercial.uppercase()) {

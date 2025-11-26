@@ -31,6 +31,7 @@ data class MarketInfo(
 data class Product(
     val number: Int,
     val product: String,
+    val product_name: String? = null,
     val ncm: String,
     val quantity: Double,
     val unidade_comercial: String,
@@ -61,6 +62,7 @@ data class MarketProductsResponse(
 data class ProductDetail(
     val id: Int,
     val ncm: String,
+    val product_name: String? = null,
     val quantity: Double,
     val unidade_comercial: String,
     val price: Double,
