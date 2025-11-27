@@ -50,6 +50,81 @@ print(f"✓ API URL: {SUPABASE_URL}")
 
 # ==================== UTILITY FUNCTIONS ====================
 
+def validate_database_schema():
+    """
+    Validate that required tables and columns exist in Supabase
+    Returns: dict with validation results
+    """
+    validation_results = {
+        'valid': True,
+        'errors': [],
+        'warnings': []
+    }
+    
+    try:
+        # Check if purchases table has product_name column
+        test_purchase = {
+            'market_id': 'TEST_VALIDATION',
+            'ncm': '00000000',
+            'ean': 'TEST',
+            'product_name': 'Test Product',
+            'quantity': 1.0,
+            'unidade_comercial': 'UN',
+            'total_price': 1.0,
+            'unit_price': 1.0,
+            'nfce_url': 'test',
+            'purchase_date': datetime.utcnow().isoformat()
+        }
+        
+        # Try to insert test data (will rollback by deleting it)
+        response = supabase.table('purchases').insert(test_purchase).execute()
+        
+        if response.data:
+            # Clean up test data
+            test_id = response.data[0]['id']
+            supabase.table('purchases').delete().eq('id', test_id).execute()
+            print("✓ purchases table schema validated (product_name column exists)")
+        else:
+            validation_results['valid'] = False
+            validation_results['errors'].append("purchases table test insert failed")
+            
+    except Exception as e:
+        validation_results['valid'] = False
+        validation_results['errors'].append(f"purchases table validation failed: {str(e)}")
+        print(f"✗ purchases table validation failed: {e}")
+    
+    try:
+        # Check unique_products table
+        test_unique = {
+            'market_id': 'TEST_VALIDATION',
+            'ncm': '00000000',
+            'ean': 'TEST',
+            'product_name': 'Test Product',
+            'unidade_comercial': 'UN',
+            'price': 1.0,
+            'nfce_url': 'test',
+            'last_updated': datetime.utcnow().isoformat()
+        }
+        
+        response = supabase.table('unique_products').insert(test_unique).execute()
+        
+        if response.data:
+            # Clean up test data
+            test_id = response.data[0]['id']
+            supabase.table('unique_products').delete().eq('id', test_id).execute()
+            print("✓ unique_products table schema validated (product_name column exists)")
+        else:
+            validation_results['valid'] = False
+            validation_results['errors'].append("unique_products table test insert failed")
+            
+    except Exception as e:
+        validation_results['valid'] = False
+        validation_results['errors'].append(f"unique_products table validation failed: {str(e)}")
+        print(f"✗ unique_products table validation failed: {e}")
+    
+    return validation_results
+
+
 def generate_market_id():
     """Generate a random unique market ID (format: MKT + 8 random chars)"""
     chars = string.ascii_uppercase + string.digits
@@ -58,13 +133,19 @@ def generate_market_id():
 
 
 def process_nfce_in_background(url, url_record_id):
-    """Background task to process NFCe extraction and save to database"""
+    """
+    Background task to process NFCe extraction and save to database
+    FIXED v2.1: Uses improved save_products_to_supabase with rollback capability
+    """
     try:
+        print(f"\n[BACKGROUND TASK] Processing NFCe URL (Record ID: {url_record_id})")
+        
         # Import crawler
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         from nfce_extractor import extract_full_nfce_data
         
         # Extract data
+        print(f"[BACKGROUND TASK] Extracting NFCe data...")
         result = extract_full_nfce_data(url, headless=True)
         market_info = result.get('market_info', {})
         products = result.get('products', [])
@@ -75,7 +156,10 @@ def process_nfce_in_background(url, url_record_id):
             print(f"✗ Background processing failed: No products or market info")
             return
         
+        print(f"[BACKGROUND TASK] Extracted {len(products)} products from {market_info.get('name')}")
+        
         # Check/create market
+        print(f"[BACKGROUND TASK] Checking/creating market...")
         market_result = supabase.table('markets').select('*').match({
             'name': market_info['name'],
             'address': market_info['address']
@@ -83,6 +167,7 @@ def process_nfce_in_background(url, url_record_id):
         
         if market_result.data:
             market = market_result.data[0]
+            print(f"[BACKGROUND TASK] Market found: {market['market_id']}")
         else:
             new_market_id = generate_market_id()
             while True:
@@ -98,9 +183,11 @@ def process_nfce_in_background(url, url_record_id):
             }
             market_insert = supabase.table('markets').insert(market_data).execute()
             market = market_insert.data[0]
+            print(f"[BACKGROUND TASK] Market created: {new_market_id}")
         
-        # Save products
-        save_products_to_supabase(market['market_id'], products, url)
+        # Save products (uses improved function with rollback)
+        print(f"[BACKGROUND TASK] Saving products to database...")
+        save_result = save_products_to_supabase(market['market_id'], products, url)
         
         # Update URL record with success
         update_data = {
@@ -109,12 +196,13 @@ def process_nfce_in_background(url, url_record_id):
             'status': 'success'
         }
         supabase.table('processed_urls').update(update_data).eq('id', url_record_id).execute()
-        print(f"✓ Background processing complete: {len(products)} products saved")
+        print(f"✓ [BACKGROUND TASK] Processing complete: {save_result['saved_to_purchases']} purchases, "
+              f"{save_result['created_unique']} new unique products, {save_result['updated_unique']} updated")
         
     except Exception as e:
         # Update status to error
         supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-        print(f"✗ Background processing error: {e}")
+        print(f"✗ [BACKGROUND TASK] Processing error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -123,61 +211,153 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
     """
     Save products to Supabase PostgreSQL database
     Maintains both full history (purchases) and latest prices (unique_products)
+    
+    FIXED v2.1:
+    - Added explicit error checking to prevent silent failures
+    - Added detailed logging for debugging
+    - Added rollback capability for transaction safety
+    - All-or-nothing approach: if any insert fails, rollback all changes
     """
     if purchase_date is None:
         purchase_date = datetime.utcnow()
+    
+    # Track inserted IDs for rollback capability
+    inserted_purchase_ids = []
+    inserted_unique_ids = []
+    updated_unique_backup = {}  # Store old values for updates
     
     try:
         saved_to_purchases = 0
         updated_unique = 0
         created_unique = 0
         
+        print(f"\n{'='*80}")
+        print(f"SAVING PRODUCTS TO SUPABASE (Transaction-safe)")
+        print(f"{'='*80}")
+        print(f"Market ID: {market_id}")
+        print(f"Products count: {len(products)}")
+        print(f"NFCe URL: {nfce_url[:80]}...")
+        print(f"{'='*80}\n")
+        
         # 1. Insert to PURCHASES table (full history - unlimited entries)
         # Stores RAW data: quantity, total_price paid, unit_price per KG/UN
-        for product in products:
-            purchase_data = {
-                'market_id': market_id,
-                'ncm': product['ncm'],
-                'ean': product.get('ean', 'SEM GTIN'),
-                'product_name': product.get('product', ''),        # Product description
-                'quantity': product.get('quantity', 0),
-                'unidade_comercial': product.get('unidade_comercial', 'UN'),
-                'total_price': product.get('total_price', 0),      # Total paid for this quantity
-                'unit_price': product.get('unit_price', 0),        # Price per KG or UN
-                'nfce_url': nfce_url,
-                'purchase_date': purchase_date.isoformat()
-            }
-            supabase.table('purchases').insert(purchase_data).execute()
-            saved_to_purchases += 1
+        print(f"[1/2] Inserting {len(products)} products to PURCHASES table...")
+        
+        for idx, product in enumerate(products, 1):
+            try:
+                purchase_data = {
+                    'market_id': market_id,
+                    'ncm': product['ncm'],
+                    'ean': product.get('ean', 'SEM GTIN'),
+                    'product_name': product.get('product', ''),        # Product description
+                    'quantity': product.get('quantity', 0),
+                    'unidade_comercial': product.get('unidade_comercial', 'UN'),
+                    'total_price': product.get('total_price', 0),      # Total paid for this quantity
+                    'unit_price': product.get('unit_price', 0),        # Price per KG or UN
+                    'nfce_url': nfce_url,
+                    'purchase_date': purchase_date.isoformat()
+                }
+                
+                # FIXED: Add explicit error checking
+                response = supabase.table('purchases').insert(purchase_data).execute()
+                
+                # Check if insert was successful
+                if not response.data or len(response.data) == 0:
+                    error_msg = f"Failed to insert product {idx} (NCM: {product['ncm']}) to purchases table. No data returned."
+                    print(f"❌ ERROR: {error_msg}")
+                    raise Exception(error_msg)
+                
+                # Track inserted ID for potential rollback
+                inserted_purchase_ids.append(response.data[0]['id'])
+                saved_to_purchases += 1
+                print(f"  ✓ [{idx}/{len(products)}] {product.get('product', 'Unknown')[:50]} - NCM: {product['ncm']} (ID: {response.data[0]['id']})")
+                
+            except Exception as e:
+                print(f"❌ CRITICAL ERROR inserting product {idx} to PURCHASES:")
+                print(f"   Product: {product.get('product', 'Unknown')}")
+                print(f"   NCM: {product.get('ncm', 'Unknown')}")
+                print(f"   Error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                # Rollback will happen in outer exception handler
+                raise Exception(f"Failed to insert to purchases table at product {idx}: {str(e)}")
+        
+        print(f"✓ Successfully inserted {saved_to_purchases} products to PURCHASES table\n")
         
         # 2. Upsert to UNIQUE_PRODUCTS table (one per NCM per market)
         # Stores UNIT PRICE only (price per KG or per UN) - no quantity needed
-        for product in products:
-            unique_data = {
-                'market_id': market_id,
-                'ncm': product['ncm'],
-                'ean': product.get('ean', 'SEM GTIN'),
-                'product_name': product.get('product', ''),        # Product description
-                'unidade_comercial': product.get('unidade_comercial', 'UN'),
-                'price': product.get('unit_price', 0),  # Unit price (per KG or per UN)
-                'nfce_url': nfce_url,
-                'last_updated': datetime.utcnow().isoformat()
-            }
-            
-            # Check if exists
-            response = supabase.table('unique_products').select('id').match({
-                'market_id': market_id,
-                'ncm': product['ncm']
-            }).execute()
-            
-            if response.data:
-                # Update existing
-                supabase.table('unique_products').update(unique_data).eq('id', response.data[0]['id']).execute()
-                updated_unique += 1
-            else:
-                # Create new
-                supabase.table('unique_products').insert(unique_data).execute()
-                created_unique += 1
+        print(f"[2/2] Upserting {len(products)} products to UNIQUE_PRODUCTS table...")
+        
+        for idx, product in enumerate(products, 1):
+            try:
+                unique_data = {
+                    'market_id': market_id,
+                    'ncm': product['ncm'],
+                    'ean': product.get('ean', 'SEM GTIN'),
+                    'product_name': product.get('product', ''),        # Product description
+                    'unidade_comercial': product.get('unidade_comercial', 'UN'),
+                    'price': product.get('unit_price', 0),  # Unit price (per KG or per UN)
+                    'nfce_url': nfce_url,
+                    'last_updated': datetime.utcnow().isoformat()
+                }
+                
+                # Check if exists
+                response = supabase.table('unique_products').select('*').match({
+                    'market_id': market_id,
+                    'ncm': product['ncm']
+                }).execute()
+                
+                if response.data:
+                    # Store backup for rollback
+                    old_id = response.data[0]['id']
+                    updated_unique_backup[old_id] = response.data[0]
+                    
+                    # Update existing
+                    update_response = supabase.table('unique_products').update(unique_data).eq('id', old_id).execute()
+                    
+                    # FIXED: Check update success
+                    if not update_response.data or len(update_response.data) == 0:
+                        error_msg = f"Failed to update product {idx} (NCM: {product['ncm']}) in unique_products table"
+                        print(f"❌ ERROR: {error_msg}")
+                        raise Exception(error_msg)
+                    
+                    updated_unique += 1
+                    print(f"  ↻ [{idx}/{len(products)}] Updated {product.get('product', 'Unknown')[:50]} (ID: {old_id})")
+                else:
+                    # Create new
+                    insert_response = supabase.table('unique_products').insert(unique_data).execute()
+                    
+                    # FIXED: Check insert success
+                    if not insert_response.data or len(insert_response.data) == 0:
+                        error_msg = f"Failed to insert product {idx} (NCM: {product['ncm']}) to unique_products table"
+                        print(f"❌ ERROR: {error_msg}")
+                        raise Exception(error_msg)
+                    
+                    # Track inserted ID for potential rollback
+                    inserted_unique_ids.append(insert_response.data[0]['id'])
+                    created_unique += 1
+                    print(f"  ✓ [{idx}/{len(products)}] Created {product.get('product', 'Unknown')[:50]} (ID: {insert_response.data[0]['id']})")
+                    
+            except Exception as e:
+                print(f"❌ CRITICAL ERROR upserting product {idx} to UNIQUE_PRODUCTS:")
+                print(f"   Product: {product.get('product', 'Unknown')}")
+                print(f"   NCM: {product.get('ncm', 'Unknown')}")
+                print(f"   Error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                # Rollback will happen in outer exception handler
+                raise Exception(f"Failed to upsert to unique_products table at product {idx}: {str(e)}")
+        
+        print(f"✓ Successfully processed {updated_unique + created_unique} products in UNIQUE_PRODUCTS table")
+        print(f"  - Created: {created_unique}")
+        print(f"  - Updated: {updated_unique}\n")
+        
+        print(f"{'='*80}")
+        print(f"TRANSACTION COMPLETED SUCCESSFULLY")
+        print(f"  ✓ Purchases saved: {saved_to_purchases}")
+        print(f"  ✓ Unique products created: {created_unique}")
+        print(f"  ✓ Unique products updated: {updated_unique}")
+        print(f"{'='*80}\n")
         
         return {
             'saved_to_purchases': saved_to_purchases,
@@ -186,7 +366,63 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         }
     
     except Exception as e:
-        print(f"Error saving products to Supabase: {e}")
+        print(f"\n{'='*80}")
+        print(f"❌ TRANSACTION FAILED - INITIATING ROLLBACK")
+        print(f"{'='*80}")
+        print(f"   Market ID: {market_id}")
+        print(f"   NFCe URL: {nfce_url}")
+        print(f"   Error: {str(e)}")
+        print(f"{'='*80}\n")
+        
+        # ROLLBACK: Delete all inserted records
+        rollback_errors = []
+        
+        # Rollback purchases
+        if inserted_purchase_ids:
+            print(f"Rolling back {len(inserted_purchase_ids)} purchases...")
+            try:
+                for purchase_id in inserted_purchase_ids:
+                    supabase.table('purchases').delete().eq('id', purchase_id).execute()
+                print(f"✓ Rolled back {len(inserted_purchase_ids)} purchases")
+            except Exception as rb_error:
+                rollback_errors.append(f"Failed to rollback purchases: {rb_error}")
+                print(f"✗ Rollback purchases failed: {rb_error}")
+        
+        # Rollback newly created unique_products
+        if inserted_unique_ids:
+            print(f"Rolling back {len(inserted_unique_ids)} unique products (new)...")
+            try:
+                for unique_id in inserted_unique_ids:
+                    supabase.table('unique_products').delete().eq('id', unique_id).execute()
+                print(f"✓ Rolled back {len(inserted_unique_ids)} unique products")
+            except Exception as rb_error:
+                rollback_errors.append(f"Failed to rollback unique_products: {rb_error}")
+                print(f"✗ Rollback unique_products failed: {rb_error}")
+        
+        # Rollback updated unique_products (restore old values)
+        if updated_unique_backup:
+            print(f"Rolling back {len(updated_unique_backup)} unique products (updates)...")
+            try:
+                for unique_id, old_data in updated_unique_backup.items():
+                    # Remove system fields
+                    restore_data = {k: v for k, v in old_data.items() if k not in ['id', 'created_at']}
+                    supabase.table('unique_products').update(restore_data).eq('id', unique_id).execute()
+                print(f"✓ Restored {len(updated_unique_backup)} unique products to previous state")
+            except Exception as rb_error:
+                rollback_errors.append(f"Failed to restore unique_products: {rb_error}")
+                print(f"✗ Restore unique_products failed: {rb_error}")
+        
+        if rollback_errors:
+            print(f"\n⚠ ROLLBACK COMPLETED WITH ERRORS:")
+            for rb_err in rollback_errors:
+                print(f"  - {rb_err}")
+        else:
+            print(f"\n✓ ROLLBACK COMPLETED SUCCESSFULLY - Database state restored")
+        
+        print(f"{'='*80}\n")
+        
+        import traceback
+        traceback.print_exc()
         raise
 
 
@@ -197,7 +433,7 @@ def index():
     """API information endpoint"""
     return jsonify({
         'name': 'AppPrecos API v2',
-        'version': '2.0',
+        'version': '2.1',
         'architecture': 'Supabase PostgreSQL - 3-Table Design',
         'status': 'running',
         'environment': os.getenv('FLASK_ENV', 'development'),
@@ -209,8 +445,15 @@ def index():
             'nfce_extract': '/api/nfce/extract',
             'nfce_status': '/api/nfce/status/{url}',
             'stats': '/api/stats',
-            'health': '/health'
-        }
+            'health': '/health',
+            'schema_check': '/api/schema/validate'
+        },
+        'fixes': [
+            'v2.1: Fixed silent failures in purchases table inserts',
+            'v2.1: Added explicit error checking for all database operations',
+            'v2.1: Added detailed logging for debugging',
+            'v2.1: Added schema validation endpoint'
+        ]
     })
 
 
@@ -513,6 +756,37 @@ def get_stats():
             'total_markets': 0,
             'total_purchases': 0,
             'total_unique_products': 0
+        }), 500
+
+
+@app.route('/api/schema/validate', methods=['GET'])
+def validate_schema():
+    """
+    Validate database schema - checks if all required columns exist
+    Useful for debugging silent insert failures
+    """
+    try:
+        validation = validate_database_schema()
+        
+        if validation['valid']:
+            return jsonify({
+                'status': 'valid',
+                'message': 'Database schema is correctly configured',
+                'details': validation
+            }), 200
+        else:
+            return jsonify({
+                'status': 'invalid',
+                'message': 'Database schema has issues',
+                'details': validation,
+                'action_required': 'Run add_product_name_migration.sql in Supabase SQL Editor'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Schema validation failed: {str(e)}',
+            'action_required': 'Check database connectivity and table existence'
         }), 500
 
 
