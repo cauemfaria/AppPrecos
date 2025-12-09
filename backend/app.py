@@ -30,7 +30,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
     raise ValueError("Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
 
 if not OPENAI_API_KEY:
-    print("⚠ WARNING: OPENAI_API_KEY not set - LLM product matching will be disabled")
+    print("[WARN] OPENAI_API_KEY not set - LLM product matching will be disabled")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -54,12 +54,12 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 openai_client = None
 if OPENAI_API_KEY:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    print("✓ OpenAI client initialized")
+    print("[OK] OpenAI client initialized")
 else:
-    print("⚠ OpenAI client NOT initialized (API key missing)")
+    print("[WARN] OpenAI client NOT initialized (API key missing)")
 
-print("✓ Supabase client initialized")
-print(f"✓ API URL: {SUPABASE_URL}")
+print("[OK] Supabase client initialized")
+print(f"[OK] API URL: {SUPABASE_URL}")
 
 
 # ==================== UTILITY FUNCTIONS ====================
@@ -93,9 +93,9 @@ def log_llm_decision(market_id, ncm, new_product_name, existing_products,
             'created_at': datetime.utcnow().isoformat()
         }
         supabase.table('llm_product_decisions').insert(log_data).execute()
-        print(f"  📝 LLM decision logged: {decision}")
+        print(f"  [LOG] LLM decision logged: {decision}")
     except Exception as e:
-        print(f"  ⚠ Failed to log LLM decision: {e}")
+        print(f"  [WARN] Failed to log LLM decision: {e}")
 
 
 def call_llm_for_product_match(new_product_name, existing_products):
@@ -169,7 +169,7 @@ Sua resposta (apenas uma palavra):"""
         execution_time_ms = int((time.time() - start_time) * 1000)
         llm_response = response.choices[0].message.content.strip()
         
-        print(f"  🤖 LLM response: {llm_response} ({execution_time_ms}ms)")
+        print(f"  [LLM] Response: {llm_response} ({execution_time_ms}ms)")
         
         # Parse response - normalize by removing spaces and converting to uppercase
         normalized_response = llm_response.upper().replace(" ", "")
@@ -196,7 +196,7 @@ Sua resposta (apenas uma palavra):"""
     except Exception as e:
         execution_time_ms = int((time.time() - start_time) * 1000)
         error_msg = f"OpenAI API error: {str(e)}"
-        print(f"  ❌ LLM error: {error_msg}")
+        print(f"  [ERROR] LLM error: {error_msg}")
         return None, None, prompt, None, execution_time_ms, error_msg
 
 
@@ -217,7 +217,7 @@ def process_nfce_in_background(url, url_record_id):
                 'status': 'error',
                 'error_message': 'No products or market info extracted'
             }).eq('id', url_record_id).execute()
-            print(f"✗ [BACKGROUND] Failed: No products or market info")
+            print(f"[FAIL] [BACKGROUND] Failed: No products or market info")
             return
         
         print(f"[BACKGROUND] Extracted {len(products)} products from {market_info.get('name')}")
@@ -257,14 +257,14 @@ def process_nfce_in_background(url, url_record_id):
             'status': 'success'
         }).eq('id', url_record_id).execute()
         
-        print(f"✓ [BACKGROUND] Complete: {save_result['saved_to_purchases']} products saved")
+        print(f"[OK] [BACKGROUND] Complete: {save_result['saved_to_purchases']} products saved")
         
     except Exception as e:
         supabase.table('processed_urls').update({
             'status': 'error',
             'error_message': str(e)
         }).eq('id', url_record_id).execute()
-        print(f"✗ [BACKGROUND] Error: {e}")
+        print(f"[FAIL] [BACKGROUND] Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -318,13 +318,13 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 
                 inserted_purchase_ids.append(response.data[0]['id'])
                 saved_to_purchases += 1
-                print(f"  ✓ [{idx}/{len(products)}] {product.get('product', 'Unknown')[:50]}")
+                print(f"  [+] [{idx}/{len(products)}] {product.get('product', 'Unknown')[:50]}")
                 
             except Exception as e:
-                print(f"❌ ERROR inserting product {idx}: {str(e)}")
+                print(f"[ERROR] Inserting product {idx}: {str(e)}")
                 raise Exception(f"Failed at product {idx}: {str(e)}")
         
-        print(f"✓ Inserted {saved_to_purchases} products to PURCHASES\n")
+        print(f"[OK] Inserted {saved_to_purchases} products to PURCHASES\n")
         
         # 2. Upsert to UNIQUE_PRODUCTS table using LLM-based matching
         print(f"[2/2] Upserting to UNIQUE_PRODUCTS table (LLM-based matching)...")
@@ -364,7 +364,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                     
                     inserted_unique_ids.append(insert_response.data[0]['id'])
                     created_unique += 1
-                    print(f"  ✓ [{idx}/{len(products)}] Created (new NCM): {product_name[:50]}")
+                    print(f"  [+] [{idx}/{len(products)}] Created (new NCM): {product_name[:50]}")
                     
                     # Log decision (no LLM needed)
                     log_llm_decision(
@@ -383,7 +383,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                     continue
                 
                 # CASE 2: Existing products found -> call LLM to decide
-                print(f"  🔍 [{idx}/{len(products)}] Found {len(existing_products)} existing products with NCM {ncm}")
+                print(f"  [SEARCH] [{idx}/{len(products)}] Found {len(existing_products)} existing products with NCM {ncm}")
                 
                 decision, matched_id, llm_prompt, llm_response, exec_time, error_msg = call_llm_for_product_match(
                     new_product_name=product_name,
@@ -407,7 +407,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 
                 # Handle LLM failure -> skip product
                 if decision is None:
-                    print(f"  ⚠ [{idx}/{len(products)}] SKIPPED (LLM error): {product_name[:50]}")
+                    print(f"  [SKIP] [{idx}/{len(products)}] SKIPPED (LLM error): {product_name[:50]}")
                     skipped_products += 1
                     continue
                 
@@ -420,7 +420,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                     
                     inserted_unique_ids.append(insert_response.data[0]['id'])
                     created_unique += 1
-                    print(f"  ✓ [{idx}/{len(products)}] Created (LLM: new product): {product_name[:50]}")
+                    print(f"  [+] [{idx}/{len(products)}] Created (LLM: new product): {product_name[:50]}")
                     
                 elif decision.startswith("UPDATE:"):
                     # Update existing product
@@ -434,14 +434,14 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                         raise Exception(f"Failed to update product {idx}")
                     
                     updated_unique += 1
-                    print(f"  ↻ [{idx}/{len(products)}] Updated (LLM: same as ID {matched_id}): {product_name[:50]}")
+                    print(f"  [~] [{idx}/{len(products)}] Updated (LLM: same as ID {matched_id}): {product_name[:50]}")
                     
             except Exception as e:
-                print(f"❌ ERROR processing product {idx}: {str(e)}")
+                print(f"[ERROR] Processing product {idx}: {str(e)}")
                 raise Exception(f"Failed at product {idx}: {str(e)}")
         
         print(f"\n{'='*60}")
-        print(f"✓ COMPLETED: {saved_to_purchases} purchases, {created_unique} new, {updated_unique} updated, {skipped_products} skipped")
+        print(f"[OK] COMPLETED: {saved_to_purchases} purchases, {created_unique} new, {updated_unique} updated, {skipped_products} skipped")
         print(f"{'='*60}\n")
         
         return {
@@ -453,33 +453,33 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
     
     except Exception as e:
         print(f"\n{'='*60}")
-        print(f"❌ TRANSACTION FAILED - ROLLING BACK")
+        print(f"[ERROR] TRANSACTION FAILED - ROLLING BACK")
         print(f"{'='*60}")
         
         if inserted_purchase_ids:
             try:
                 for purchase_id in inserted_purchase_ids:
                     supabase.table('purchases').delete().eq('id', purchase_id).execute()
-                print(f"✓ Rolled back purchases")
+                print(f"[OK] Rolled back purchases")
             except Exception as rb_error:
-                print(f"✗ Rollback purchases failed: {rb_error}")
+                print(f"[FAIL] Rollback purchases failed: {rb_error}")
         
         if inserted_unique_ids:
             try:
                 for unique_id in inserted_unique_ids:
                     supabase.table('unique_products').delete().eq('id', unique_id).execute()
-                print(f"✓ Rolled back unique products")
+                print(f"[OK] Rolled back unique products")
             except Exception as rb_error:
-                print(f"✗ Rollback unique_products failed: {rb_error}")
+                print(f"[FAIL] Rollback unique_products failed: {rb_error}")
         
         if updated_unique_backup:
             try:
                 for unique_id, old_data in updated_unique_backup.items():
                     restore_data = {k: v for k, v in old_data.items() if k not in ['id', 'created_at']}
                     supabase.table('unique_products').update(restore_data).eq('id', unique_id).execute()
-                print(f"✓ Restored updated products")
+                print(f"[OK] Restored updated products")
             except Exception as rb_error:
-                print(f"✗ Restore failed: {rb_error}")
+                print(f"[FAIL] Restore failed: {rb_error}")
         
         print(f"{'='*60}\n")
         raise

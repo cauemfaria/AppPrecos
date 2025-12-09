@@ -115,9 +115,25 @@ class ScannerFragment : Fragment() {
         }
         
         binding.buttonSubmitUrl.setOnClickListener {
-            val url = binding.editTextUrl.text.toString()
+            val url = binding.editTextUrl.text.toString().trim()
             if (url.isNotBlank()) {
-                processNFCeUrl(url)
+                // Use the same queue system as camera scanning
+                val added = viewModel.addToQueue(url)
+                if (added) {
+                    Snackbar.make(
+                        binding.root,
+                        getString(R.string.scanner_qr_added_to_queue),
+                        Snackbar.LENGTH_SHORT
+                    ).show()
+                    binding.editTextUrl.text?.clear()
+                } else {
+                    // URL already in queue or duplicate
+                    Snackbar.make(
+                        binding.root,
+                        getString(R.string.duplicate_qr_message),
+                        Snackbar.LENGTH_SHORT
+                    ).show()
+                }
             } else {
                 Snackbar.make(
                     binding.root,
@@ -129,70 +145,14 @@ class ScannerFragment : Fragment() {
     }
     
     private fun observeViewModel() {
-        // Observe sync processing state (for manual URL)
-        lifecycleScope.launch {
-            viewModel.scanState.collect { state ->
-                when (state) {
-                    is ScanState.Idle -> {
-                        binding.progressIndicator.visibility = View.GONE
-                        binding.textStatus.visibility = View.GONE
-                    }
-                    is ScanState.Processing -> {
-                        binding.progressIndicator.visibility = View.VISIBLE
-                        binding.textStatus.visibility = View.VISIBLE
-                        binding.textStatus.text = getString(R.string.scanner_status_processing)
-                    }
-                    is ScanState.Success -> {
-                        binding.progressIndicator.visibility = View.GONE
-                        binding.textStatus.visibility = View.VISIBLE
-                        val actionText = if (state.action == "created") 
-                            getString(R.string.success_new_market) 
-                        else 
-                            getString(R.string.success_existing_market)
-                        binding.textStatus.text = getString(
-                            R.string.success_message,
-                            actionText,
-                            state.productsCount
-                        )
-                        
-                        Snackbar.make(
-                            binding.root,
-                            getString(R.string.success_qr_processed),
-                            Snackbar.LENGTH_LONG
-                        ).setAction("View") {
-                            (activity as? MainActivity)?.switchToMarketsTab()
-                        }.show()
-                        
-                        binding.editTextUrl.text?.clear()
-                    }
-                    is ScanState.Duplicate -> {
-                        binding.progressIndicator.visibility = View.GONE
-                        binding.textStatus.visibility = View.VISIBLE
-                        binding.textStatus.text = getString(R.string.duplicate_qr_title)
-                        Snackbar.make(
-                            binding.root,
-                            getString(R.string.duplicate_qr_message),
-                            Snackbar.LENGTH_LONG
-                        ).show()
-                    }
-                    is ScanState.Error -> {
-                        binding.progressIndicator.visibility = View.GONE
-                        binding.textStatus.visibility = View.VISIBLE
-                        binding.textStatus.text = getString(R.string.error_label, state.message)
-                        Snackbar.make(
-                            binding.root,
-                            state.message,
-                            Snackbar.LENGTH_LONG
-                        ).show()
-                    }
-                }
-            }
-        }
-        
-        // Observe background processing queue
+        // Observe background processing queue (for both camera and manual URL)
         lifecycleScope.launch {
             viewModel.processingQueue.collect { queue ->
                 updateQueueUI(queue)
+                
+                // Hide manual sync indicators since we use queue now
+                binding.progressIndicator.visibility = View.GONE
+                binding.textStatus.visibility = View.GONE
             }
         }
     }
@@ -359,10 +319,6 @@ class ScannerFragment : Fragment() {
     
     companion object {
         private const val TAG = "ScannerFragment"
-    }
-    
-    private fun processNFCeUrl(url: String) {
-        viewModel.processNFCe(url)
     }
     
     override fun onDestroyView() {
