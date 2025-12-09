@@ -1,72 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material 3 Light Theme Colors -->
+    <!-- Brand Colors -->
+    <color name="primary">#1976D2</color>
+    <color name="primary_variant">#1565C0</color>
+    <color name="secondary">#FF6F00</color>
     
-    <!-- Primary Colors -->
-    <color name="md_theme_light_primary">#6750A4</color>
-    <color name="md_theme_light_onPrimary">#FFFFFF</color>
-    <color name="md_theme_light_primaryContainer">#EADDFF</color>
-    <color name="md_theme_light_onPrimaryContainer">#21005D</color>
+    <!-- Price comparison colors -->
+    <color name="price_lowest">#4CAF50</color>
+    <color name="price_highest">#F44336</color>
+    <color name="price_equal">#2196F3</color>
+    <color name="price_not_found">#9E9E9E</color>
     
-    <!-- Secondary Colors -->
-    <color name="md_theme_light_secondary">#625B71</color>
-    <color name="md_theme_light_onSecondary">#FFFFFF</color>
-    <color name="md_theme_light_secondaryContainer">#E8DEF8</color>
-    <color name="md_theme_light_onSecondaryContainer">#1D192B</color>
-    
-    <!-- Tertiary Colors -->
-    <color name="md_theme_light_tertiary">#7D5260</color>
-    <color name="md_theme_light_onTertiary">#FFFFFF</color>
-    <color name="md_theme_light_tertiaryContainer">#FFD8E4</color>
-    <color name="md_theme_light_onTertiaryContainer">#31111D</color>
-    
-    <!-- Error Colors -->
-    <color name="md_theme_light_error">#B3261E</color>
-    <color name="md_theme_light_onError">#FFFFFF</color>
-    <color name="md_theme_light_errorContainer">#F9DEDC</color>
-    <color name="md_theme_light_onErrorContainer">#410E0B</color>
-    
-    <!-- Background & Surface -->
-    <color name="md_theme_light_background">#FFFBFE</color>
-    <color name="md_theme_light_onBackground">#1C1B1F</color>
-    <color name="md_theme_light_surface">#FFFBFE</color>
-    <color name="md_theme_light_onSurface">#1C1B1F</color>
-    <color name="md_theme_light_surfaceVariant">#E7E0EC</color>
-    <color name="md_theme_light_onSurfaceVariant">#49454F</color>
-    
-    <!-- Surface Container Colors -->
-    <color name="md_theme_light_surfaceContainerLowest">#FFFFFF</color>
-    <color name="md_theme_light_surfaceContainerLow">#F7F2FA</color>
-    <color name="md_theme_light_surfaceContainer">#F3EDF7</color>
-    <color name="md_theme_light_surfaceContainerHigh">#ECE6F0</color>
-    <color name="md_theme_light_surfaceContainerHighest">#E6E0E9</color>
-    
-    <!-- Outline -->
-    <color name="md_theme_light_outline">#79747E</color>
-    <color name="md_theme_light_outlineVariant">#CAC4D0</color>
-    
-    <!-- Inverse Colors -->
-    <color name="md_theme_light_inverseSurface">#313033</color>
-    <color name="md_theme_light_inverseOnSurface">#F4EFF4</color>
-    <color name="md_theme_light_inversePrimary">#D0BCFF</color>
-    
-    <!-- Shadow & Scrim -->
-    <color name="md_theme_light_shadow">#000000</color>
-    <color name="md_theme_light_scrim">#000000</color>
-    
-    <!-- Legacy support -->
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-    
-    <!-- Backward compatibility aliases -->
-    <color name="primary">@color/md_theme_light_primary</color>
-    <color name="primary_dark">@color/md_theme_light_primaryContainer</color>
-    <color name="primary_light">@color/md_theme_light_inversePrimary</color>
-    <color name="accent">@color/md_theme_light_tertiary</color>
-    <color name="accent_dark">@color/md_theme_light_tertiaryContainer</color>
-    <color name="primary_text">@color/md_theme_light_onSurface</color>
-    <color name="secondary_text">@color/md_theme_light_onSurfaceVariant</color>
-    <color name="background">@color/md_theme_light_background</color>
-    <color name="background_dark">@color/md_theme_dark_background</color>
+    <!-- Light theme background for price cells -->
+    <color name="price_lowest_bg">#E8F5E9</color>
+    <color name="price_highest_bg">#FFEBEE</color>
+    <color name="price_equal_bg">#E3F2FD</color>
 </resources>
-

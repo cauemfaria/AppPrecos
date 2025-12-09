@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/cardProcessingQueue"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="16dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="4dp"
+    app:strokeWidth="0dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Header (always visible) -->
+        <LinearLayout
+            android:id="@+id/headerProcessingQueue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="12dp"
+            android:background="?attr/colorSurfaceVariant">
+
+            <ProgressBar
+                android:id="@+id/progressQueue"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:indeterminate="true"
+                style="?android:attr/progressBarStyleSmall" />
+
+            <TextView
+                android:id="@+id/textQueueStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                tools:text="Processando 2 notas..." />
+
+            <ImageButton
+                android:id="@+id/buttonExpandQueue"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_expand_more"
+                android:contentDescription="Expandir"
+                app:tint="?attr/colorOnSurfaceVariant" />
+
+        </LinearLayout>
+
+        <!-- Expandable list -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerQueueItems"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:maxHeight="200dp"
+            android:nestedScrollingEnabled="false"
+            tools:visibility="visible"
+            tools:listitem="@layout/item_processing_queue" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
+

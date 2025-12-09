@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appprecos.data.repository.AppRepository
 import com.appprecos.data.repository.DuplicateURLException
+import com.appprecos.data.service.QrProcessingManager
+import com.appprecos.data.service.QrProcessingItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +18,26 @@ class ScannerViewModel(
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
     val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
     
+    // Processing queue from QrProcessingManager
+    val processingQueue: StateFlow<List<QrProcessingItem>> = QrProcessingManager.processingQueue
+    
+    /**
+     * Add URL to background processing queue (for camera scans)
+     */
+    fun addToQueue(url: String): Boolean {
+        return QrProcessingManager.addToQueue(url)
+    }
+    
+    /**
+     * Remove item from queue
+     */
+    fun removeFromQueue(url: String) {
+        QrProcessingManager.removeFromQueue(url)
+    }
+    
+    /**
+     * Process NFCe synchronously (for manual URL input)
+     */
     fun processNFCe(url: String) {
         viewModelScope.launch {
             _scanState.value = ScanState.Processing
@@ -32,7 +54,7 @@ class ScannerViewModel(
                     }
                 }
                 .onFailure { error ->
-                    if (error is com.appprecos.data.repository.DuplicateURLException) {
+                    if (error is DuplicateURLException) {
                         val errorData = error.errorData
                         _scanState.value = ScanState.Duplicate(
                             processedAt = errorData?.processed_at ?: "Unknown",
@@ -47,6 +69,10 @@ class ScannerViewModel(
                 }
         }
     }
+    
+    fun resetState() {
+        _scanState.value = ScanState.Idle
+    }
 }
 
 sealed class ScanState {
@@ -56,7 +82,7 @@ sealed class ScanState {
         val marketName: String,
         val marketId: String,
         val productsCount: Int,
-        val action: String  // "created" or "matched"
+        val action: String
     ) : ScanState()
     data class Duplicate(
         val processedAt: String,
@@ -65,4 +91,3 @@ sealed class ScanState {
     ) : ScanState()
     data class Error(val message: String) : ScanState()
 }
-

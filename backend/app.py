@@ -11,6 +11,7 @@ import os
 import string
 import random
 import sys
+import threading
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -56,16 +57,83 @@ def generate_market_id():
     return f"MKT{random_part}"
 
 
+def process_nfce_in_background(url, url_record_id):
+    """Background task to process NFCe extraction and save to database"""
+    try:
+        print(f"\n[BACKGROUND] Processing NFCe (Record ID: {url_record_id})")
+        
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from nfce_extractor import extract_full_nfce_data
+        
+        result = extract_full_nfce_data(url, headless=True)
+        market_info = result.get('market_info', {})
+        products = result.get('products', [])
+        
+        if not products or not market_info.get('name') or not market_info.get('address'):
+            supabase.table('processed_urls').update({
+                'status': 'error',
+                'error_message': 'No products or market info extracted'
+            }).eq('id', url_record_id).execute()
+            print(f"✗ [BACKGROUND] Failed: No products or market info")
+            return
+        
+        print(f"[BACKGROUND] Extracted {len(products)} products from {market_info.get('name')}")
+        
+        # Check/create market
+        market_result = supabase.table('markets').select('*').match({
+            'name': market_info['name'],
+            'address': market_info['address']
+        }).execute()
+        
+        if market_result.data:
+            market = market_result.data[0]
+        else:
+            new_market_id = generate_market_id()
+            while True:
+                check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
+                if not check.data:
+                    break
+                new_market_id = generate_market_id()
+            
+            market_data = {
+                'market_id': new_market_id,
+                'name': market_info['name'],
+                'address': market_info['address']
+            }
+            market_insert = supabase.table('markets').insert(market_data).execute()
+            market = market_insert.data[0]
+        
+        # Save products
+        save_result = save_products_to_supabase(market['market_id'], products, url)
+        
+        # Update URL record with success
+        supabase.table('processed_urls').update({
+            'market_id': market['market_id'],
+            'market_name': market['name'],
+            'products_count': len(products),
+            'status': 'success'
+        }).eq('id', url_record_id).execute()
+        
+        print(f"✓ [BACKGROUND] Complete: {save_result['saved_to_purchases']} products saved")
+        
+    except Exception as e:
+        supabase.table('processed_urls').update({
+            'status': 'error',
+            'error_message': str(e)
+        }).eq('id', url_record_id).execute()
+        print(f"✗ [BACKGROUND] Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None):
     """
     Save products to Supabase PostgreSQL database
     Maintains both full history (purchases) and latest prices (unique_products)
-    All-or-nothing approach: if any insert fails, rollback all changes
     """
     if purchase_date is None:
         purchase_date = datetime.utcnow()
     
-    # Track inserted IDs for rollback capability
     inserted_purchase_ids = []
     inserted_unique_ids = []
     updated_unique_backup = {}
@@ -82,7 +150,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         print(f"Products count: {len(products)}")
         print(f"{'='*60}\n")
         
-        # 1. Insert to PURCHASES table (full history)
+        # 1. Insert to PURCHASES table
         print(f"[1/2] Inserting {len(products)} products to PURCHASES table...")
         
         for idx, product in enumerate(products, 1):
@@ -103,7 +171,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 response = supabase.table('purchases').insert(purchase_data).execute()
                 
                 if not response.data or len(response.data) == 0:
-                    raise Exception(f"Failed to insert product {idx} to purchases table")
+                    raise Exception(f"Failed to insert product {idx}")
                 
                 inserted_purchase_ids.append(response.data[0]['id'])
                 saved_to_purchases += 1
@@ -115,7 +183,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         
         print(f"✓ Inserted {saved_to_purchases} products to PURCHASES\n")
         
-        # 2. Upsert to UNIQUE_PRODUCTS table (latest prices)
+        # 2. Upsert to UNIQUE_PRODUCTS table
         print(f"[2/2] Upserting to UNIQUE_PRODUCTS table...")
         
         for idx, product in enumerate(products, 1):
@@ -131,7 +199,6 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                     'last_updated': datetime.utcnow().isoformat()
                 }
                 
-                # Check if exists
                 response = supabase.table('unique_products').select('*').match({
                     'market_id': market_id,
                     'ncm': product['ncm']
@@ -177,9 +244,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         print(f"❌ TRANSACTION FAILED - ROLLING BACK")
         print(f"{'='*60}")
         
-        # Rollback purchases
         if inserted_purchase_ids:
-            print(f"Rolling back {len(inserted_purchase_ids)} purchases...")
             try:
                 for purchase_id in inserted_purchase_ids:
                     supabase.table('purchases').delete().eq('id', purchase_id).execute()
@@ -187,9 +252,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
             except Exception as rb_error:
                 print(f"✗ Rollback purchases failed: {rb_error}")
         
-        # Rollback new unique_products
         if inserted_unique_ids:
-            print(f"Rolling back {len(inserted_unique_ids)} unique products...")
             try:
                 for unique_id in inserted_unique_ids:
                     supabase.table('unique_products').delete().eq('id', unique_id).execute()
@@ -197,9 +260,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
             except Exception as rb_error:
                 print(f"✗ Rollback unique_products failed: {rb_error}")
         
-        # Restore updated unique_products
         if updated_unique_backup:
-            print(f"Restoring {len(updated_unique_backup)} updated products...")
             try:
                 for unique_id, old_data in updated_unique_backup.items():
                     restore_data = {k: v for k, v in old_data.items() if k not in ['id', 'created_at']}
@@ -224,6 +285,9 @@ def index():
             'markets': '/api/markets',
             'market_products': '/api/markets/{market_id}/products',
             'nfce_extract': '/api/nfce/extract',
+            'nfce_status': '/api/nfce/status/{record_id}',
+            'products_search': '/api/products/search',
+            'products_compare': '/api/products/compare',
             'health': '/health'
         }
     })
@@ -260,7 +324,7 @@ def get_markets():
 
 @app.route('/api/markets/<string:market_id>/products', methods=['GET'])
 def get_market_products(market_id):
-    """Get unique products for a specific market (latest prices only)"""
+    """Get unique products for a specific market"""
     try:
         market_result = supabase.table('markets').select('*').eq('market_id', market_id).execute()
         if not market_result.data:
@@ -281,17 +345,18 @@ def get_market_products(market_id):
 def extract_nfce():
     """
     Extract data from NFCe URL and save to database
-    Request body: { "url": "...", "save": true/false }
+    Request body: { "url": "...", "save": true/false, "async": true/false }
     """
     data = request.get_json()
     
     if not data.get('url'):
         return jsonify({'error': 'NFCe URL is required'}), 400
     
-    url_record_id = None
-    try:
-        # Check if save mode requested
-        if data.get('save'):
+    use_async = data.get('async', False)
+    
+    # ========== ASYNC MODE ==========
+    if data.get('save') and use_async:
+        try:
             # Check if URL already processed
             existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', data['url']).execute()
             if existing_url.data:
@@ -309,6 +374,53 @@ def extract_nfce():
             temp_url_data = {
                 'nfce_url': data['url'],
                 'market_id': 'PROCESSING',
+                'market_name': '',
+                'products_count': 0,
+                'status': 'processing',
+                'processed_at': datetime.utcnow().isoformat()
+            }
+            url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
+            url_record_id = url_insert.data[0]['id']
+            
+            # Start background processing
+            thread = threading.Thread(
+                target=process_nfce_in_background,
+                args=(data['url'], url_record_id),
+                daemon=True
+            )
+            thread.start()
+            
+            return jsonify({
+                'message': 'NFCe processing started',
+                'status': 'processing',
+                'record_id': url_record_id
+            }), 202
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Failed to start processing: {str(e)}'}), 500
+    
+    # ========== SYNC MODE ==========
+    url_record_id = None
+    try:
+        if data.get('save'):
+            existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', data['url']).execute()
+            if existing_url.data:
+                url_data = existing_url.data[0]
+                return jsonify({
+                    'error': 'This NFCe has already been processed',
+                    'message': 'URL already exists in database',
+                    'status': url_data.get('status', 'unknown'),
+                    'processed_at': url_data['processed_at'],
+                    'market_id': url_data['market_id'],
+                    'products_count': url_data['products_count']
+                }), 409
+            
+            temp_url_data = {
+                'nfce_url': data['url'],
+                'market_id': 'PROCESSING',
+                'market_name': '',
                 'products_count': 0,
                 'status': 'processing',
                 'processed_at': datetime.utcnow().isoformat()
@@ -316,7 +428,6 @@ def extract_nfce():
             url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
             url_record_id = url_insert.data[0]['id']
         
-        # Import and run extractor
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         from nfce_extractor import extract_full_nfce_data
         
@@ -330,14 +441,12 @@ def extract_nfce():
                 supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
             return jsonify({'error': 'No products extracted from NFCe'}), 400
         
-        # If save=true, save to database
         if data.get('save'):
             if not market_info.get('name') or not market_info.get('address'):
                 if url_record_id:
                     supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
                 return jsonify({'error': 'Could not extract market information'}), 400
             
-            # Check/create market
             market_result = supabase.table('markets').select('*').match({
                 'name': market_info['name'],
                 'address': market_info['address']
@@ -359,20 +468,19 @@ def extract_nfce():
                 market = market_insert.data[0]
                 market_action = 'created'
             
-            # Save products
             save_result = save_products_to_supabase(market['market_id'], products, data['url'])
             
-            # Update URL record
             if url_record_id:
-                update_data = {
+                supabase.table('processed_urls').update({
                     'market_id': market['market_id'],
+                    'market_name': market['name'],
                     'products_count': len(products),
                     'status': 'success'
-                }
-                supabase.table('processed_urls').update(update_data).eq('id', url_record_id).execute()
+                }).eq('id', url_record_id).execute()
             
             return jsonify({
                 'message': 'NFCe data extracted and saved successfully',
+                'record_id': url_record_id,
                 'market': {
                     'id': market['id'],
                     'market_id': market['market_id'],
@@ -389,7 +497,6 @@ def extract_nfce():
                 }
             }), 201
         else:
-            # Return extracted data without saving
             return jsonify({
                 'message': 'NFCe data extracted successfully (not saved)',
                 'market_info': market_info,
@@ -404,10 +511,171 @@ def extract_nfce():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/nfce/status/<int:record_id>', methods=['GET'])
+def get_nfce_status(record_id):
+    """Get processing status by record ID"""
+    try:
+        result = supabase.table('processed_urls').select('*').eq('id', record_id).execute()
+        
+        if not result.data:
+            return jsonify({'error': 'Record not found'}), 404
+        
+        record = result.data[0]
+        return jsonify({
+            'record_id': record['id'],
+            'status': record['status'],
+            'market_id': record.get('market_id'),
+            'market_name': record.get('market_name', ''),
+            'products_count': record.get('products_count', 0),
+            'error_message': record.get('error_message'),
+            'processed_at': record['processed_at']
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/products/search', methods=['GET'])
+def search_products():
+    """
+    Search products by name across all markets
+    Query params: name (required), limit (optional, default 50)
+    """
+    name_query = request.args.get('name', '').strip()
+    limit = min(int(request.args.get('limit', 50)), 100)
+    
+    if not name_query or len(name_query) < 2:
+        return jsonify({'error': 'Search query must be at least 2 characters'}), 400
+    
+    try:
+        # Search unique_products by product_name (case-insensitive)
+        result = supabase.table('unique_products').select(
+            'id, product_name, ean, ncm, price, unidade_comercial, market_id'
+        ).ilike('product_name', f'%{name_query}%').limit(limit).execute()
+        
+        # Group by product (ean or ncm+product_name if no ean)
+        products_map = {}
+        for p in result.data:
+            # Use EAN as key if available, otherwise use NCM+name
+            if p['ean'] and p['ean'] != 'SEM GTIN':
+                key = f"ean:{p['ean']}"
+            else:
+                key = f"ncm:{p['ncm']}:{p['product_name']}"
+            
+            if key not in products_map:
+                products_map[key] = {
+                    'product_name': p['product_name'],
+                    'ean': p['ean'],
+                    'ncm': p['ncm'],
+                    'unidade_comercial': p['unidade_comercial'],
+                    'markets_count': 0,
+                    'min_price': p['price'],
+                    'max_price': p['price']
+                }
+            
+            products_map[key]['markets_count'] += 1
+            products_map[key]['min_price'] = min(products_map[key]['min_price'], p['price'])
+            products_map[key]['max_price'] = max(products_map[key]['max_price'], p['price'])
+        
+        return jsonify({
+            'query': name_query,
+            'results': list(products_map.values()),
+            'total': len(products_map)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/products/compare', methods=['POST'])
+def compare_products():
+    """
+    Compare product prices across selected markets
+    Request body: {
+        "products": [{"ean": "...", "ncm": "...", "product_name": "..."}],
+        "market_ids": ["MKT123", "MKT456"]
+    }
+    Returns price comparison table
+    """
+    data = request.get_json()
+    
+    products = data.get('products', [])
+    market_ids = data.get('market_ids', [])
+    
+    if not products:
+        return jsonify({'error': 'At least one product is required'}), 400
+    if not market_ids:
+        return jsonify({'error': 'At least one market is required'}), 400
+    
+    try:
+        # Get market info
+        markets_result = supabase.table('markets').select('market_id, name').in_('market_id', market_ids).execute()
+        markets_info = {m['market_id']: m['name'] for m in markets_result.data}
+        
+        comparison = []
+        
+        for product in products:
+            product_row = {
+                'product_name': product.get('product_name', ''),
+                'ean': product.get('ean', ''),
+                'ncm': product.get('ncm', ''),
+                'prices': {}
+            }
+            
+            for market_id in market_ids:
+                price = None
+                
+                # Try to find by EAN first (if available and not "SEM GTIN")
+                if product.get('ean') and product['ean'] != 'SEM GTIN':
+                    result = supabase.table('unique_products').select('price').match({
+                        'market_id': market_id,
+                        'ean': product['ean']
+                    }).execute()
+                    if result.data:
+                        price = result.data[0]['price']
+                
+                # Fallback to NCM if no EAN match
+                if price is None and product.get('ncm'):
+                    result = supabase.table('unique_products').select('price, product_name').match({
+                        'market_id': market_id,
+                        'ncm': product['ncm']
+                    }).execute()
+                    if result.data:
+                        # If multiple products with same NCM, try to match by name
+                        if len(result.data) > 1 and product.get('product_name'):
+                            for r in result.data:
+                                if product['product_name'].lower() in r['product_name'].lower():
+                                    price = r['price']
+                                    break
+                        if price is None:
+                            price = result.data[0]['price']
+                
+                product_row['prices'][market_id] = price
+            
+            # Calculate min/max for color coding
+            valid_prices = [p for p in product_row['prices'].values() if p is not None]
+            if valid_prices:
+                product_row['min_price'] = min(valid_prices)
+                product_row['max_price'] = max(valid_prices)
+                product_row['all_equal'] = len(set(valid_prices)) == 1
+            else:
+                product_row['min_price'] = None
+                product_row['max_price'] = None
+                product_row['all_equal'] = False
+            
+            comparison.append(product_row)
+        
+        return jsonify({
+            'markets': markets_info,
+            'comparison': comparison
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     import io
     
-    # Fix Windows console encoding
     if sys.platform == 'win32':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')

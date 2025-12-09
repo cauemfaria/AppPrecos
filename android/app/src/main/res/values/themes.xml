@@ -90,5 +90,12 @@
     </style>
 
     <style name="Theme.AppPrecos" parent="Base.Theme.AppPrecos" />
+    
+    <!-- Full screen dialog theme -->
+    <style name="Theme.AppPrecos.FullScreenDialog" parent="Theme.Material3.DayNight.Dialog">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">?attr/colorSurface</item>
+    </style>
 </resources>
 

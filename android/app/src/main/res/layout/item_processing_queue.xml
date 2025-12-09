@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="8dp">
+
+    <!-- Status icon -->
+    <FrameLayout
+        android:layout_width="24dp"
+        android:layout_height="24dp">
+
+        <ProgressBar
+            android:id="@+id/progressItem"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:indeterminate="true"
+            style="?android:attr/progressBarStyleSmall"
+            android:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/iconStatus"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:visibility="gone"
+            tools:src="@drawable/ic_check"
+            tools:visibility="visible" />
+
+    </FrameLayout>
+
+    <!-- Text content -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/textItemTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:maxLines="1"
+            android:ellipsize="end"
+            tools:text="Processando..." />
+
+        <TextView
+            android:id="@+id/textItemSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone"
+            tools:text="Mercado ABC - 15 produtos"
+            tools:visibility="visible" />
+
+    </LinearLayout>
+
+    <!-- Close button (for errors) -->
+    <ImageButton
+        android:id="@+id/buttonDismiss"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_close"
+        android:contentDescription="Remover"
+        android:visibility="gone"
+        app:tint="?attr/colorOnSurfaceVariant"
+        tools:visibility="visible" />
+
+</LinearLayout>
+

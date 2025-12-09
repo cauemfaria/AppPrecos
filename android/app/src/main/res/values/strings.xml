@@ -6,8 +6,10 @@
     <!-- Navigation -->
     <string name="nav_scanner">Scanner</string>
     <string name="nav_markets">Markets</string>
+    <string name="nav_shopping_list">Lista</string>
     <string name="nav_scanner_description">Scan NFCe receipts</string>
     <string name="nav_markets_description">View markets and prices</string>
+    <string name="nav_shopping_list_description">Shopping list and comparison</string>
     
     <!-- Scanner Screen -->
     <string name="scanner_title">Scan NFCe Receipt</string>
@@ -25,6 +27,19 @@
     <string name="scanner_instruction">Position the QR code within the frame</string>
     <string name="scanner_close">Close</string>
     <string name="scanner_qr_detected">QR Code detected!</string>
+    <string name="scanner_qr_added_to_queue">QR adicionado à fila</string>
+    
+    <!-- Processing Queue -->
+    <string name="queue_status_queued">Na fila…</string>
+    <string name="queue_status_sending">Enviando…</string>
+    <string name="queue_status_processing">Processando…</string>
+    <string name="queue_status_success">Concluído</string>
+    <string name="queue_status_error">Erro</string>
+    <string name="queue_status_duplicate">Já processado</string>
+    <string name="queue_products_count">%1$d produtos</string>
+    <string name="queue_processing_count">Processando %1$d nota(s)…</string>
+    <string name="queue_all_done">Tudo pronto!</string>
+    <string name="queue_with_errors">%1$d erro(s)</string>
     
     <!-- Markets Screen -->
     <string name="markets_title">Markets</string>
@@ -48,6 +63,32 @@
     <string name="product_price_format">R$ %1$.2f</string>
     <string name="product_unit_unidade">Por unidade</string>
     <string name="product_unit_kg">Kg</string>
+    
+    <!-- Shopping List -->
+    <string name="shopping_list_title">Lista de Compras</string>
+    <string name="shopping_list_empty">Nenhum produto na lista</string>
+    <string name="shopping_list_empty_hint">Toque em + para adicionar produtos</string>
+    <string name="shopping_list_add_product">Adicionar Produto</string>
+    <string name="shopping_list_search_hint">Buscar produto por nome…</string>
+    <string name="shopping_list_search_min">Digite pelo menos 2 caracteres</string>
+    <string name="shopping_list_no_results">Nenhum produto encontrado</string>
+    <string name="shopping_list_added">Produto adicionado à lista</string>
+    <string name="shopping_list_already_added">Produto já está na lista</string>
+    <string name="shopping_list_removed">Produto removido</string>
+    <string name="shopping_list_select_markets">Selecionar Mercados</string>
+    <string name="shopping_list_compare">Comparar Preços</string>
+    <string name="shopping_list_clear">Limpar Lista</string>
+    <string name="shopping_list_products_count">%1$d produto(s)</string>
+    <string name="shopping_list_markets_selected">%1$d mercado(s) selecionado(s)</string>
+    <string name="shopping_list_select_at_least_one">Selecione pelo menos um mercado</string>
+    <string name="shopping_list_add_products_first">Adicione produtos à lista primeiro</string>
+    
+    <!-- Comparison -->
+    <string name="comparison_title">Comparação de Preços</string>
+    <string name="comparison_not_found">-</string>
+    <string name="comparison_lowest">Menor preço</string>
+    <string name="comparison_highest">Maior preço</string>
+    <string name="comparison_equal">Mesmo preço</string>
     
     <!-- Success Messages -->
     <string name="success_qr_processed">✓ QR Code Successfully Processed!</string>
@@ -92,4 +133,3 @@
     <string name="action_view">View</string>
     <string name="action_details">Details</string>
 </resources>
-

@@ -10,7 +10,7 @@ import com.appprecos.databinding.ActivityMainBinding
 import com.appprecos.ui.markets.MarketsFragment
 import com.appprecos.ui.scanner.ScannerFragment
 import com.appprecos.ui.settings.SettingsFragment
-import com.google.android.material.badge.BadgeDrawable
+import com.appprecos.ui.shoppinglist.ShoppingListFragment
 import com.google.android.material.navigation.NavigationBarView
 
 class MainActivity : AppCompatActivity() {
@@ -30,7 +30,7 @@ class MainActivity : AppCompatActivity() {
         // Apply window insets
         setupWindowInsets()
         
-        // Setup navigation (either BottomNav or NavigationRail based on screen size)
+        // Setup navigation
         setupNavigation()
         
         // Show scanner fragment by default
@@ -48,7 +48,6 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupNavigation() {
-        // Get the navigation view (either BottomNavigationView or NavigationRailView)
         val navigationView = getNavigationView()
         
         navigationView?.setOnItemSelectedListener { menuItem ->
@@ -64,6 +63,13 @@ class MainActivity : AppCompatActivity() {
                     if (currentNavigationItemId != R.id.navigation_markets) {
                         showFragment(MarketsFragment())
                         currentNavigationItemId = R.id.navigation_markets
+                    }
+                    true
+                }
+                R.id.navigation_shopping_list -> {
+                    if (currentNavigationItemId != R.id.navigation_shopping_list) {
+                        showFragment(ShoppingListFragment())
+                        currentNavigationItemId = R.id.navigation_shopping_list
                     }
                     true
                 }
@@ -86,8 +92,11 @@ class MainActivity : AppCompatActivity() {
         getNavigationView()?.selectedItemId = R.id.navigation_markets
     }
     
+    fun switchToShoppingListTab() {
+        getNavigationView()?.selectedItemId = R.id.navigation_shopping_list
+    }
+    
     private fun getNavigationView(): NavigationBarView? {
-        // Return BottomNavigationView for compact screens or NavigationRailView for large screens
         return binding.bottomNavigation ?: binding.navigationRail
     }
     
@@ -105,8 +114,6 @@ class MainActivity : AppCompatActivity() {
     
     /**
      * Show a badge on a navigation item
-     * @param navigationItemId The menu item id (R.id.navigation_scanner or R.id.navigation_markets)
-     * @param count The number to display on the badge (0 to hide number, show dot only)
      */
     fun showBadge(navigationItemId: Int, count: Int = 0) {
         val navigationView = getNavigationView()
@@ -129,4 +136,3 @@ class MainActivity : AppCompatActivity() {
         navigationView?.removeBadge(navigationItemId)
     }
 }
-

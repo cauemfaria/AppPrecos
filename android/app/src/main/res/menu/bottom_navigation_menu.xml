@@ -13,9 +13,14 @@
         android:contentDescription="@string/nav_markets_description" />
     
     <item
+        android:id="@+id/navigation_shopping_list"
+        android:icon="@drawable/ic_shopping_list"
+        android:title="@string/nav_shopping_list"
+        android:contentDescription="@string/nav_shopping_list_description" />
+    
+    <item
         android:id="@+id/navigation_settings"
         android:icon="@drawable/ic_settings"
         android:title="Settings"
         android:contentDescription="App settings" />
 </menu>
-

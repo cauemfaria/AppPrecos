@@ -130,7 +130,7 @@
                 android:layout_marginStart="@dimen/spacing_sm"
                 android:layout_marginEnd="@dimen/spacing_sm" />
 
-            <!-- Progress Indicator (Material 3 Circular) -->
+            <!-- Progress Indicator (only for manual URL) -->
             <com.google.android.material.progressindicator.CircularProgressIndicator
                 android:id="@+id/progressIndicator"
                 android:layout_width="wrap_content"
@@ -161,9 +161,21 @@
                 tools:text="Processing..."
                 tools:visibility="visible" />
 
+            <!-- Processing Queue Card -->
+            <include
+                android:id="@+id/processingQueueView"
+                layout="@layout/view_processing_queue"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:layout_constraintTop_toBottomOf="@id/textStatus"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:layout_marginTop="@dimen/spacing_lg"
+                tools:visibility="visible" />
+
         </androidx.constraintlayout.widget.ConstraintLayout>
 
     </androidx.core.widget.NestedScrollView>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-
