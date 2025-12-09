@@ -12,8 +12,10 @@ import string
 import random
 import sys
 import threading
+import time
 from dotenv import load_dotenv
 from supabase import create_client
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -21,10 +23,14 @@ load_dotenv()
 # Supabase configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Validate required environment variables
 if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
     raise ValueError("Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
+
+if not OPENAI_API_KEY:
+    print("⚠ WARNING: OPENAI_API_KEY not set - LLM product matching will be disabled")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -44,6 +50,14 @@ CORS(app, resources={
 # Get Supabase admin client
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
+# Initialize OpenAI client
+openai_client = None
+if OPENAI_API_KEY:
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    print("✓ OpenAI client initialized")
+else:
+    print("⚠ OpenAI client NOT initialized (API key missing)")
+
 print("✓ Supabase client initialized")
 print(f"✓ API URL: {SUPABASE_URL}")
 
@@ -55,6 +69,135 @@ def generate_market_id():
     chars = string.ascii_uppercase + string.digits
     random_part = ''.join(random.choices(chars, k=8))
     return f"MKT{random_part}"
+
+
+def log_llm_decision(market_id, ncm, new_product_name, existing_products, 
+                     llm_prompt, llm_response, decision, matched_product_id,
+                     success, error_message, execution_time_ms):
+    """
+    Log LLM decision to Supabase for debugging.
+    """
+    try:
+        log_data = {
+            'market_id': market_id,
+            'ncm': ncm,
+            'new_product_name': new_product_name[:200] if new_product_name else '',
+            'existing_products': existing_products,  # JSONB
+            'llm_prompt': llm_prompt,
+            'llm_response': llm_response,
+            'decision': decision,
+            'matched_product_id': matched_product_id,
+            'success': success,
+            'error_message': error_message,
+            'execution_time_ms': execution_time_ms,
+            'created_at': datetime.utcnow().isoformat()
+        }
+        supabase.table('llm_product_decisions').insert(log_data).execute()
+        print(f"  📝 LLM decision logged: {decision}")
+    except Exception as e:
+        print(f"  ⚠ Failed to log LLM decision: {e}")
+
+
+def call_llm_for_product_match(new_product_name, existing_products):
+    """
+    Call OpenAI to determine if new product matches any existing product.
+    
+    Args:
+        new_product_name: Name of the new product being added
+        existing_products: List of dicts with 'id' and 'product_name' keys
+    
+    Returns:
+        tuple: (decision, matched_id, llm_prompt, llm_response, execution_time_ms, error_message)
+        decision: "CREATE_NEW" or "UPDATE:{id}"
+        matched_id: ID of matched product (or None)
+    """
+    if not openai_client:
+        return None, None, None, None, 0, "OpenAI client not initialized"
+    
+    if not existing_products:
+        return "CREATE_NEW", None, None, None, 0, None
+    
+    # Handle empty product name
+    if not new_product_name or not new_product_name.strip():
+        return None, None, None, None, 0, "New product name is empty"
+    
+    # Limit to 20 most recent products to avoid huge prompts
+    MAX_PRODUCTS_TO_COMPARE = 20
+    products_to_compare = existing_products[:MAX_PRODUCTS_TO_COMPARE]
+    
+    # Build the list of existing products for the prompt
+    existing_list = "\n".join([
+        f"{i+1}. ID: {p['id']} - \"{p['product_name']}\""
+        for i, p in enumerate(products_to_compare)
+    ])
+    
+    prompt = f"""Você é um especialista em identificação de produtos de supermercado.
+
+Dado um novo produto e uma lista de produtos existentes com o mesmo código NCM (categoria fiscal),
+determine se o novo produto é IGUAL a algum dos existentes ou se é um produto DIFERENTE.
+
+Novo produto: "{new_product_name}"
+
+Produtos existentes:
+{existing_list}
+
+REGRAS IMPORTANTES:
+- Variações de escrita, abreviações e formatação = MESMO produto (ex: "COCA COLA 350ML" = "COCA-COLA LATA 350ML")
+- Marcas diferentes = produtos DIFERENTES (ex: "COCA COLA" ≠ "PEPSI")
+- Tamanhos/quantidades diferentes = produtos DIFERENTES (ex: "350ML" ≠ "2L")
+- Sabores diferentes = produtos DIFERENTES (ex: "ORIGINAL" ≠ "ZERO")
+
+Responda APENAS com:
+- "NOVO" se é um produto diferente de todos os existentes
+- "IGUAL:ID" se é igual ao produto com esse ID (substitua ID pelo número do ID)
+
+Sua resposta (apenas uma palavra):"""
+
+    start_time = time.time()
+    
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Você responde apenas com 'NOVO' ou 'IGUAL:ID'. Nada mais."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=20,
+            temperature=0.1  # Low temperature for consistent decisions
+        )
+        
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        llm_response = response.choices[0].message.content.strip()
+        
+        print(f"  🤖 LLM response: {llm_response} ({execution_time_ms}ms)")
+        
+        # Parse response - normalize by removing spaces and converting to uppercase
+        normalized_response = llm_response.upper().replace(" ", "")
+        
+        if normalized_response == "NOVO":
+            return "CREATE_NEW", None, prompt, llm_response, execution_time_ms, None
+        elif normalized_response.startswith("IGUAL:"):
+            try:
+                # Extract ID after "IGUAL:" - handle variations like "IGUAL:123", "IGUAL: 123", "igual:123"
+                id_part = normalized_response.split(":")[1].strip()
+                matched_id = int(id_part)
+                # Verify the ID exists in our list
+                valid_ids = [p['id'] for p in products_to_compare]
+                if matched_id in valid_ids:
+                    return f"UPDATE:{matched_id}", matched_id, prompt, llm_response, execution_time_ms, None
+                else:
+                    return "CREATE_NEW", None, prompt, llm_response, execution_time_ms, f"LLM returned invalid ID: {matched_id}"
+            except (ValueError, IndexError):
+                return "CREATE_NEW", None, prompt, llm_response, execution_time_ms, f"Failed to parse ID from: {llm_response}"
+        else:
+            # Unexpected response - default to creating new
+            return "CREATE_NEW", None, prompt, llm_response, execution_time_ms, f"Unexpected LLM response: {llm_response}"
+            
+    except Exception as e:
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        error_msg = f"OpenAI API error: {str(e)}"
+        print(f"  ❌ LLM error: {error_msg}")
+        return None, None, prompt, None, execution_time_ms, error_msg
 
 
 def process_nfce_in_background(url, url_record_id):
@@ -183,39 +326,37 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         
         print(f"✓ Inserted {saved_to_purchases} products to PURCHASES\n")
         
-        # 2. Upsert to UNIQUE_PRODUCTS table
-        print(f"[2/2] Upserting to UNIQUE_PRODUCTS table...")
+        # 2. Upsert to UNIQUE_PRODUCTS table using LLM-based matching
+        print(f"[2/2] Upserting to UNIQUE_PRODUCTS table (LLM-based matching)...")
+        skipped_products = 0
         
         for idx, product in enumerate(products, 1):
+            product_name = product.get('product', '')
+            ncm = product['ncm']
+            
             try:
                 unique_data = {
                     'market_id': market_id,
-                    'ncm': product['ncm'],
+                    'ncm': ncm,
                     'ean': product.get('ean', 'SEM GTIN'),
-                    'product_name': product.get('product', ''),
+                    'product_name': product_name,
                     'unidade_comercial': product.get('unidade_comercial', 'UN'),
                     'price': product.get('unit_price', 0),
                     'nfce_url': nfce_url,
                     'last_updated': datetime.utcnow().isoformat()
                 }
                 
+                # Query existing products with same NCM in this market
+                # Get all fields for potential rollback
                 response = supabase.table('unique_products').select('*').match({
                     'market_id': market_id,
-                    'ncm': product['ncm']
+                    'ncm': ncm
                 }).execute()
                 
-                if response.data:
-                    old_id = response.data[0]['id']
-                    updated_unique_backup[old_id] = response.data[0]
-                    
-                    update_response = supabase.table('unique_products').update(unique_data).eq('id', old_id).execute()
-                    
-                    if not update_response.data or len(update_response.data) == 0:
-                        raise Exception(f"Failed to update product {idx}")
-                    
-                    updated_unique += 1
-                    print(f"  ↻ [{idx}/{len(products)}] Updated {product.get('product', 'Unknown')[:50]}")
-                else:
+                existing_products = response.data if response.data else []
+                
+                # CASE 1: No existing products with this NCM -> create new directly
+                if not existing_products:
                     insert_response = supabase.table('unique_products').insert(unique_data).execute()
                     
                     if not insert_response.data or len(insert_response.data) == 0:
@@ -223,20 +364,91 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                     
                     inserted_unique_ids.append(insert_response.data[0]['id'])
                     created_unique += 1
-                    print(f"  ✓ [{idx}/{len(products)}] Created {product.get('product', 'Unknown')[:50]}")
+                    print(f"  ✓ [{idx}/{len(products)}] Created (new NCM): {product_name[:50]}")
+                    
+                    # Log decision (no LLM needed)
+                    log_llm_decision(
+                        market_id=market_id,
+                        ncm=ncm,
+                        new_product_name=product_name,
+                        existing_products=None,
+                        llm_prompt=None,
+                        llm_response=None,
+                        decision="CREATE_NEW",
+                        matched_product_id=None,
+                        success=True,
+                        error_message=None,
+                        execution_time_ms=0
+                    )
+                    continue
+                
+                # CASE 2: Existing products found -> call LLM to decide
+                print(f"  🔍 [{idx}/{len(products)}] Found {len(existing_products)} existing products with NCM {ncm}")
+                
+                decision, matched_id, llm_prompt, llm_response, exec_time, error_msg = call_llm_for_product_match(
+                    new_product_name=product_name,
+                    existing_products=existing_products
+                )
+                
+                # Log the LLM decision
+                log_llm_decision(
+                    market_id=market_id,
+                    ncm=ncm,
+                    new_product_name=product_name,
+                    existing_products=[{'id': p['id'], 'name': p['product_name']} for p in existing_products],
+                    llm_prompt=llm_prompt,
+                    llm_response=llm_response,
+                    decision=decision if decision else "SKIPPED",
+                    matched_product_id=matched_id,
+                    success=decision is not None,
+                    error_message=error_msg,
+                    execution_time_ms=exec_time
+                )
+                
+                # Handle LLM failure -> skip product
+                if decision is None:
+                    print(f"  ⚠ [{idx}/{len(products)}] SKIPPED (LLM error): {product_name[:50]}")
+                    skipped_products += 1
+                    continue
+                
+                # Handle LLM decision
+                if decision == "CREATE_NEW":
+                    insert_response = supabase.table('unique_products').insert(unique_data).execute()
+                    
+                    if not insert_response.data or len(insert_response.data) == 0:
+                        raise Exception(f"Failed to insert product {idx}")
+                    
+                    inserted_unique_ids.append(insert_response.data[0]['id'])
+                    created_unique += 1
+                    print(f"  ✓ [{idx}/{len(products)}] Created (LLM: new product): {product_name[:50]}")
+                    
+                elif decision.startswith("UPDATE:"):
+                    # Update existing product
+                    old_data = next((p for p in existing_products if p['id'] == matched_id), None)
+                    if old_data:
+                        updated_unique_backup[matched_id] = old_data
+                    
+                    update_response = supabase.table('unique_products').update(unique_data).eq('id', matched_id).execute()
+                    
+                    if not update_response.data or len(update_response.data) == 0:
+                        raise Exception(f"Failed to update product {idx}")
+                    
+                    updated_unique += 1
+                    print(f"  ↻ [{idx}/{len(products)}] Updated (LLM: same as ID {matched_id}): {product_name[:50]}")
                     
             except Exception as e:
-                print(f"❌ ERROR upserting product {idx}: {str(e)}")
+                print(f"❌ ERROR processing product {idx}: {str(e)}")
                 raise Exception(f"Failed at product {idx}: {str(e)}")
         
         print(f"\n{'='*60}")
-        print(f"✓ COMPLETED: {saved_to_purchases} purchases, {created_unique} new, {updated_unique} updated")
+        print(f"✓ COMPLETED: {saved_to_purchases} purchases, {created_unique} new, {updated_unique} updated, {skipped_products} skipped")
         print(f"{'='*60}\n")
         
         return {
             'saved_to_purchases': saved_to_purchases,
             'updated_unique': updated_unique,
-            'created_unique': created_unique
+            'created_unique': created_unique,
+            'skipped_products': skipped_products
         }
     
     except Exception as e:
@@ -493,6 +705,7 @@ def extract_nfce():
                     'products_saved_to_main': save_result['saved_to_purchases'],
                     'unique_products_created': save_result['created_unique'],
                     'unique_products_updated': save_result['updated_unique'],
+                    'unique_products_skipped': save_result.get('skipped_products', 0),
                     'market_action': market_action
                 }
             }), 201

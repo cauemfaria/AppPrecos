@@ -14,15 +14,17 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="16dp"
-        android:background="?attr/colorSurfaceVariant">
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:background="?attr/colorPrimary">
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/comparison_title"
-            android:textAppearance="?attr/textAppearanceTitleLarge" />
+            android:textAppearance="?attr/textAppearanceTitleLarge"
+            android:textColor="?attr/colorOnPrimary" />
 
         <ImageButton
             android:id="@+id/buttonClose"
@@ -31,77 +33,99 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_close"
             android:contentDescription="@string/dialog_close"
-            app:tint="?attr/colorOnSurfaceVariant" />
+            app:tint="?attr/colorOnPrimary" />
 
     </LinearLayout>
 
     <!-- Legend -->
-    <LinearLayout
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp"
-        android:gravity="center">
+        android:layout_margin="12dp"
+        app:cardElevation="0dp"
+        app:cardBackgroundColor="?attr/colorSurfaceVariant"
+        app:cardCornerRadius="12dp">
 
-        <View
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:background="@color/price_lowest" />
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/comparison_lowest"
-            android:textAppearance="?attr/textAppearanceLabelSmall"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="16dp" />
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:gravity="center">
 
-        <View
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:background="@color/price_highest" />
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/comparison_highest"
-            android:textAppearance="?attr/textAppearanceLabelSmall"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="16dp" />
+            <!-- Lowest -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center">
+                
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/legend_dot_lowest" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/comparison_lowest"
+                    android:textAppearance="?attr/textAppearanceLabelSmall"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
 
-        <View
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:background="@color/price_equal" />
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/comparison_equal"
-            android:textAppearance="?attr/textAppearanceLabelSmall"
-            android:layout_marginStart="4dp" />
+            <!-- Highest -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center">
+                
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/legend_dot_highest" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/comparison_highest"
+                    android:textAppearance="?attr/textAppearanceLabelSmall"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
 
-    </LinearLayout>
+            <!-- Equal -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center">
+                
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/legend_dot_equal" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/comparison_equal"
+                    android:textAppearance="?attr/textAppearanceLabelSmall"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
 
-    <!-- Scrollable table -->
-    <HorizontalScrollView
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Products list -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerComparison"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true">
-
-        <ScrollView
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:fillViewport="true">
-
-            <TableLayout
-                android:id="@+id/tableComparison"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:padding="8dp"
-                android:stretchColumns="0" />
-
-        </ScrollView>
-
-    </HorizontalScrollView>
+        android:clipToPadding="false"
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="16dp"
+        tools:listitem="@layout/item_comparison_product" />
 
 </LinearLayout>
-

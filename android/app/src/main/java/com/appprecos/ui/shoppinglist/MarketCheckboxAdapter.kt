@@ -9,7 +9,7 @@ import com.appprecos.data.model.Market
 import com.appprecos.databinding.ItemMarketCheckboxBinding
 
 class MarketCheckboxAdapter(
-    private val onMarketToggle: (String) -> Unit,
+    private val onMarketToggle: (String) -> Boolean,
     private val isSelected: (String) -> Boolean
 ) : ListAdapter<Market, MarketCheckboxAdapter.ViewHolder>(DiffCallback()) {
 
@@ -36,12 +36,19 @@ class MarketCheckboxAdapter(
             binding.checkboxMarket.isChecked = isSelected(market.market_id)
             
             binding.root.setOnClickListener {
-                binding.checkboxMarket.isChecked = !binding.checkboxMarket.isChecked
-                onMarketToggle(market.market_id)
+                val success = onMarketToggle(market.market_id)
+                if (success) {
+                    binding.checkboxMarket.isChecked = !binding.checkboxMarket.isChecked
+                }
             }
             
             binding.checkboxMarket.setOnClickListener {
-                onMarketToggle(market.market_id)
+                val wasChecked = binding.checkboxMarket.isChecked
+                val success = onMarketToggle(market.market_id)
+                if (!success) {
+                    // Revert the checkbox if toggle failed (limit reached)
+                    binding.checkboxMarket.isChecked = !wasChecked
+                }
             }
         }
     }

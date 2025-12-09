@@ -113,14 +113,26 @@ class ShoppingListViewModel(application: Application) : AndroidViewModel(applica
         }
     }
     
-    fun toggleMarketSelection(marketId: String) {
+    companion object {
+        const val MAX_MARKETS_FOR_COMPARISON = 5
+    }
+    
+    fun toggleMarketSelection(marketId: String): Boolean {
         val current = _selectedMarketIds.value.toMutableSet()
         if (marketId in current) {
             current.remove(marketId)
+            _selectedMarketIds.value = current
+            return true
         } else {
+            // Check if we've reached the limit
+            if (current.size >= MAX_MARKETS_FOR_COMPARISON) {
+                _error.value = "Máximo de $MAX_MARKETS_FOR_COMPARISON mercados para comparação"
+                return false
+            }
             current.add(marketId)
+            _selectedMarketIds.value = current
+            return true
         }
-        _selectedMarketIds.value = current
     }
     
     fun isMarketSelected(marketId: String): Boolean {

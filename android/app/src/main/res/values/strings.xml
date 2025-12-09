@@ -67,7 +67,8 @@
     <!-- Shopping List -->
     <string name="shopping_list_title">Lista de Compras</string>
     <string name="shopping_list_empty">Nenhum produto na lista</string>
-    <string name="shopping_list_empty_hint">Toque em + para adicionar produtos</string>
+    <string name="shopping_list_empty_hint">Adicione produtos para comparar preços</string>
+    <string name="shopping_list_add">Adicionar</string>
     <string name="shopping_list_add_product">Adicionar Produto</string>
     <string name="shopping_list_search_hint">Buscar produto por nome…</string>
     <string name="shopping_list_search_min">Digite pelo menos 2 caracteres</string>
@@ -76,10 +77,12 @@
     <string name="shopping_list_already_added">Produto já está na lista</string>
     <string name="shopping_list_removed">Produto removido</string>
     <string name="shopping_list_select_markets">Selecionar Mercados</string>
-    <string name="shopping_list_compare">Comparar Preços</string>
-    <string name="shopping_list_clear">Limpar Lista</string>
+    <string name="shopping_list_select_markets_max">Selecione até %1$d mercados</string>
+    <string name="shopping_list_max_markets_hint">Máximo de 5 mercados para comparação</string>
+    <string name="shopping_list_compare">Comparar</string>
+    <string name="shopping_list_clear">Limpar</string>
     <string name="shopping_list_products_count">%1$d produto(s)</string>
-    <string name="shopping_list_markets_selected">%1$d mercado(s) selecionado(s)</string>
+    <string name="shopping_list_markets_selected">%1$d mercado(s)</string>
     <string name="shopping_list_select_at_least_one">Selecione pelo menos um mercado</string>
     <string name="shopping_list_add_products_first">Adicione produtos à lista primeiro</string>
     

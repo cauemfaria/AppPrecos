@@ -62,7 +62,7 @@ class ShoppingListFragment : Fragment() {
     }
     
     private fun setupButtons() {
-        binding.fabAddProduct.setOnClickListener {
+        binding.buttonAddProduct.setOnClickListener {
             showAddProductDialog()
         }
         

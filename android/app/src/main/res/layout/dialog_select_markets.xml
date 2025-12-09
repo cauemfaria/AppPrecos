@@ -8,10 +8,19 @@
     android:padding="16dp">
 
     <TextView
+        android:id="@+id/textSelectMarketsTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/shopping_list_select_markets"
         android:textAppearance="?attr/textAppearanceTitleLarge"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/shopping_list_max_markets_hint"
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:layout_marginBottom="16dp" />
 
     <ProgressBar

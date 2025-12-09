@@ -1,6 +1,6 @@
 """
-Supabase Migration Script - 3-Table Architecture
-Creates: markets, purchases, unique_products, processed_urls
+Supabase Migration Script - 3-Table Architecture + LLM Logging
+Creates: markets, purchases, unique_products, processed_urls, llm_product_decisions
 """
 
 import os
@@ -63,6 +63,8 @@ CREATE INDEX idx_purchases_date ON purchases(purchase_date);
 CREATE INDEX idx_purchases_product_name ON purchases(product_name);
 
 -- TABLE 3: Unique Products (Latest Prices)
+-- NOTE: No unique constraint on (market_id, ncm) because multiple products can share same NCM
+-- LLM-based matching determines if products are the same or different
 CREATE TABLE unique_products (
     id BIGSERIAL PRIMARY KEY,
     market_id VARCHAR(20) NOT NULL REFERENCES markets(market_id),
@@ -72,13 +74,13 @@ CREATE TABLE unique_products (
     unidade_comercial VARCHAR(10),
     price FLOAT NOT NULL,
     nfce_url VARCHAR(1000),
-    last_updated TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT unique_product_per_market UNIQUE(market_id, ncm)
+    last_updated TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX idx_unique_products_market_id ON unique_products(market_id);
 CREATE INDEX idx_unique_products_ncm ON unique_products(ncm);
 CREATE INDEX idx_unique_products_product_name ON unique_products(product_name);
+CREATE INDEX idx_unique_products_market_ncm ON unique_products(market_id, ncm);
 
 -- TABLE 4: Processed URLs (with Status Tracking)
 CREATE TABLE processed_urls (
@@ -93,6 +95,31 @@ CREATE TABLE processed_urls (
 CREATE INDEX idx_processed_urls_nfce ON processed_urls(nfce_url);
 CREATE INDEX idx_processed_urls_market ON processed_urls(market_id);
 CREATE INDEX idx_processed_urls_status ON processed_urls(status);
+
+-- TABLE 5: LLM Product Decisions (Debugging/Logging)
+-- Logs all LLM calls for product identification decisions
+CREATE TABLE llm_product_decisions (
+    id BIGSERIAL PRIMARY KEY,
+    market_id VARCHAR(20) NOT NULL,
+    ncm VARCHAR(8) NOT NULL,
+    new_product_name VARCHAR(200),
+    existing_products JSONB,  -- Array of {id, name} objects
+    llm_prompt TEXT,
+    llm_response TEXT,
+    decision VARCHAR(50),     -- "CREATE_NEW" or "UPDATE:{id}" or "SKIPPED"
+    matched_product_id BIGINT,
+    success BOOLEAN DEFAULT true,
+    error_message TEXT,
+    execution_time_ms INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_llm_decisions_market ON llm_product_decisions(market_id);
+CREATE INDEX idx_llm_decisions_ncm ON llm_product_decisions(ncm);
+CREATE INDEX idx_llm_decisions_created ON llm_product_decisions(created_at);
+CREATE INDEX idx_llm_decisions_success ON llm_product_decisions(success);
+
+COMMENT ON TABLE llm_product_decisions IS 'Log of all LLM calls for product identification decisions';
 """
     
     print("\nCopy and run this SQL in Supabase SQL Editor:")
