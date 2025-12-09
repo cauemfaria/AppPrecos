@@ -15,8 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object QrProcessingManager {
     private const val TAG = "QrProcessingManager"
-    private const val POLL_INTERVAL_MS = 2000L
-    private const val MAX_POLL_ATTEMPTS = 60 // 2 minutes max
+    private const val POLL_INTERVAL_MS = 3000L  // Poll every 3 seconds
+    private const val MAX_POLL_ATTEMPTS = 120   // 6 minutes max (extractions are queued sequentially)
     
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val apiService = ApiClient.apiService

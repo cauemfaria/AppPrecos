@@ -17,6 +17,9 @@ from dotenv import load_dotenv
 from supabase import create_client
 from openai import OpenAI
 
+# Semaphore to limit concurrent Playwright extractions (browser is resource-heavy)
+extraction_semaphore = threading.Semaphore(1)  # Only 1 extraction at a time
+
 # Load environment variables
 load_dotenv()
 
@@ -202,69 +205,96 @@ Sua resposta (apenas uma palavra):"""
 
 def process_nfce_in_background(url, url_record_id):
     """Background task to process NFCe extraction and save to database"""
+    start_time = time.time()
+    
     try:
-        print(f"\n[BACKGROUND] Processing NFCe (Record ID: {url_record_id})")
+        print(f"\n[BACKGROUND #{url_record_id}] Queued for processing...")
+        print(f"[BACKGROUND #{url_record_id}] Waiting for extraction slot (semaphore)...")
         
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-        from nfce_extractor import extract_full_nfce_data
+        # Acquire semaphore to limit concurrent extractions
+        # This prevents multiple Playwright browsers from running simultaneously
+        extraction_semaphore.acquire()
+        wait_time = time.time() - start_time
+        print(f"[BACKGROUND #{url_record_id}] Got extraction slot after {wait_time:.1f}s")
         
-        result = extract_full_nfce_data(url, headless=True)
-        market_info = result.get('market_info', {})
-        products = result.get('products', [])
-        
-        if not products or not market_info.get('name') or not market_info.get('address'):
-            supabase.table('processed_urls').update({
-                'status': 'error',
-                'error_message': 'No products or market info extracted'
-            }).eq('id', url_record_id).execute()
-            print(f"[FAIL] [BACKGROUND] Failed: No products or market info")
-            return
-        
-        print(f"[BACKGROUND] Extracted {len(products)} products from {market_info.get('name')}")
-        
-        # Check/create market
-        market_result = supabase.table('markets').select('*').match({
-            'name': market_info['name'],
-            'address': market_info['address']
-        }).execute()
-        
-        if market_result.data:
-            market = market_result.data[0]
-        else:
-            new_market_id = generate_market_id()
-            while True:
-                check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
-                if not check.data:
-                    break
-                new_market_id = generate_market_id()
+        try:
+            print(f"[BACKGROUND #{url_record_id}] Starting Playwright extraction...")
             
-            market_data = {
-                'market_id': new_market_id,
+            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+            from nfce_extractor import extract_full_nfce_data
+            
+            extraction_start = time.time()
+            result = extract_full_nfce_data(url, headless=True)
+            extraction_time = time.time() - extraction_start
+            print(f"[BACKGROUND #{url_record_id}] Playwright extraction completed in {extraction_time:.1f}s")
+            
+            market_info = result.get('market_info', {})
+            products = result.get('products', [])
+            
+            if not products or not market_info.get('name') or not market_info.get('address'):
+                supabase.table('processed_urls').update({
+                    'status': 'error',
+                    'error_message': 'No products or market info extracted'
+                }).eq('id', url_record_id).execute()
+                print(f"[FAIL] [BACKGROUND #{url_record_id}] No products or market info extracted")
+                return
+            
+            print(f"[BACKGROUND #{url_record_id}] Extracted {len(products)} products from {market_info.get('name')}")
+            
+            # Check/create market
+            print(f"[BACKGROUND #{url_record_id}] Checking/creating market...")
+            market_result = supabase.table('markets').select('*').match({
                 'name': market_info['name'],
                 'address': market_info['address']
-            }
-            market_insert = supabase.table('markets').insert(market_data).execute()
-            market = market_insert.data[0]
-        
-        # Save products
-        save_result = save_products_to_supabase(market['market_id'], products, url)
-        
-        # Update URL record with success
-        supabase.table('processed_urls').update({
-            'market_id': market['market_id'],
-            'market_name': market['name'],
-            'products_count': len(products),
-            'status': 'success'
-        }).eq('id', url_record_id).execute()
-        
-        print(f"[OK] [BACKGROUND] Complete: {save_result['saved_to_purchases']} products saved")
+            }).execute()
+            
+            if market_result.data:
+                market = market_result.data[0]
+                print(f"[BACKGROUND #{url_record_id}] Found existing market: {market['market_id']}")
+            else:
+                new_market_id = generate_market_id()
+                while True:
+                    check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
+                    if not check.data:
+                        break
+                    new_market_id = generate_market_id()
+                
+                market_data = {
+                    'market_id': new_market_id,
+                    'name': market_info['name'],
+                    'address': market_info['address']
+                }
+                market_insert = supabase.table('markets').insert(market_data).execute()
+                market = market_insert.data[0]
+                print(f"[BACKGROUND #{url_record_id}] Created new market: {market['market_id']}")
+            
+            # Save products
+            print(f"[BACKGROUND #{url_record_id}] Saving {len(products)} products...")
+            save_result = save_products_to_supabase(market['market_id'], products, url)
+            
+            # Update URL record with success
+            supabase.table('processed_urls').update({
+                'market_id': market['market_id'],
+                'market_name': market['name'],
+                'products_count': len(products),
+                'status': 'success'
+            }).eq('id', url_record_id).execute()
+            
+            total_time = time.time() - start_time
+            print(f"[OK] [BACKGROUND #{url_record_id}] Complete in {total_time:.1f}s: {save_result['saved_to_purchases']} products saved")
+            
+        finally:
+            # Always release the semaphore
+            extraction_semaphore.release()
+            print(f"[BACKGROUND #{url_record_id}] Released extraction slot")
         
     except Exception as e:
         supabase.table('processed_urls').update({
             'status': 'error',
-            'error_message': str(e)
+            'error_message': str(e)[:200]  # Limit error message length
         }).eq('id', url_record_id).execute()
-        print(f"[FAIL] [BACKGROUND] Error: {e}")
+        total_time = time.time() - start_time
+        print(f"[FAIL] [BACKGROUND #{url_record_id}] Error after {total_time:.1f}s: {e}")
         import traceback
         traceback.print_exc()
 
