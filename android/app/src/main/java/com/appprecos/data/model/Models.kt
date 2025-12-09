@@ -72,9 +72,3 @@ data class ProductDetail(
     val last_updated: String? = null
 )
 
-data class Stats(
-    val total_markets: Int,
-    val total_products_across_all_markets: Int,
-    val architecture: String
-)
-

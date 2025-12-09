@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: app-precos-web
+    env: python
+    rootDir: .
+    buildCommand: >
+      uv sync --frozen &&
+      uv run python manage.py collectstatic --noinput
+    startCommand: >
+      uv run gunicorn app_precos_site.wsgi:application --bind 0.0.0.0:$PORT
+    plan: starter
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: app-precos-web.onrender.com
+      - key: DJANGO_CSRF_TRUSTED
+        value: https://app-precos-web.onrender.com
+      - key: SUPABASE_URL
+        sync: true
+      - key: SUPABASE_ANON_KEY
+        sync: true
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: true
+
+

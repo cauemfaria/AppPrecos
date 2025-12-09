@@ -1,0 +1,65 @@
+{% extends "core/base.html" %}
+
+{% block title %}AppPrecos · Painel{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <div class="panel__header">
+        <h1>Monitoramento de preços</h1>
+        <p>Envie uma NFC-e recente para atualizar o histórico.</p>
+    </div>
+    <form class="nfce-form" action="{% url 'nfce-submit' %}" method="post">
+        {% csrf_token %}
+        <label for="nfce_url">URL NFC-e</label>
+        <input type="url" id="nfce_url" name="nfce_url" placeholder="https://www.nfce..." required>
+        <label class="switch">
+            <input type="checkbox" name="async" value="true">
+            <span>Processar em segundo plano</span>
+        </label>
+        <button type="submit">Enviar NFC-e</button>
+        <a class="link" href="{% url 'qr-scanner' %}">Usar câmera e QR Code</a>
+    </form>
+</section>
+
+<section class="panel grid">
+    <div class="card">
+        <span class="card__label">Mercados monitorados</span>
+        <strong class="card__value">{{ stats.total_markets|default:0 }}</strong>
+        {% if stats_error %}
+            <small class="card__hint">Erro: {{ stats_error }}</small>
+        {% endif %}
+    </div>
+    <div class="card">
+        <span class="card__label">Compras salvas</span>
+        <strong class="card__value">{{ stats.total_purchases|default:0 }}</strong>
+    </div>
+    <div class="card">
+        <span class="card__label">Produtos únicos</span>
+        <strong class="card__value">{{ stats.total_unique_products|default:0 }}</strong>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel__header">
+        <h2>Mercados recentes</h2>
+        {% if markets_error %}
+            <small>Erro ao carregar mercados: {{ markets_error }}</small>
+        {% endif %}
+    </div>
+    <div class="market-list">
+        {% for market in markets %}
+            <a class="market-row" href="{% url 'market-detail' market.market_id %}">
+                <div>
+                    <strong>{{ market.name }}</strong>
+                    <p>{{ market.address }}</p>
+                </div>
+                <span>&rsaquo;</span>
+            </a>
+        {% empty %}
+            <p class="empty-state">Nenhum mercado cadastrado até o momento.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+

@@ -14,8 +14,5 @@ interface ApiService {
     
     @GET("markets/{market_id}/products")
     suspend fun getMarketProducts(@Path("market_id") marketId: String): Response<MarketProductsResponse>
-    
-    @GET("stats")
-    suspend fun getStats(): Response<Stats>
 }
 
