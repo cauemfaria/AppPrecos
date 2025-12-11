@@ -73,17 +73,18 @@ def cleanup_stale_locks():
     try:
         # Find records stuck in 'extracting' status for too long
         # We mark them as errors so they can be retried
-        stale = supabase.table('processed_urls').select('id,updated_at').eq('status', 'extracting').execute()
+        # Use 'processed_at' column instead of 'updated_at'
+        stale = supabase.table('processed_urls').select('id,processed_at').eq('status', 'extracting').execute()
         
         if stale.data:
             from datetime import datetime, timezone
             now = datetime.now(timezone.utc)
             
             for record in stale.data:
-                if record.get('updated_at'):
+                if record.get('processed_at'):
                     try:
-                        updated_at = datetime.fromisoformat(record['updated_at'].replace('Z', '+00:00'))
-                        age_seconds = (now - updated_at).total_seconds()
+                        processed_at = datetime.fromisoformat(record['processed_at'].replace('Z', '+00:00'))
+                        age_seconds = (now - processed_at).total_seconds()
                         
                         if age_seconds > STALE_LOCK_TIMEOUT_SECONDS:
                             supabase.table('processed_urls').update({
@@ -239,12 +240,19 @@ Novo produto: "{new_product_name}"
 Produtos existentes (de diversos mercados):
 {existing_list}
 
-REGRAS IMPORTANTES:
-- Variações de escrita, abreviações e formatação = MESMO produto (ex: "COCA COLA 350ML" = "Coca-Cola Lata 350ml")
-- Marcas diferentes = produtos DIFERENTES (ex: "COCA COLA" ≠ "PEPSI")
-- Tamanhos/quantidades diferentes = produtos DIFERENTES (ex: "350ML" ≠ "2L")
-- Sabores diferentes = produtos DIFERENTES (ex: "ORIGINAL" ≠ "ZERO")
-- Embalagens diferentes podem ser o mesmo produto (ex: "LATA" = "LT" = sem mencionar embalagem)
+ABREVIAÇÕES COMUNS (considere ao comparar):
+- Embalagens: LT/LTA=Lata, GF/GRF=Garrafa, CX=Caixa, PCT=Pacote, PT=Pote, SC/SAC=Sachê, UN=Unidade
+- Medidas: KG=Kg, G=g, ML=ml, L=L
+- Lácteos: CR=Creme de, IOG=Iogurte, QJ/QJO=Queijo, REQUEIJ=Requeijão
+- Vegetais: MACO/MC=Maço, TOM=Tomate, BAT=Batata
+- Outros: AC=Açúcar, REF=Refinado/Refrigerante, ACHOC=Achocolatado, BISC=Biscoito
+
+REGRAS DE COMPARAÇÃO:
+- Variações de escrita/abreviações = MESMO produto (ex: "COCA COLA 350ML" = "Coca-Cola Lata 350ml")
+- Marcas diferentes = DIFERENTES (ex: "COCA COLA" ≠ "PEPSI")
+- Tamanhos diferentes = DIFERENTES (ex: "350ML" ≠ "2L")
+- Sabores diferentes = DIFERENTES (ex: "ORIGINAL" ≠ "ZERO")
+- Embalagens diferentes podem ser o mesmo (ex: "LATA" = "LT")
 
 Responda no formato JSON:
 {{
@@ -255,14 +263,9 @@ Responda no formato JSON:
 
 IMPORTANTE sobre nome_canonico:
 - Se IGUAL: use EXATAMENTE o nome do produto existente que deu match
-- Se NOVO: formate o nome de forma limpa e padronizada:
-  - Use Title Case (Primeira Letra Maiúscula)
-  - Expanda abreviações comuns (LT→Lata, CX→Caixa, PCT→Pacote, KG→Kg, ML→ml, etc)
-  - Mantenha todas as informações importantes: marca, sabor, tamanho, tipo
-  - Remova caracteres especiais desnecessários
-  - Exemplo: "COCA COLA LT 350ML" → "Coca-Cola Lata 350ml"
+- Se NOVO: formate o nome expandindo abreviações (CR LEITE→Creme de Leite, MACO→Maço, etc)
 
-Responda APENAS com o JSON, sem explicações:"""
+Responda APENAS com o JSON:"""
 
     start_time = time.time()
     
@@ -342,25 +345,31 @@ def call_llm_format_new_product(product_name):
 
 Produto: "{product_name}"
 
+ABREVIAÇÕES COMUNS DE SUPERMERCADO (expanda todas):
+- Embalagens: LT/LTA=Lata, GF/GRF=Garrafa, CX=Caixa, PCT=Pacote, PT=Pote, SC/SAC=Sachê/Saco, TP=Tetra Pak, PET=Pet, BD/BDJ=Bandeja, UN=Unidade
+- Medidas: KG=Kg, G=g, ML=ml, L=L, CM=cm, M=m
+- Produtos lácteos: CR=Creme de, LT/LEITE=Leite, IOG=Iogurte, QJ/QJO=Queijo, REQUEIJ=Requeijão, MANT=Manteiga, MARG=Margarina
+- Carnes: FGO=Frango, BOV=Bovino, SUÍ=Suíno, PX=Peixe, BIF=Bife, FIL=Filé, COX=Coxa, ASA=Asa, PRES=Presunto
+- Vegetais/Frutas: MACO/MC=Maço, TOM=Tomate, BAT=Batata, CEB=Cebola, CEN=Cenoura, ALF=Alface, MAC/MACA=Maçã
+- Tipos: TP/T1=Tipo 1, PARB=Parboilizado, INT=Integral, DESC=Desnatado, TRAD=Tradicional, NAT=Natural
+- Outros: AC/ACUC=Açúcar, REF=Refrigerante/Refinado, ACHOC=Achocolatado, BISC=Biscoito, CHOC=Chocolate, SAB=Sabor, C/=Com, S/=Sem
+- Marcas: Não altere nomes de marcas (Italac, Sadia, Quero, etc)
+
 REGRAS:
 - Use Title Case (Primeira Letra Maiúscula)
-- Expanda abreviações comuns:
-  - LT, LTA → Lata
-  - GF, GRF → Garrafa  
-  - CX → Caixa
-  - PCT → Pacote
-  - KG → Kg
-  - ML → ml
-  - L → L (litro)
-  - UN → Unidade
-- Mantenha todas as informações: marca, sabor, tamanho, tipo, quantidade
+- Mantenha TODAS as informações: marca, sabor, tamanho, tipo, quantidade
 - Remova caracteres especiais desnecessários (* . /)
 - Use hífen para marcas compostas (Coca-Cola, Guaraná-Antarctica)
+- Se não souber uma abreviação, mantenha como está
 
 Exemplos:
 - "COCA COLA LT 350ML" → "Coca-Cola Lata 350ml"
-- "LEITE INTEGRAL ITALAC 1L" → "Leite Integral Italac 1L"
-- "ARROZ BRANCO TP 1 5KG CAMIL" → "Arroz Branco Tipo 1 5Kg Camil"
+- "CR LEITE ITALAC 200G" → "Creme de Leite Italac 200g"
+- "COENTRO MACO" → "Coentro Maço"
+- "AC REF 1KG UNIAO" → "Açúcar Refinado 1Kg União"
+- "QJO MUSSARELA KG" → "Queijo Mussarela Kg"
+- "IOG LIQ FIT 1L" → "Iogurte Líquido Fit 1L"
+- "ARROZ PARB TP1 5KG" → "Arroz Parboilizado Tipo 1 5Kg"
 
 Responda APENAS com o nome formatado, nada mais:"""
 
