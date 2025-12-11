@@ -17,8 +17,8 @@ from dotenv import load_dotenv
 from supabase import create_client
 from openai import OpenAI
 
-# Semaphore to limit concurrent Playwright extractions (browser is resource-heavy)
-extraction_semaphore = threading.Semaphore(1)  # Only 1 extraction at a time
+# Database-based lock for extraction (works across Gunicorn workers)
+# We use the processed_urls table status='extracting' as the lock
 
 # Load environment variables
 load_dotenv()
@@ -62,6 +62,97 @@ else:
     print("[WARN] OpenAI client NOT initialized (API key missing)")
 
 print("[OK] Supabase client initialized")
+
+# ============================================================================
+# Database-based extraction lock (works across Gunicorn workers)
+# ============================================================================
+STALE_LOCK_TIMEOUT_SECONDS = 300  # 5 minutes - if lock is older than this, consider it stale
+
+def cleanup_stale_locks():
+    """Clean up any stale 'extracting' status from crashed workers"""
+    try:
+        # Find records stuck in 'extracting' status for too long
+        # We mark them as errors so they can be retried
+        stale = supabase.table('processed_urls').select('id,updated_at').eq('status', 'extracting').execute()
+        
+        if stale.data:
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            
+            for record in stale.data:
+                if record.get('updated_at'):
+                    try:
+                        updated_at = datetime.fromisoformat(record['updated_at'].replace('Z', '+00:00'))
+                        age_seconds = (now - updated_at).total_seconds()
+                        
+                        if age_seconds > STALE_LOCK_TIMEOUT_SECONDS:
+                            supabase.table('processed_urls').update({
+                                'status': 'error',
+                                'error_message': f'Stale lock cleaned up (stuck for {age_seconds:.0f}s)'
+                            }).eq('id', record['id']).execute()
+                            print(f"[LOCK] Cleaned stale lock for record #{record['id']} (age: {age_seconds:.0f}s)")
+                    except Exception as e:
+                        print(f"[LOCK] Error checking stale lock: {e}")
+    except Exception as e:
+        print(f"[LOCK] Error in cleanup_stale_locks: {e}")
+
+def acquire_extraction_lock(record_id, max_wait_seconds=600):
+    """
+    Try to acquire extraction lock using database.
+    Returns True if lock acquired, False if timeout.
+    Uses processed_urls table with status='extracting' as the lock.
+    """
+    start_time = time.time()
+    check_interval = 2  # seconds
+    stale_check_interval = 30  # Check for stale locks every 30 seconds
+    last_stale_check = 0
+    
+    while True:
+        # Periodically clean up stale locks
+        elapsed = time.time() - start_time
+        if elapsed - last_stale_check >= stale_check_interval:
+            cleanup_stale_locks()
+            last_stale_check = elapsed
+        
+        # Check if any other record is currently extracting
+        extracting = supabase.table('processed_urls').select('id').eq('status', 'extracting').execute()
+        
+        if not extracting.data:
+            # No one is extracting, try to claim the lock
+            try:
+                supabase.table('processed_urls').update({
+                    'status': 'extracting'
+                }).eq('id', record_id).eq('status', 'processing').execute()
+                
+                # Verify we got it (in case of race condition)
+                check = supabase.table('processed_urls').select('status').eq('id', record_id).execute()
+                if check.data and check.data[0]['status'] == 'extracting':
+                    print(f"[LOCK #{record_id}] Acquired! Will query fresh data including all previous extractions")
+                    return True
+            except Exception as e:
+                print(f"[LOCK] Error acquiring lock: {e}")
+        
+        # Check timeout
+        elapsed = time.time() - start_time
+        if elapsed >= max_wait_seconds:
+            print(f"[LOCK] Timeout waiting for lock after {elapsed:.1f}s")
+            return False
+        
+        # Wait and retry
+        print(f"[LOCK #{record_id}] Waiting... ({elapsed:.0f}s elapsed, other extraction in progress)")
+        time.sleep(check_interval)
+
+def release_extraction_lock(record_id, final_status, **kwargs):
+    """Release lock by updating status to final state"""
+    try:
+        update_data = {'status': final_status, **kwargs}
+        supabase.table('processed_urls').update(update_data).eq('id', record_id).execute()
+        print(f"[LOCK #{record_id}] Released with status: {final_status}")
+        if final_status == 'success':
+            print(f"[LOCK #{record_id}] Database fully updated - next worker can now start and see new data")
+    except Exception as e:
+        print(f"[LOCK] Error releasing lock: {e}")
+
 print(f"[OK] API URL: {SUPABASE_URL}")
 
 
@@ -74,7 +165,7 @@ def generate_market_id():
     return f"MKT{random_part}"
 
 
-def log_llm_decision(market_id, ncm, new_product_name, existing_products, 
+def log_llm_decision(market_id, ncm, new_product_name, canonical_name, existing_products, 
                      llm_prompt, llm_response, decision, matched_product_id,
                      success, error_message, execution_time_ms):
     """
@@ -87,7 +178,7 @@ def log_llm_decision(market_id, ncm, new_product_name, existing_products,
             'new_product_name': new_product_name[:200] if new_product_name else '',
             'existing_products': existing_products,  # JSONB
             'llm_prompt': llm_prompt,
-            'llm_response': llm_response,
+            'llm_response': llm_response if llm_response else canonical_name,  # Store canonical name if no response
             'decision': decision,
             'matched_product_id': matched_product_id,
             'success': success,
@@ -96,7 +187,7 @@ def log_llm_decision(market_id, ncm, new_product_name, existing_products,
             'created_at': datetime.utcnow().isoformat()
         }
         supabase.table('llm_product_decisions').insert(log_data).execute()
-        print(f"  [LOG] LLM decision logged: {decision}")
+        print(f"  [LOG] LLM decision logged: {decision} → \"{canonical_name}\"")
     except Exception as e:
         print(f"  [WARN] Failed to log LLM decision: {e}")
 
@@ -104,25 +195,28 @@ def log_llm_decision(market_id, ncm, new_product_name, existing_products,
 def call_llm_for_product_match(new_product_name, existing_products):
     """
     Call OpenAI to determine if new product matches any existing product.
+    Also returns a canonical (formatted) product name.
     
     Args:
-        new_product_name: Name of the new product being added
-        existing_products: List of dicts with 'id' and 'product_name' keys
+        new_product_name: Name of the new product being added (often ugly/abbreviated)
+        existing_products: List of dicts with 'id' and 'product_name' keys (from ALL markets)
     
     Returns:
-        tuple: (decision, matched_id, llm_prompt, llm_response, execution_time_ms, error_message)
+        tuple: (decision, matched_id, canonical_name, llm_prompt, llm_response, execution_time_ms, error_message)
         decision: "CREATE_NEW" or "UPDATE:{id}"
         matched_id: ID of matched product (or None)
+        canonical_name: The standardized product name to use
     """
     if not openai_client:
-        return None, None, None, None, 0, "OpenAI client not initialized"
-    
-    if not existing_products:
-        return "CREATE_NEW", None, None, None, 0, None
+        return None, None, None, None, None, 0, "OpenAI client not initialized"
     
     # Handle empty product name
     if not new_product_name or not new_product_name.strip():
-        return None, None, None, None, 0, "New product name is empty"
+        return None, None, None, None, None, 0, "New product name is empty"
+    
+    # If no existing products, we need to format the name
+    if not existing_products:
+        return call_llm_format_new_product(new_product_name)
     
     # Limit to 20 most recent products to avoid huge prompts
     MAX_PRODUCTS_TO_COMPARE = 20
@@ -141,20 +235,33 @@ determine se o novo produto é IGUAL a algum dos existentes ou se é um produto 
 
 Novo produto: "{new_product_name}"
 
-Produtos existentes:
+Produtos existentes (de diversos mercados):
 {existing_list}
 
 REGRAS IMPORTANTES:
-- Variações de escrita, abreviações e formatação = MESMO produto (ex: "COCA COLA 350ML" = "COCA-COLA LATA 350ML")
+- Variações de escrita, abreviações e formatação = MESMO produto (ex: "COCA COLA 350ML" = "Coca-Cola Lata 350ml")
 - Marcas diferentes = produtos DIFERENTES (ex: "COCA COLA" ≠ "PEPSI")
 - Tamanhos/quantidades diferentes = produtos DIFERENTES (ex: "350ML" ≠ "2L")
 - Sabores diferentes = produtos DIFERENTES (ex: "ORIGINAL" ≠ "ZERO")
+- Embalagens diferentes podem ser o mesmo produto (ex: "LATA" = "LT" = sem mencionar embalagem)
 
-Responda APENAS com:
-- "NOVO" se é um produto diferente de todos os existentes
-- "IGUAL:ID" se é igual ao produto com esse ID (substitua ID pelo número do ID)
+Responda no formato JSON:
+{{
+  "decisao": "NOVO" ou "IGUAL",
+  "id_match": null ou ID do produto igual (número),
+  "nome_canonico": "Nome formatado do produto"
+}}
 
-Sua resposta (apenas uma palavra):"""
+IMPORTANTE sobre nome_canonico:
+- Se IGUAL: use EXATAMENTE o nome do produto existente que deu match
+- Se NOVO: formate o nome de forma limpa e padronizada:
+  - Use Title Case (Primeira Letra Maiúscula)
+  - Expanda abreviações comuns (LT→Lata, CX→Caixa, PCT→Pacote, KG→Kg, ML→ml, etc)
+  - Mantenha todas as informações importantes: marca, sabor, tamanho, tipo
+  - Remova caracteres especiais desnecessários
+  - Exemplo: "COCA COLA LT 350ML" → "Coca-Cola Lata 350ml"
+
+Responda APENAS com o JSON, sem explicações:"""
 
     start_time = time.time()
     
@@ -162,10 +269,10 @@ Sua resposta (apenas uma palavra):"""
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Você responde apenas com 'NOVO' ou 'IGUAL:ID'. Nada mais."},
+                {"role": "system", "content": "Você é um especialista em identificação de produtos. Responda apenas com JSON válido."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=20,
+            max_tokens=200,
             temperature=0.1  # Low temperature for consistent decisions
         )
         
@@ -174,125 +281,209 @@ Sua resposta (apenas uma palavra):"""
         
         print(f"  [LLM] Response: {llm_response} ({execution_time_ms}ms)")
         
-        # Parse response - normalize by removing spaces and converting to uppercase
-        normalized_response = llm_response.upper().replace(" ", "")
-        
-        if normalized_response == "NOVO":
-            return "CREATE_NEW", None, prompt, llm_response, execution_time_ms, None
-        elif normalized_response.startswith("IGUAL:"):
-            try:
-                # Extract ID after "IGUAL:" - handle variations like "IGUAL:123", "IGUAL: 123", "igual:123"
-                id_part = normalized_response.split(":")[1].strip()
-                matched_id = int(id_part)
+        # Parse JSON response
+        import json
+        try:
+            # Clean up response - remove markdown code blocks if present
+            clean_response = llm_response
+            if clean_response.startswith("```"):
+                clean_response = clean_response.split("```")[1]
+                if clean_response.startswith("json"):
+                    clean_response = clean_response[4:]
+            clean_response = clean_response.strip()
+            
+            result = json.loads(clean_response)
+            decision_raw = result.get("decisao", "").upper()
+            matched_id = result.get("id_match")
+            canonical_name = result.get("nome_canonico", new_product_name)
+            
+            if decision_raw == "NOVO":
+                return "CREATE_NEW", None, canonical_name, prompt, llm_response, execution_time_ms, None
+            elif decision_raw == "IGUAL" and matched_id:
+                matched_id = int(matched_id)
                 # Verify the ID exists in our list
                 valid_ids = [p['id'] for p in products_to_compare]
                 if matched_id in valid_ids:
-                    return f"UPDATE:{matched_id}", matched_id, prompt, llm_response, execution_time_ms, None
+                    # Get canonical name from matched product
+                    matched_product = next((p for p in products_to_compare if p['id'] == matched_id), None)
+                    if matched_product:
+                        canonical_name = matched_product['product_name']
+                    return f"UPDATE:{matched_id}", matched_id, canonical_name, prompt, llm_response, execution_time_ms, None
                 else:
-                    return "CREATE_NEW", None, prompt, llm_response, execution_time_ms, f"LLM returned invalid ID: {matched_id}"
-            except (ValueError, IndexError):
-                return "CREATE_NEW", None, prompt, llm_response, execution_time_ms, f"Failed to parse ID from: {llm_response}"
-        else:
-            # Unexpected response - default to creating new
-            return "CREATE_NEW", None, prompt, llm_response, execution_time_ms, f"Unexpected LLM response: {llm_response}"
+                    return "CREATE_NEW", None, canonical_name, prompt, llm_response, execution_time_ms, f"LLM returned invalid ID: {matched_id}"
+            else:
+                # Unexpected response - default to creating new with formatted name
+                return "CREATE_NEW", None, canonical_name, prompt, llm_response, execution_time_ms, f"Unexpected decision: {decision_raw}"
+                
+        except json.JSONDecodeError as je:
+            # Fallback to simple parsing if JSON fails
+            print(f"  [WARN] JSON parse failed, trying fallback: {je}")
+            return "CREATE_NEW", None, new_product_name, prompt, llm_response, execution_time_ms, f"JSON parse error: {je}"
             
     except Exception as e:
         execution_time_ms = int((time.time() - start_time) * 1000)
         error_msg = f"OpenAI API error: {str(e)}"
         print(f"  [ERROR] LLM error: {error_msg}")
-        return None, None, prompt, None, execution_time_ms, error_msg
+        return None, None, None, prompt, None, execution_time_ms, error_msg
+
+
+def call_llm_format_new_product(product_name):
+    """
+    Call OpenAI to format a new product name when no existing products to compare.
+    
+    Returns:
+        tuple: (decision, matched_id, canonical_name, llm_prompt, llm_response, execution_time_ms, error_message)
+    """
+    if not openai_client:
+        return "CREATE_NEW", None, product_name, None, None, 0, "OpenAI client not initialized"
+    
+    prompt = f"""Formate o seguinte nome de produto de supermercado de forma limpa e padronizada:
+
+Produto: "{product_name}"
+
+REGRAS:
+- Use Title Case (Primeira Letra Maiúscula)
+- Expanda abreviações comuns:
+  - LT, LTA → Lata
+  - GF, GRF → Garrafa  
+  - CX → Caixa
+  - PCT → Pacote
+  - KG → Kg
+  - ML → ml
+  - L → L (litro)
+  - UN → Unidade
+- Mantenha todas as informações: marca, sabor, tamanho, tipo, quantidade
+- Remova caracteres especiais desnecessários (* . /)
+- Use hífen para marcas compostas (Coca-Cola, Guaraná-Antarctica)
+
+Exemplos:
+- "COCA COLA LT 350ML" → "Coca-Cola Lata 350ml"
+- "LEITE INTEGRAL ITALAC 1L" → "Leite Integral Italac 1L"
+- "ARROZ BRANCO TP 1 5KG CAMIL" → "Arroz Branco Tipo 1 5Kg Camil"
+
+Responda APENAS com o nome formatado, nada mais:"""
+
+    start_time = time.time()
+    
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Você formata nomes de produtos. Responda apenas com o nome formatado."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=100,
+            temperature=0.1
+        )
+        
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        canonical_name = response.choices[0].message.content.strip()
+        
+        # Remove quotes if present
+        if canonical_name.startswith('"') and canonical_name.endswith('"'):
+            canonical_name = canonical_name[1:-1]
+        
+        print(f"  [LLM] Formatted: \"{product_name}\" → \"{canonical_name}\" ({execution_time_ms}ms)")
+        
+        return "CREATE_NEW", None, canonical_name, prompt, canonical_name, execution_time_ms, None
+        
+    except Exception as e:
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        error_msg = f"OpenAI API error: {str(e)}"
+        print(f"  [ERROR] LLM format error: {error_msg}")
+        # Return original name on error
+        return "CREATE_NEW", None, product_name, prompt, None, execution_time_ms, error_msg
 
 
 def process_nfce_in_background(url, url_record_id):
     """Background task to process NFCe extraction and save to database"""
     start_time = time.time()
     
-    try:
-        print(f"\n[BACKGROUND #{url_record_id}] Queued for processing...")
-        print(f"[BACKGROUND #{url_record_id}] Waiting for extraction slot (semaphore)...")
-        
-        # Acquire semaphore to limit concurrent extractions
-        # This prevents multiple Playwright browsers from running simultaneously
-        extraction_semaphore.acquire()
-        wait_time = time.time() - start_time
-        print(f"[BACKGROUND #{url_record_id}] Got extraction slot after {wait_time:.1f}s")
-        
-        try:
-            print(f"[BACKGROUND #{url_record_id}] Starting Playwright extraction...")
-            
-            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-            from nfce_extractor import extract_full_nfce_data
-            
-            extraction_start = time.time()
-            result = extract_full_nfce_data(url, headless=True)
-            extraction_time = time.time() - extraction_start
-            print(f"[BACKGROUND #{url_record_id}] Playwright extraction completed in {extraction_time:.1f}s")
-            
-            market_info = result.get('market_info', {})
-            products = result.get('products', [])
-            
-            if not products or not market_info.get('name') or not market_info.get('address'):
-                supabase.table('processed_urls').update({
-                    'status': 'error',
-                    'error_message': 'No products or market info extracted'
-                }).eq('id', url_record_id).execute()
-                print(f"[FAIL] [BACKGROUND #{url_record_id}] No products or market info extracted")
-                return
-            
-            print(f"[BACKGROUND #{url_record_id}] Extracted {len(products)} products from {market_info.get('name')}")
-            
-            # Check/create market
-            print(f"[BACKGROUND #{url_record_id}] Checking/creating market...")
-            market_result = supabase.table('markets').select('*').match({
-                'name': market_info['name'],
-                'address': market_info['address']
-            }).execute()
-            
-            if market_result.data:
-                market = market_result.data[0]
-                print(f"[BACKGROUND #{url_record_id}] Found existing market: {market['market_id']}")
-            else:
-                new_market_id = generate_market_id()
-                while True:
-                    check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
-                    if not check.data:
-                        break
-                    new_market_id = generate_market_id()
-                
-                market_data = {
-                    'market_id': new_market_id,
-                    'name': market_info['name'],
-                    'address': market_info['address']
-                }
-                market_insert = supabase.table('markets').insert(market_data).execute()
-                market = market_insert.data[0]
-                print(f"[BACKGROUND #{url_record_id}] Created new market: {market['market_id']}")
-            
-            # Save products
-            print(f"[BACKGROUND #{url_record_id}] Saving {len(products)} products...")
-            save_result = save_products_to_supabase(market['market_id'], products, url)
-            
-            # Update URL record with success
-            supabase.table('processed_urls').update({
-                'market_id': market['market_id'],
-                'market_name': market['name'],
-                'products_count': len(products),
-                'status': 'success'
-            }).eq('id', url_record_id).execute()
-            
-            total_time = time.time() - start_time
-            print(f"[OK] [BACKGROUND #{url_record_id}] Complete in {total_time:.1f}s: {save_result['saved_to_purchases']} products saved")
-            
-        finally:
-            # Always release the semaphore
-            extraction_semaphore.release()
-            print(f"[BACKGROUND #{url_record_id}] Released extraction slot")
-        
-    except Exception as e:
+    print(f"\n[BACKGROUND #{url_record_id}] Queued for processing...")
+    print(f"[BACKGROUND #{url_record_id}] Waiting for extraction slot (database lock)...")
+    
+    # Acquire database-based lock (works across Gunicorn workers)
+    if not acquire_extraction_lock(url_record_id, max_wait_seconds=600):
+        # Timeout - mark as error
         supabase.table('processed_urls').update({
             'status': 'error',
-            'error_message': str(e)[:200]  # Limit error message length
+            'error_message': 'Timeout waiting for extraction slot'
         }).eq('id', url_record_id).execute()
+        print(f"[FAIL] [BACKGROUND #{url_record_id}] Timeout waiting for lock")
+        return
+    
+    wait_time = time.time() - start_time
+    print(f"[BACKGROUND #{url_record_id}] Got extraction slot after {wait_time:.1f}s")
+    
+    try:
+        print(f"[BACKGROUND #{url_record_id}] Starting Playwright extraction...")
+        
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from nfce_extractor import extract_full_nfce_data
+        
+        extraction_start = time.time()
+        result = extract_full_nfce_data(url, headless=True)
+        extraction_time = time.time() - extraction_start
+        print(f"[BACKGROUND #{url_record_id}] Playwright extraction completed in {extraction_time:.1f}s")
+        
+        market_info = result.get('market_info', {})
+        products = result.get('products', [])
+        
+        if not products or not market_info.get('name') or not market_info.get('address'):
+            release_extraction_lock(url_record_id, 'error',
+                error_message='No products or market info extracted'
+            )
+            print(f"[FAIL] [BACKGROUND #{url_record_id}] No products or market info extracted")
+            return
+        
+        print(f"[BACKGROUND #{url_record_id}] Extracted {len(products)} products from {market_info.get('name')}")
+        
+        # Check/create market
+        print(f"[BACKGROUND #{url_record_id}] Checking/creating market...")
+        market_result = supabase.table('markets').select('*').match({
+            'name': market_info['name'],
+            'address': market_info['address']
+        }).execute()
+        
+        if market_result.data:
+            market = market_result.data[0]
+            print(f"[BACKGROUND #{url_record_id}] Found existing market: {market['market_id']}")
+        else:
+            new_market_id = generate_market_id()
+            while True:
+                check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
+                if not check.data:
+                    break
+                new_market_id = generate_market_id()
+            
+            market_data = {
+                'market_id': new_market_id,
+                'name': market_info['name'],
+                'address': market_info['address']
+            }
+            market_insert = supabase.table('markets').insert(market_data).execute()
+            market = market_insert.data[0]
+            print(f"[BACKGROUND #{url_record_id}] Created new market: {market['market_id']}")
+        
+        # Save products
+        print(f"[BACKGROUND #{url_record_id}] Saving {len(products)} products...")
+        save_result = save_products_to_supabase(market['market_id'], products, url)
+        
+        # Update URL record with success (this also releases the lock)
+        release_extraction_lock(url_record_id, 'success',
+            market_id=market['market_id'],
+            market_name=market['name'],
+            products_count=len(products)
+        )
+        
+        total_time = time.time() - start_time
+        print(f"[OK] [BACKGROUND #{url_record_id}] Complete in {total_time:.1f}s: {save_result['saved_to_purchases']} products saved")
+        
+    except Exception as e:
+        # Release lock with error status
+        release_extraction_lock(url_record_id, 'error',
+            error_message=str(e)[:200]
+        )
         total_time = time.time() - start_time
         print(f"[FAIL] [BACKGROUND #{url_record_id}] Error after {total_time:.1f}s: {e}")
         import traceback
@@ -357,75 +548,56 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         print(f"[OK] Inserted {saved_to_purchases} products to PURCHASES\n")
         
         # 2. Upsert to UNIQUE_PRODUCTS table using LLM-based matching
+        # NOTE: Each insert/update commits immediately to database
+        # This ensures the next NFCe extraction will see this data for LLM comparison
         print(f"[2/2] Upserting to UNIQUE_PRODUCTS table (LLM-based matching)...")
+        print(f"      (Each product is saved immediately - next extraction will see it)")
         skipped_products = 0
         
         for idx, product in enumerate(products, 1):
-            product_name = product.get('product', '')
+            original_product_name = product.get('product', '')
             ncm = product['ncm']
             
             try:
+                # Query existing products with same NCM from ALL markets
+                # This enables cross-market product matching for price comparison
+                response = supabase.table('unique_products').select('*').eq('ncm', ncm).execute()
+                
+                existing_products = response.data if response.data else []
+                
+                # Call LLM to match/format product
+                # Returns: (decision, matched_id, canonical_name, llm_prompt, llm_response, exec_time, error_msg)
+                decision, matched_id, canonical_name, llm_prompt, llm_response, exec_time, error_msg = call_llm_for_product_match(
+                    new_product_name=original_product_name,
+                    existing_products=existing_products
+                )
+                
+                # Use canonical name for storage (or original if LLM failed)
+                product_name = canonical_name if canonical_name else original_product_name
+                
                 unique_data = {
                     'market_id': market_id,
                     'ncm': ncm,
                     'ean': product.get('ean', 'SEM GTIN'),
-                    'product_name': product_name,
+                    'product_name': product_name,  # Use canonical name!
                     'unidade_comercial': product.get('unidade_comercial', 'UN'),
                     'price': product.get('unit_price', 0),
                     'nfce_url': nfce_url,
                     'last_updated': datetime.utcnow().isoformat()
                 }
                 
-                # Query existing products with same NCM in this market
-                # Get all fields for potential rollback
-                response = supabase.table('unique_products').select('*').match({
-                    'market_id': market_id,
-                    'ncm': ncm
-                }).execute()
-                
-                existing_products = response.data if response.data else []
-                
-                # CASE 1: No existing products with this NCM -> create new directly
-                if not existing_products:
-                    insert_response = supabase.table('unique_products').insert(unique_data).execute()
-                    
-                    if not insert_response.data or len(insert_response.data) == 0:
-                        raise Exception(f"Failed to insert product {idx}")
-                    
-                    inserted_unique_ids.append(insert_response.data[0]['id'])
-                    created_unique += 1
-                    print(f"  [+] [{idx}/{len(products)}] Created (new NCM): {product_name[:50]}")
-                    
-                    # Log decision (no LLM needed)
-                    log_llm_decision(
-                        market_id=market_id,
-                        ncm=ncm,
-                        new_product_name=product_name,
-                        existing_products=None,
-                        llm_prompt=None,
-                        llm_response=None,
-                        decision="CREATE_NEW",
-                        matched_product_id=None,
-                        success=True,
-                        error_message=None,
-                        execution_time_ms=0
-                    )
-                    continue
-                
-                # CASE 2: Existing products found -> call LLM to decide
-                print(f"  [SEARCH] [{idx}/{len(products)}] Found {len(existing_products)} existing products with NCM {ncm}")
-                
-                decision, matched_id, llm_prompt, llm_response, exec_time, error_msg = call_llm_for_product_match(
-                    new_product_name=product_name,
-                    existing_products=existing_products
-                )
+                # Log what we found
+                if existing_products:
+                    markets_with_product = set(p.get('market_id', 'unknown') for p in existing_products)
+                    print(f"  [SEARCH] [{idx}/{len(products)}] Found {len(existing_products)} products with NCM {ncm} in {len(markets_with_product)} markets")
                 
                 # Log the LLM decision
                 log_llm_decision(
                     market_id=market_id,
                     ncm=ncm,
-                    new_product_name=product_name,
-                    existing_products=[{'id': p['id'], 'name': p['product_name']} for p in existing_products],
+                    new_product_name=original_product_name,
+                    canonical_name=canonical_name,
+                    existing_products=[{'id': p['id'], 'name': p['product_name'], 'market': p.get('market_id')} for p in existing_products] if existing_products else None,
                     llm_prompt=llm_prompt,
                     llm_response=llm_response,
                     decision=decision if decision else "SKIPPED",
@@ -437,12 +609,31 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 
                 # Handle LLM failure -> skip product
                 if decision is None:
-                    print(f"  [SKIP] [{idx}/{len(products)}] SKIPPED (LLM error): {product_name[:50]}")
+                    print(f"  [SKIP] [{idx}/{len(products)}] SKIPPED (LLM error): {original_product_name[:50]}")
                     skipped_products += 1
                     continue
                 
-                # Handle LLM decision
-                if decision == "CREATE_NEW":
+                # Check if this market already has this product (to update instead of insert)
+                existing_in_this_market = supabase.table('unique_products').select('id').match({
+                    'market_id': market_id,
+                    'ncm': ncm,
+                    'product_name': product_name
+                }).execute()
+                
+                if existing_in_this_market.data:
+                    # Update existing row for this market
+                    update_id = existing_in_this_market.data[0]['id']
+                    
+                    # Backup old data for potential rollback
+                    old_data_response = supabase.table('unique_products').select('*').eq('id', update_id).execute()
+                    if old_data_response.data:
+                        updated_unique_backup[update_id] = old_data_response.data[0]
+                    
+                    update_response = supabase.table('unique_products').update(unique_data).eq('id', update_id).execute()
+                    updated_unique += 1
+                    print(f"  [~] [{idx}/{len(products)}] Updated price in market: \"{product_name[:40]}\"")
+                else:
+                    # Create new row for this market
                     insert_response = supabase.table('unique_products').insert(unique_data).execute()
                     
                     if not insert_response.data or len(insert_response.data) == 0:
@@ -450,21 +641,11 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                     
                     inserted_unique_ids.append(insert_response.data[0]['id'])
                     created_unique += 1
-                    print(f"  [+] [{idx}/{len(products)}] Created (LLM: new product): {product_name[:50]}")
                     
-                elif decision.startswith("UPDATE:"):
-                    # Update existing product
-                    old_data = next((p for p in existing_products if p['id'] == matched_id), None)
-                    if old_data:
-                        updated_unique_backup[matched_id] = old_data
-                    
-                    update_response = supabase.table('unique_products').update(unique_data).eq('id', matched_id).execute()
-                    
-                    if not update_response.data or len(update_response.data) == 0:
-                        raise Exception(f"Failed to update product {idx}")
-                    
-                    updated_unique += 1
-                    print(f"  [~] [{idx}/{len(products)}] Updated (LLM: same as ID {matched_id}): {product_name[:50]}")
+                    if matched_id:
+                        print(f"  [+] [{idx}/{len(products)}] Added to market (matched ID {matched_id}): \"{product_name[:40]}\"")
+                    else:
+                        print(f"  [+] [{idx}/{len(products)}] Created (new product): \"{product_name[:40]}\"")
                     
             except Exception as e:
                 print(f"[ERROR] Processing product {idx}: {str(e)}")
@@ -472,6 +653,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         
         print(f"\n{'='*60}")
         print(f"[OK] COMPLETED: {saved_to_purchases} purchases, {created_unique} new, {updated_unique} updated, {skipped_products} skipped")
+        print(f"[OK] All products committed to database - next extraction will see this data")
         print(f"{'='*60}\n")
         
         return {
