@@ -13,6 +13,7 @@ import random
 import sys
 import threading
 import time
+import requests
 from dotenv import load_dotenv
 from supabase import create_client
 from openai import OpenAI
@@ -62,6 +63,76 @@ else:
     print("[WARN] OpenAI client NOT initialized (API key missing)")
 
 print("[OK] Supabase client initialized")
+
+# ============================================================================
+# Open Food Facts API - Get product name from GTIN/EAN
+# ============================================================================
+OPEN_FOOD_FACTS_API = "https://world.openfoodfacts.org/api/v2/product"
+
+def get_product_from_open_food_facts(gtin):
+    """
+    Query Open Food Facts API to get product name from GTIN/EAN barcode.
+    
+    Args:
+        gtin: The barcode/EAN of the product
+        
+    Returns:
+        tuple: (success, product_name, execution_time_ms)
+        - success: True if product found, False otherwise
+        - product_name: The product name from OFF, or None if not found
+        - execution_time_ms: Time taken for the API call
+    """
+    if not gtin or gtin == 'SEM GTIN' or len(gtin) < 8:
+        return False, None, 0
+    
+    start_time = time.time()
+    
+    try:
+        url = f"{OPEN_FOOD_FACTS_API}/{gtin}?fields=product_name,product_name_pt,product_name_en,brands"
+        
+        response = requests.get(url, timeout=5, headers={
+            'User-Agent': 'AppPrecos/1.0 (contact@appprecos.com)'
+        })
+        
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            if data.get('status') == 1 and data.get('product'):
+                product = data['product']
+                
+                # Try Portuguese name first, then generic, then English
+                product_name = (
+                    product.get('product_name_pt') or 
+                    product.get('product_name') or 
+                    product.get('product_name_en')
+                )
+                
+                if product_name:
+                    # Optionally append brand if available
+                    brand = product.get('brands', '').split(',')[0].strip()
+                    if brand and brand.lower() not in product_name.lower():
+                        product_name = f"{product_name} {brand}"
+                    
+                    # Clean up the name
+                    product_name = product_name.strip()
+                    
+                    print(f"  [OFF] Found: \"{product_name}\" for GTIN {gtin} ({execution_time_ms}ms)")
+                    return True, product_name, execution_time_ms
+        
+        print(f"  [OFF] Not found: GTIN {gtin} ({execution_time_ms}ms)")
+        return False, None, execution_time_ms
+        
+    except requests.Timeout:
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        print(f"  [OFF] Timeout: GTIN {gtin} ({execution_time_ms}ms)")
+        return False, None, execution_time_ms
+        
+    except Exception as e:
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        print(f"  [OFF] Error: {e} for GTIN {gtin} ({execution_time_ms}ms)")
+        return False, None, execution_time_ms
 
 # ============================================================================
 # Database-based extraction lock (works across Gunicorn workers)
@@ -240,12 +311,10 @@ Novo produto: "{new_product_name}"
 Produtos existentes (de diversos mercados):
 {existing_list}
 
-ABREVIAÇÕES COMUNS (considere ao comparar):
-- Embalagens: LT/LTA=Lata, GF/GRF=Garrafa, CX=Caixa, PCT=Pacote, PT=Pote, SC/SAC=Sachê, UN=Unidade
-- Medidas: KG=Kg, G=g, ML=ml, L=L
-- Lácteos: CR=Creme de, IOG=Iogurte, QJ/QJO=Queijo, REQUEIJ=Requeijão
-- Vegetais: MACO/MC=Maço, TOM=Tomate, BAT=Batata
-- Outros: AC=Açúcar, REF=Refinado/Refrigerante, ACHOC=Achocolatado, BISC=Biscoito
+NOTA: Abreviações comuns de supermercado brasileiro são equivalentes:
+- QJ/QJO=Queijo, MUSS=Mussarela, BOV=Bovino, RES=Resfriado
+- BISC=Biscoito, REFRIG=Refrigerante, AZ=Azeite, INT=Integral
+- Ignore diferenças de capitalização em medidas (KG=kg, ML=ml)
 
 REGRAS DE COMPARAÇÃO:
 - Variações de escrita/abreviações = MESMO produto (ex: "COCA COLA 350ML" = "Coca-Cola Lata 350ml")
@@ -271,7 +340,7 @@ Responda APENAS com o JSON:"""
     
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "Você é um especialista em identificação de produtos. Responda apenas com JSON válido."},
                 {"role": "user", "content": prompt}
@@ -341,43 +410,25 @@ def call_llm_format_new_product(product_name):
     if not openai_client:
         return "CREATE_NEW", None, product_name, None, None, 0, "OpenAI client not initialized"
     
-    prompt = f"""Formate o seguinte nome de produto de supermercado de forma limpa e padronizada:
+    prompt = f"""Formate este nome de produto de supermercado brasileiro de forma legível.
 
 Produto: "{product_name}"
 
-ABREVIAÇÕES COMUNS DE SUPERMERCADO (expanda todas):
-- Embalagens: LT/LTA=Lata, GF/GRF=Garrafa, CX=Caixa, PCT=Pacote, PT=Pote, SC/SAC=Sachê/Saco, TP=Tetra Pak, PET=Pet, BD/BDJ=Bandeja, UN=Unidade
-- Medidas: KG=Kg, G=g, ML=ml, L=L, CM=cm, M=m
-- Produtos lácteos: CR=Creme de, LT/LEITE=Leite, IOG=Iogurte, QJ/QJO=Queijo, REQUEIJ=Requeijão, MANT=Manteiga, MARG=Margarina
-- Carnes: FGO=Frango, BOV=Bovino, SUÍ=Suíno, PX=Peixe, BIF=Bife, FIL=Filé, COX=Coxa, ASA=Asa, PRES=Presunto
-- Vegetais/Frutas: MACO/MC=Maço, TOM=Tomate, BAT=Batata, CEB=Cebola, CEN=Cenoura, ALF=Alface, MAC/MACA=Maçã
-- Tipos: TP/T1=Tipo 1, PARB=Parboilizado, INT=Integral, DESC=Desnatado, TRAD=Tradicional, NAT=Natural
-- Outros: AC/ACUC=Açúcar, REF=Refrigerante/Refinado, ACHOC=Achocolatado, BISC=Biscoito, CHOC=Chocolate, SAB=Sabor, C/=Com, S/=Sem
-- Marcas: Não altere nomes de marcas (Italac, Sadia, Quero, etc)
+INSTRUÇÕES:
+1. Expanda abreviações comuns de supermercado brasileiro (QJ=Queijo, MUSS=Mussarela, BOV=Bovino, RES=Resfriado, BISC=Biscoito, REFRIG=Refrigerante, AZ=Azeite, E.V=Extra Virgem, INT=Integral, BDJ=Bandeja, etc)
+2. NUNCA remova palavras - preserve tudo, especialmente nomes de marcas
+3. NUNCA reordene - mantenha a ordem original das palavras
+4. Use Title Case e acentuação correta em português
+5. Remova pontos entre palavras (QJ.MUSS → Queijo Mussarela)
+6. Se não reconhecer uma abreviação, mantenha-a em Title Case
 
-REGRAS:
-- Use Title Case (Primeira Letra Maiúscula)
-- Mantenha TODAS as informações: marca, sabor, tamanho, tipo, quantidade
-- Remova caracteres especiais desnecessários (* . /)
-- Use hífen para marcas compostas (Coca-Cola, Guaraná-Antarctica)
-- Se não souber uma abreviação, mantenha como está
-
-Exemplos:
-- "COCA COLA LT 350ML" → "Coca-Cola Lata 350ml"
-- "CR LEITE ITALAC 200G" → "Creme de Leite Italac 200g"
-- "COENTRO MACO" → "Coentro Maço"
-- "AC REF 1KG UNIAO" → "Açúcar Refinado 1Kg União"
-- "QJO MUSSARELA KG" → "Queijo Mussarela Kg"
-- "IOG LIQ FIT 1L" → "Iogurte Líquido Fit 1L"
-- "ARROZ PARB TP1 5KG" → "Arroz Parboilizado Tipo 1 5Kg"
-
-Responda APENAS com o nome formatado, nada mais:"""
+Responda APENAS com o nome formatado:"""
 
     start_time = time.time()
     
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "Você formata nomes de produtos. Responda apenas com o nome formatado."},
                 {"role": "user", "content": prompt}
@@ -557,71 +608,109 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         
         print(f"[OK] Inserted {saved_to_purchases} products to PURCHASES\n")
         
-        # 2. Upsert to UNIQUE_PRODUCTS table using LLM-based matching
+        # 2. Upsert to UNIQUE_PRODUCTS table
+        # Priority: 1) Open Food Facts API (if GTIN exists) 2) LLM-based matching
         # NOTE: Each insert/update commits immediately to database
-        # This ensures the next NFCe extraction will see this data for LLM comparison
-        print(f"[2/2] Upserting to UNIQUE_PRODUCTS table (LLM-based matching)...")
+        print(f"[2/2] Upserting to UNIQUE_PRODUCTS table...")
+        print(f"      Priority: Open Food Facts API -> LLM fallback")
         print(f"      (Each product is saved immediately - next extraction will see it)")
         skipped_products = 0
+        off_hits = 0
+        llm_calls = 0
         
         for idx, product in enumerate(products, 1):
             original_product_name = product.get('product', '')
             ncm = product['ncm']
+            ean = product.get('ean', 'SEM GTIN')
             
             try:
-                # Query existing products with same NCM from ALL markets
-                # This enables cross-market product matching for price comparison
-                response = supabase.table('unique_products').select('*').eq('ncm', ncm).execute()
+                # ============================================================
+                # STEP 1: Try Open Food Facts API first (if valid GTIN exists)
+                # ============================================================
+                off_success, off_product_name, off_time = get_product_from_open_food_facts(ean)
                 
-                existing_products = response.data if response.data else []
+                if off_success and off_product_name:
+                    # Open Food Facts has this product - use it directly!
+                    canonical_name = off_product_name
+                    decision = "CREATE_NEW"  # Will check for existing below
+                    matched_id = None
+                    llm_prompt = None
+                    llm_response = None
+                    exec_time = off_time
+                    error_msg = None
+                    off_hits += 1
+                    
+                    # Log as OFF decision
+                    log_llm_decision(
+                        market_id=market_id,
+                        ncm=ncm,
+                        new_product_name=original_product_name,
+                        canonical_name=canonical_name,
+                        existing_products=None,
+                        llm_prompt=f"[OPEN_FOOD_FACTS] GTIN: {ean}",
+                        llm_response=f"Found: {off_product_name}",
+                        decision="OFF_HIT",
+                        matched_product_id=None,
+                        success=True,
+                        error_message=None,
+                        execution_time_ms=exec_time
+                    )
+                else:
+                    # ============================================================
+                    # STEP 2: Open Food Facts miss - Fall back to LLM
+                    # ============================================================
+                    llm_calls += 1
+                    
+                    # Query existing products with same NCM from ALL markets
+                    response = supabase.table('unique_products').select('*').eq('ncm', ncm).execute()
+                    existing_products = response.data if response.data else []
+                    
+                    # Log what we found
+                    if existing_products:
+                        markets_with_product = set(p.get('market_id', 'unknown') for p in existing_products)
+                        print(f"  [SEARCH] [{idx}/{len(products)}] Found {len(existing_products)} products with NCM {ncm} in {len(markets_with_product)} markets")
+                    
+                    # Call LLM to match/format product
+                    decision, matched_id, canonical_name, llm_prompt, llm_response, exec_time, error_msg = call_llm_for_product_match(
+                        new_product_name=original_product_name,
+                        existing_products=existing_products
+                    )
+                    
+                    # Log the LLM decision
+                    log_llm_decision(
+                        market_id=market_id,
+                        ncm=ncm,
+                        new_product_name=original_product_name,
+                        canonical_name=canonical_name,
+                        existing_products=[{'id': p['id'], 'name': p['product_name'], 'market': p.get('market_id')} for p in existing_products] if existing_products else None,
+                        llm_prompt=llm_prompt,
+                        llm_response=llm_response,
+                        decision=decision if decision else "SKIPPED",
+                        matched_product_id=matched_id,
+                        success=decision is not None,
+                        error_message=error_msg,
+                        execution_time_ms=exec_time
+                    )
+                    
+                    # Handle LLM failure -> skip product
+                    if decision is None:
+                        print(f"  [SKIP] [{idx}/{len(products)}] SKIPPED (LLM error): {original_product_name[:50]}")
+                        skipped_products += 1
+                        continue
                 
-                # Call LLM to match/format product
-                # Returns: (decision, matched_id, canonical_name, llm_prompt, llm_response, exec_time, error_msg)
-                decision, matched_id, canonical_name, llm_prompt, llm_response, exec_time, error_msg = call_llm_for_product_match(
-                    new_product_name=original_product_name,
-                    existing_products=existing_products
-                )
-                
-                # Use canonical name for storage (or original if LLM failed)
+                # Use canonical name for storage (or original if both failed)
                 product_name = canonical_name if canonical_name else original_product_name
                 
                 unique_data = {
                     'market_id': market_id,
                     'ncm': ncm,
-                    'ean': product.get('ean', 'SEM GTIN'),
+                    'ean': ean,
                     'product_name': product_name,  # Use canonical name!
                     'unidade_comercial': product.get('unidade_comercial', 'UN'),
                     'price': product.get('unit_price', 0),
                     'nfce_url': nfce_url,
                     'last_updated': datetime.utcnow().isoformat()
                 }
-                
-                # Log what we found
-                if existing_products:
-                    markets_with_product = set(p.get('market_id', 'unknown') for p in existing_products)
-                    print(f"  [SEARCH] [{idx}/{len(products)}] Found {len(existing_products)} products with NCM {ncm} in {len(markets_with_product)} markets")
-                
-                # Log the LLM decision
-                log_llm_decision(
-                    market_id=market_id,
-                    ncm=ncm,
-                    new_product_name=original_product_name,
-                    canonical_name=canonical_name,
-                    existing_products=[{'id': p['id'], 'name': p['product_name'], 'market': p.get('market_id')} for p in existing_products] if existing_products else None,
-                    llm_prompt=llm_prompt,
-                    llm_response=llm_response,
-                    decision=decision if decision else "SKIPPED",
-                    matched_product_id=matched_id,
-                    success=decision is not None,
-                    error_message=error_msg,
-                    execution_time_ms=exec_time
-                )
-                
-                # Handle LLM failure -> skip product
-                if decision is None:
-                    print(f"  [SKIP] [{idx}/{len(products)}] SKIPPED (LLM error): {original_product_name[:50]}")
-                    skipped_products += 1
-                    continue
                 
                 # Check if this market already has this product (to update instead of insert)
                 existing_in_this_market = supabase.table('unique_products').select('id').match({
@@ -662,15 +751,20 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 raise Exception(f"Failed at product {idx}: {str(e)}")
         
         print(f"\n{'='*60}")
-        print(f"[OK] COMPLETED: {saved_to_purchases} purchases, {created_unique} new, {updated_unique} updated, {skipped_products} skipped")
-        print(f"[OK] All products committed to database - next extraction will see this data")
+        print(f"[OK] COMPLETED:")
+        print(f"     Purchases: {saved_to_purchases}")
+        print(f"     Unique: {created_unique} new, {updated_unique} updated, {skipped_products} skipped")
+        print(f"     Names: {off_hits} from Open Food Facts, {llm_calls} from LLM")
+        print(f"[OK] All products committed to database")
         print(f"{'='*60}\n")
         
         return {
             'saved_to_purchases': saved_to_purchases,
             'updated_unique': updated_unique,
             'created_unique': created_unique,
-            'skipped_products': skipped_products
+            'skipped_products': skipped_products,
+            'off_hits': off_hits,
+            'llm_calls': llm_calls
         }
     
     except Exception as e:

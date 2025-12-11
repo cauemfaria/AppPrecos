@@ -5,11 +5,18 @@ Extracts product data from NFCe URLs using Playwright
 
 import sys
 import io
+import os
 
 # Only set encoding when running as standalone script
 if sys.platform == 'win32' and __name__ == '__main__':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+# Fix Playwright path - clear if it points to a non-existent path (e.g., production Linux path on Windows)
+playwright_path = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
+if playwright_path and not os.path.exists(playwright_path):
+    del os.environ['PLAYWRIGHT_BROWSERS_PATH']
+    print(f"[NFCe] Cleared invalid PLAYWRIGHT_BROWSERS_PATH: {playwright_path}")
 
 from playwright.sync_api import sync_playwright
 import re
