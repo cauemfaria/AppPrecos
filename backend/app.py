@@ -176,9 +176,10 @@ def log_llm_decision(market_id, ncm, new_product_name, canonical_name, existing_
             'market_id': market_id,
             'ncm': ncm,
             'new_product_name': new_product_name[:200] if new_product_name else '',
+            'canonical_name': canonical_name[:200] if canonical_name else '',  # Store formatted name
             'existing_products': existing_products,  # JSONB
             'llm_prompt': llm_prompt,
-            'llm_response': llm_response if llm_response else canonical_name,  # Store canonical name if no response
+            'llm_response': llm_response,
             'decision': decision,
             'matched_product_id': matched_product_id,
             'success': success,
