@@ -132,16 +132,6 @@ htmlcov/
 
 # ==================== Temporary Files ====================
 
-# Screenshots and test outputs
-*.png
-*.jpg
-*.jpeg
-screenshot*.png
-debug*.png
-page_state.png
-before_click.png
-after_click.png
-
 # Excel outputs
 ncm_codes.xlsx
 *.xlsx

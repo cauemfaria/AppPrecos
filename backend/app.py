@@ -128,11 +128,83 @@ def get_product_from_open_food_facts(gtin):
         execution_time_ms = int((time.time() - start_time) * 1000)
         print(f"  [OFF] Timeout: GTIN {gtin} ({execution_time_ms}ms)")
         return False, None, execution_time_ms
-        
+            
     except Exception as e:
         execution_time_ms = int((time.time() - start_time) * 1000)
         print(f"  [OFF] Error: {e} for GTIN {gtin} ({execution_time_ms}ms)")
         return False, None, execution_time_ms
+
+
+# ============================================================================
+# Bluesoft Cosmos API - Get product name from GTIN/EAN
+# ============================================================================
+COSMOS_TOKENS = os.getenv('COSMOS_TOKENS', '').split(',') if os.getenv('COSMOS_TOKENS') else []
+COSMOS_USER_AGENT = os.getenv('COSMOS_USER_AGENT', 'Cosmos-API-Request')
+_current_cosmos_token_idx = 0
+
+def get_product_from_cosmos(gtin):
+    """
+    Query Bluesoft Cosmos API to get product name from GTIN/EAN barcode.
+    Handles multiple tokens and 429 rate limits.
+    
+    Returns:
+        tuple: (success, product_name, brand_name, execution_time_ms, error_msg)
+    """
+    global _current_cosmos_token_idx
+    
+    if not gtin or gtin == 'SEM GTIN' or len(gtin) < 8:
+        return False, None, None, 0, "Invalid GTIN"
+    
+    if not COSMOS_TOKENS:
+        return False, None, None, 0, "No Cosmos tokens available"
+
+    start_time = time.time()
+    
+    # Try each available token if we hit 429
+    tokens_to_try = len(COSMOS_TOKENS)
+    
+    for _ in range(tokens_to_try):
+        token = COSMOS_TOKENS[_current_cosmos_token_idx].strip()
+        url = f"https://api.cosmos.bluesoft.com.br/gtins/{gtin}.json"
+        headers = {
+            "X-Cosmos-Token": token,
+            "User-Agent": COSMOS_USER_AGENT,
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            
+            if response.status_code == 200:
+                data = response.json()
+                product_name = data.get('description')
+                brand_name = data.get('brand', {}).get('name')
+                print(f"  [COSMOS] Found: \"{product_name}\" [{brand_name}] for GTIN {gtin} ({execution_time_ms}ms)")
+                return True, product_name, brand_name, execution_time_ms, None
+                
+            elif response.status_code == 429:
+                print(f"  [COSMOS] Limit exceeded for token index {_current_cosmos_token_idx}. Rotating...")
+                _current_cosmos_token_idx = (_current_cosmos_token_idx + 1) % len(COSMOS_TOKENS)
+                # After rotating, the next loop iteration will try the next token
+                continue
+                
+            elif response.status_code == 404:
+                print(f"  [COSMOS] Product {gtin} not found (404)")
+                return False, None, None, execution_time_ms, "Product not found"
+                
+            else:
+                error_msg = f"HTTP {response.status_code}"
+                print(f"  [COSMOS] Error: {error_msg} for GTIN {gtin}")
+                return False, None, None, execution_time_ms, error_msg
+                
+        except Exception as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            print(f"  [COSMOS] Request Error: {e}")
+            return False, None, None, execution_time_ms, str(e)
+            
+    return False, None, None, 0, "All Cosmos tokens reached limit"
+
 
 # ============================================================================
 # Database-based extraction lock (works across Gunicorn workers)
@@ -144,7 +216,6 @@ def cleanup_stale_locks():
     try:
         # Find records stuck in 'extracting' status for too long
         # We mark them as errors so they can be retried
-        # Use 'processed_at' column instead of 'updated_at'
         stale = supabase.table('processed_urls').select('id,processed_at').eq('status', 'extracting').execute()
         
         if stale.data:
@@ -154,7 +225,20 @@ def cleanup_stale_locks():
             for record in stale.data:
                 if record.get('processed_at'):
                     try:
-                        processed_at = datetime.fromisoformat(record['processed_at'].replace('Z', '+00:00'))
+                        processed_at_str = record['processed_at']
+                        # Handle both timezone-aware and naive timestamps
+                        if processed_at_str.endswith('Z'):
+                            processed_at_str = processed_at_str[:-1] + '+00:00'
+                        elif '+' not in processed_at_str and '-' not in processed_at_str[-6:]:
+                            # Naive datetime - assume UTC
+                            processed_at_str = processed_at_str + '+00:00'
+                        
+                        processed_at = datetime.fromisoformat(processed_at_str)
+                        
+                        # Make sure processed_at is timezone-aware
+                        if processed_at.tzinfo is None:
+                            processed_at = processed_at.replace(tzinfo=timezone.utc)
+                        
                         age_seconds = (now - processed_at).total_seconds()
                         
                         if age_seconds > STALE_LOCK_TIMEOUT_SECONDS:
@@ -164,7 +248,7 @@ def cleanup_stale_locks():
                             }).eq('id', record['id']).execute()
                             print(f"[LOCK] Cleaned stale lock for record #{record['id']} (age: {age_seconds:.0f}s)")
                     except Exception as e:
-                        print(f"[LOCK] Error checking stale lock: {e}")
+                        print(f"[LOCK] Error checking stale lock for record #{record.get('id')}: {e}")
     except Exception as e:
         print(f"[LOCK] Error in cleanup_stale_locks: {e}")
 
@@ -193,14 +277,30 @@ def acquire_extraction_lock(record_id, max_wait_seconds=600):
             # No one is extracting, try to claim the lock
             try:
                 supabase.table('processed_urls').update({
-                    'status': 'extracting'
+                    'status': 'extracting',
+                    'processed_at': datetime.utcnow().isoformat()  # Update timestamp for stale detection
                 }).eq('id', record_id).eq('status', 'processing').execute()
                 
-                # Verify we got it (in case of race condition)
-                check = supabase.table('processed_urls').select('status').eq('id', record_id).execute()
-                if check.data and check.data[0]['status'] == 'extracting':
+                # Small delay to let any concurrent updates settle
+                time.sleep(0.2)
+                
+                # CRITICAL: Verify we're the ONLY one extracting (race condition check)
+                all_extracting = supabase.table('processed_urls').select('id').eq('status', 'extracting').execute()
+                
+                if all_extracting.data and len(all_extracting.data) == 1 and all_extracting.data[0]['id'] == record_id:
+                    # We're the only one - lock acquired successfully
                     print(f"[LOCK #{record_id}] Acquired! Will query fresh data including all previous extractions")
                     return True
+                elif all_extracting.data and len(all_extracting.data) > 1:
+                    # Race condition! Multiple workers got the lock simultaneously
+                    # Back off: revert to 'processing' and wait
+                    print(f"[LOCK #{record_id}] Race condition detected ({len(all_extracting.data)} extracting), backing off...")
+                    supabase.table('processed_urls').update({
+                        'status': 'processing'
+                    }).eq('id', record_id).execute()
+                    time.sleep(check_interval + (record_id % 3))  # Jittered backoff
+                    continue
+                    
             except Exception as e:
                 print(f"[LOCK] Error acquiring lock: {e}")
         
@@ -265,6 +365,77 @@ def log_llm_decision(market_id, ncm, new_product_name, canonical_name, existing_
         print(f"  [WARN] Failed to log LLM decision: {e}")
 
 
+def log_product_lookup(nfce_url, market_id, gtin, ncm, original_name, final_name,
+                       cosmos_result=None, off_result=None, llm_result=None,
+                       source_used=None, success=False):
+    """
+    Log detailed product lookup to Supabase product_lookup_log table.
+    
+    Args:
+        nfce_url: The NFCe URL being processed
+        market_id: Market identifier
+        gtin: Product GTIN/EAN
+        ncm: Product NCM code
+        original_name: Original name from NFCe
+        final_name: Final name after lookup/formatting
+        cosmos_result: Dict with Bluesoft Cosmos lookup details
+        off_result: Dict with Open Food Facts lookup details  
+        llm_result: Dict with LLM lookup details
+        source_used: Which source provided the final name
+        success: Whether lookup was successful
+    """
+    try:
+        log_data = {
+            'nfce_url': nfce_url,
+            'market_id': market_id,
+            'gtin': gtin if gtin != 'SEM GTIN' else None,
+            'ncm': ncm,
+            'original_name': original_name[:500] if original_name else None,
+            'final_name': final_name[:500] if final_name else None,
+            'source_used': source_used,
+            'success': success,
+        }
+        
+        # Bluesoft Cosmos details (generic api columns)
+        if cosmos_result:
+            log_data.update({
+                'api_attempted': True,
+                'api_success': cosmos_result.get('success', False),
+                'api_product_name': cosmos_result.get('product_name'),
+                'api_brand': cosmos_result.get('brand'),
+                'api_error': cosmos_result.get('error'),
+                'api_from_cache': False,
+                'api_time_ms': cosmos_result.get('time_ms'),
+            })
+        
+        # Open Food Facts details
+        if off_result:
+            log_data.update({
+                'off_attempted': True,
+                'off_success': off_result.get('success', False),
+                'off_product_name': off_result.get('product_name'),
+                'off_error': off_result.get('error'),
+                'off_time_ms': off_result.get('time_ms'),
+            })
+        
+        # LLM details
+        if llm_result:
+            log_data.update({
+                'llm_attempted': True,
+                'llm_success': llm_result.get('success', False),
+                'llm_decision': llm_result.get('decision'),
+                'llm_matched_id': llm_result.get('matched_id'),
+                'llm_error': llm_result.get('error'),
+                'llm_time_ms': llm_result.get('time_ms'),
+            })
+        
+        supabase.table('product_lookup_log').insert(log_data).execute()
+        
+    except Exception as e:
+        # Don't fail the main process if logging fails
+        print(f"  [WARN] Failed to log product lookup: {e}")
+
+
 def call_llm_for_product_match(new_product_name, existing_products):
     """
     Call OpenAI to determine if new product matches any existing product.
@@ -301,48 +472,49 @@ def call_llm_for_product_match(new_product_name, existing_products):
         for i, p in enumerate(products_to_compare)
     ])
     
-    prompt = f"""Você é um especialista em identificação de produtos de supermercado.
+    prompt = f"""Você é um especialista em identificação de produtos de supermercado brasileiro.
 
-Dado um novo produto e uma lista de produtos existentes com o mesmo código NCM (categoria fiscal),
-determine se o novo produto é IGUAL a algum dos existentes ou se é um produto DIFERENTE.
+Dado um novo produto e uma lista de produtos existentes com o mesmo NCM,
+determine se o novo produto é IGUAL a algum existente ou se é DIFERENTE.
 
 Novo produto: "{new_product_name}"
 
-Produtos existentes (de diversos mercados):
+Produtos existentes:
 {existing_list}
 
-NOTA: Abreviações comuns de supermercado brasileiro são equivalentes:
-- QJ/QJO=Queijo, MUSS=Mussarela, BOV=Bovino, RES=Resfriado
-- BISC=Biscoito, REFRIG=Refrigerante, AZ=Azeite, INT=Integral
-- Ignore diferenças de capitalização em medidas (KG=kg, ML=ml)
+=== ABREVIAÇÕES COMUNS (são equivalentes) ===
+QJ/QJO=Queijo, MUSS=Mussarela, PARM=Parmesão, BOV=Bovino, RES=Resfriado
+BISC=Biscoito, REFRIG=Refrigerante, AZ=Azeite, INT=Integral, AMER=Americana
+BDJ=Bandeja, TRC=Trincado, COZ=Cozido, HIDROP=Hidropônico, UN=Unidade
 
-REGRAS DE COMPARAÇÃO:
-- Variações de escrita/abreviações = MESMO produto (ex: "COCA COLA 350ML" = "Coca-Cola Lata 350ml")
-- Marcas diferentes = DIFERENTES (ex: "COCA COLA" ≠ "PEPSI")
-- Tamanhos diferentes = DIFERENTES (ex: "350ML" ≠ "2L")
-- Sabores diferentes = DIFERENTES (ex: "ORIGINAL" ≠ "ZERO")
-- Embalagens diferentes podem ser o mesmo (ex: "LATA" = "LT")
+=== REGRAS CRÍTICAS ===
+1. MARCAS/FABRICANTES DIFERENTES = NOVO (ex: "AURORA" != "PARLAK", "SADIA" != "SEARA")
+2. VARIEDADES/TIPOS DIFERENTES = NOVO (ex: "ITALIANO" != generico, "PINK LADY" != "GALA")
+3. TAMANHOS DIFERENTES = NOVO (ex: "500G" != "1KG", "350ML" != "2L")
+4. SABORES DIFERENTES = NOVO (ex: "ORIGINAL" != "ZERO", "LIMAO" != "BAUNILHA")
+5. Apenas variacoes de ESCRITA/ABREVIACAO = IGUAL (ex: "QJ MUSS" = "Queijo Mussarela")
 
-Responda no formato JSON:
-{{
-  "decisao": "NOVO" ou "IGUAL",
-  "id_match": null ou ID do produto igual (número),
-  "nome_canonico": "Nome formatado do produto"
-}}
+ATENCAO: Se um produto tem marca/fabricante e o outro nao tem, sao DIFERENTES!
+Ex: "QJ.MUSS AURORA KG" != "Queijo Mussarela Parlak" (AURORA != PARLAK = marcas diferentes)
+Ex: "TOMATE ITALIANO KG" != "Tomate Kg" (ITALIANO e uma variedade especifica)
 
-IMPORTANTE sobre nome_canonico:
-- Se IGUAL: use EXATAMENTE o nome do produto existente que deu match
-- Se NOVO: formate o nome expandindo abreviações (CR LEITE→Creme de Leite, MACO→Maço, etc)
+Responda em JSON:
+{{"decisao": "NOVO" ou "IGUAL", "id_match": null ou ID, "nome_canonico": "Nome formatado"}}
 
-Responda APENAS com o JSON:"""
+IMPORTANTE: Mesmo que a decisao seja "IGUAL", se o nome do produto existente estiver em caixa alta ou mal formatado, forneca um "nome_canonico" limpo e legivel.
+
+Se IGUAL: melhore a formatacao se o nome existente for ruim.
+Se NOVO: formate expandindo abreviacoes.
+
+JSON:"""
 
     start_time = time.time()
     
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Você é um especialista em identificação de produtos. Responda apenas com JSON válido."},
+                {"role": "system", "content": "Voce e um especialista em identificacao de produtos. Responda apenas com JSON valido."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=200,
@@ -377,10 +549,8 @@ Responda APENAS com o JSON:"""
                 # Verify the ID exists in our list
                 valid_ids = [p['id'] for p in products_to_compare]
                 if matched_id in valid_ids:
-                    # Get canonical name from matched product
-                    matched_product = next((p for p in products_to_compare if p['id'] == matched_id), None)
-                    if matched_product:
-                        canonical_name = matched_product['product_name']
+                    # PRIORIDADE: Se o LLM sugeriu um nome canônico melhor/limpo, usamos ele
+                    # mesmo que tenha dado match com um ID existente.
                     return f"UPDATE:{matched_id}", matched_id, canonical_name, prompt, llm_response, execution_time_ms, None
                 else:
                     return "CREATE_NEW", None, canonical_name, prompt, llm_response, execution_time_ms, f"LLM returned invalid ID: {matched_id}"
@@ -410,17 +580,27 @@ def call_llm_format_new_product(product_name):
     if not openai_client:
         return "CREATE_NEW", None, product_name, None, None, 0, "OpenAI client not initialized"
     
-    prompt = f"""Formate este nome de produto de supermercado brasileiro de forma legível.
+    prompt = f"""Formate este nome de produto de supermercado brasileiro.
 
 Produto: "{product_name}"
 
-INSTRUÇÕES:
-1. Expanda abreviações comuns de supermercado brasileiro (QJ=Queijo, MUSS=Mussarela, BOV=Bovino, RES=Resfriado, BISC=Biscoito, REFRIG=Refrigerante, AZ=Azeite, E.V=Extra Virgem, INT=Integral, BDJ=Bandeja, etc)
-2. NUNCA remova palavras - preserve tudo, especialmente nomes de marcas
-3. NUNCA reordene - mantenha a ordem original das palavras
-4. Use Title Case e acentuação correta em português
-5. Remova pontos entre palavras (QJ.MUSS → Queijo Mussarela)
-6. Se não reconhecer uma abreviação, mantenha-a em Title Case
+=== ABREVIAÇÕES COMUNS ===
+QJ/QJO=Queijo, MUSS=Mussarela, PARM=Parmesão, BOV=Bovino, RES=Resfriado
+BISC=Biscoito, REFRIG=Refrigerante, AZ=Azeite, E.V=Extra Virgem, INT=Integral
+BDJ=Bandeja, TRC=Trincado, COZ=Cozido, HIDROP=Hidropônico, UN=Unidade
+AMER=Americana, CR=Creme, MACO=Maço, MORT=Mortadela, PROT=Protetor
+DET=Detergente, SAB=Sabão, AMAC=Amaciante, LIMP=Limpador, DESIF=Desinfetante
+MAC=Macarrão, AC=Açúcar, REF=Refinado, MIN=Mineral, PAP=Papel
+
+=== REGRAS ===
+1. Expanda abreviacoes conhecidas
+2. NUNCA remova palavras - preserve tudo (especialmente marcas)
+3. NUNCA reordene - mantenha a ordem original
+4. Use Title Case e acentuacao correta (a, e, c, etc)
+5. Remova pontos entre palavras (QJ.MUSS -> Queijo Mussarela)
+6. MANTENHA "Kg" (nao expanda para Quilograma)
+7. Se nao reconhecer uma palavra, mantenha em Title Case
+8. Remova virgulas e caracteres estranhos no final
 
 Responda APENAS com o nome formatado:"""
 
@@ -428,9 +608,9 @@ Responda APENAS com o nome formatado:"""
     
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Você formata nomes de produtos. Responda apenas com o nome formatado."},
+                {"role": "system", "content": "Voce formata nomes de produtos. Responda apenas com o nome formatado."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=100,
@@ -553,30 +733,26 @@ def process_nfce_in_background(url, url_record_id):
 
 def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None):
     """
-    Save products to Supabase PostgreSQL database
-    Maintains both full history (purchases) and latest prices (unique_products)
+    Save products to Supabase PostgreSQL database (PURCHASES table only)
+    Enrichment and unique_products upsert is now handled by a separate worker.
     """
     if purchase_date is None:
         purchase_date = datetime.utcnow()
     
     inserted_purchase_ids = []
-    inserted_unique_ids = []
-    updated_unique_backup = {}
     
     try:
         saved_to_purchases = 0
-        updated_unique = 0
-        created_unique = 0
         
         print(f"\n{'='*60}")
-        print(f"SAVING PRODUCTS TO SUPABASE")
+        print(f"SAVING PRODUCTS TO PURCHASES")
         print(f"{'='*60}")
         print(f"Market ID: {market_id}")
         print(f"Products count: {len(products)}")
         print(f"{'='*60}\n")
         
         # 1. Insert to PURCHASES table
-        print(f"[1/2] Inserting {len(products)} products to PURCHASES table...")
+        print(f"Inserting {len(products)} products to PURCHASES table...")
         
         for idx, product in enumerate(products, 1):
             try:
@@ -590,7 +766,9 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                     'total_price': product.get('total_price', 0),
                     'unit_price': product.get('unit_price', 0),
                     'nfce_url': nfce_url,
-                    'purchase_date': purchase_date.isoformat()
+                    'purchase_date': purchase_date.isoformat(),
+                    'enriched': False,
+                    'enrichment_status': 'pending'
                 }
                 
                 response = supabase.table('purchases').insert(purchase_data).execute()
@@ -608,75 +786,160 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
         
         print(f"[OK] Inserted {saved_to_purchases} products to PURCHASES\n")
         
+        return {
+            'saved_to_purchases': saved_to_purchases,
+            'updated_unique': 0,
+            'created_unique': 0,
+            'skipped_products': 0,
+            'off_hits': 0,
+            'llm_calls': 0
+        }
+    
+    except Exception as e:
+        print(f"\n{'='*60}")
+        print(f"[ERROR] TRANSACTION FAILED - ROLLING BACK")
+        print(f"{'='*60}")
+        
+        if inserted_purchase_ids:
+            try:
+                for purchase_id in inserted_purchase_ids:
+                    supabase.table('purchases').delete().eq('id', purchase_id).execute()
+                print(f"[OK] Rolled back purchases")
+            except Exception as rb_error:
+                print(f"[FAIL] Rollback purchases failed: {rb_error}")
+        
+        print(f"{'='*60}\n")
+        raise
+
+
+def enrich_and_upsert_unique_products(market_id, products, nfce_url):
+    """
+    DEPRECATED: This was the original enrichment logic.
+    Now maintained here for future reference or for the enrichment worker to use.
+    """
+    updated_unique = 0
+    created_unique = 0
+    skipped_products = 0
+    off_hits = 0
+    llm_calls = 0
+    
+    inserted_unique_ids = []
+    updated_unique_backup = {}
+    
+    try:
         # 2. Upsert to UNIQUE_PRODUCTS table
-        # Priority: 1) Open Food Facts API (if GTIN exists) 2) LLM-based matching
-        # NOTE: Each insert/update commits immediately to database
+        # Priority: 1) Bluesoft Cosmos 2) Open Food Facts 3) LLM
+        # NOTE: Each insert/update commits immediately - partial success is preserved
         print(f"[2/2] Upserting to UNIQUE_PRODUCTS table...")
-        print(f"      Priority: Open Food Facts API -> LLM fallback")
-        print(f"      (Each product is saved immediately - next extraction will see it)")
-        skipped_products = 0
-        off_hits = 0
-        llm_calls = 0
+        print(f"      Priority: Bluesoft Cosmos -> Open Food Facts -> LLM")
         
         for idx, product in enumerate(products, 1):
             original_product_name = product.get('product', '')
             ncm = product['ncm']
             ean = product.get('ean', 'SEM GTIN')
             
+            # Variables for this product
+            canonical_name = None
+            decision = None
+            matched_id = None
+            source_used = None
+            
+            # Detailed lookup results for logging
+            cosmos_result = None
+            off_result = None
+            llm_result = None
+            
             try:
-                # ============================================================
-                # STEP 1: Try Open Food Facts API first (if valid GTIN exists)
-                # ============================================================
-                off_success, off_product_name, off_time = get_product_from_open_food_facts(ean)
+                print(f"\n  [{idx}/{len(products)}] Processing: {original_product_name[:50]}... (GTIN: {ean})")
                 
-                if off_success and off_product_name:
-                    # Open Food Facts has this product - use it directly!
-                    canonical_name = off_product_name
-                    decision = "CREATE_NEW"  # Will check for existing below
-                    matched_id = None
-                    llm_prompt = None
-                    llm_response = None
-                    exec_time = off_time
-                    error_msg = None
-                    off_hits += 1
+                # ============================================================
+                # STEP 1: Try Bluesoft Cosmos FIRST (if valid GTIN)
+                # ============================================================
+                if ean and ean != 'SEM GTIN' and len(ean) >= 8:
+                    cosmos_success, cosmos_product_name, cosmos_brand, cosmos_time, cosmos_error = get_product_from_cosmos(ean)
                     
-                    # Log as OFF decision
-                    log_llm_decision(
-                        market_id=market_id,
-                        ncm=ncm,
-                        new_product_name=original_product_name,
-                        canonical_name=canonical_name,
-                        existing_products=None,
-                        llm_prompt=f"[OPEN_FOOD_FACTS] GTIN: {ean}",
-                        llm_response=f"Found: {off_product_name}",
-                        decision="OFF_HIT",
-                        matched_product_id=None,
-                        success=True,
-                        error_message=None,
-                        execution_time_ms=exec_time
-                    )
+                    # Store Cosmos result for logging
+                    cosmos_result = {
+                        'success': cosmos_success,
+                        'product_name': cosmos_product_name,
+                        'brand': cosmos_brand,
+                        'time_ms': cosmos_time,
+                        'error': cosmos_error
+                    }
+                    
+                    if cosmos_success and cosmos_product_name:
+                        # Cosmos found the product!
+                        canonical_name = cosmos_product_name
+                        decision = "CREATE_NEW"
+                        source_used = "COSMOS_BLUE"
+                        print(f"    [COSMOS] SUCCESS: \"{cosmos_product_name}\" [{cosmos_brand}]")
+                    else:
+                        print(f"    [COSMOS] FAILED: {cosmos_error or 'Not found'}")
+                        
+                        # ============================================================
+                        # STEP 2: Cosmos failed - Try Open Food Facts as FALLBACK
+                        # ============================================================
+                        off_success, off_product_name, off_time = get_product_from_open_food_facts(ean)
+                        
+                        # Store OFF result for logging
+                        off_result = {
+                            'success': off_success,
+                            'product_name': off_product_name,
+                            'time_ms': off_time,
+                            'error': None if off_success else 'Not found'
+                        }
+                        
+                        if off_success and off_product_name:
+                            # Open Food Facts found the product!
+                            canonical_name = off_product_name
+                            decision = "CREATE_NEW"
+                            source_used = "OPEN_FOOD_FACTS"
+                            off_hits += 1
+                            print(f"    [OFF] SUCCESS (fallback): \"{off_product_name}\"")
+                        else:
+                            print(f"    [OFF] FAILED: Not found")
                 else:
-                    # ============================================================
-                    # STEP 2: Open Food Facts miss - Fall back to LLM
-                    # ============================================================
+                    print(f"    [SKIP] No valid GTIN, going to LLM...")
+                
+                # ============================================================
+                # STEP 3: Both Cosmos and OFF failed - Use LLM as FINAL FALLBACK
+                # ============================================================
+                if canonical_name is None:
                     llm_calls += 1
                     
                     # Query existing products with same NCM from ALL markets
                     response = supabase.table('unique_products').select('*').eq('ncm', ncm).execute()
                     existing_products = response.data if response.data else []
                     
-                    # Log what we found
                     if existing_products:
                         markets_with_product = set(p.get('market_id', 'unknown') for p in existing_products)
-                        print(f"  [SEARCH] [{idx}/{len(products)}] Found {len(existing_products)} products with NCM {ncm} in {len(markets_with_product)} markets")
+                        print(f"    [LLM] Found {len(existing_products)} similar products in {len(markets_with_product)} markets")
                     
                     # Call LLM to match/format product
-                    decision, matched_id, canonical_name, llm_prompt, llm_response, exec_time, error_msg = call_llm_for_product_match(
+                    llm_decision, llm_matched_id, llm_canonical, llm_prompt, llm_response, llm_time, llm_error = call_llm_for_product_match(
                         new_product_name=original_product_name,
                         existing_products=existing_products
                     )
                     
-                    # Log the LLM decision
+                    # Store LLM result for logging
+                    llm_result = {
+                        'success': llm_canonical is not None,
+                        'decision': llm_decision,
+                        'matched_id': llm_matched_id,
+                        'time_ms': llm_time,
+                        'error': llm_error
+                    }
+                    
+                    if llm_canonical:
+                        canonical_name = llm_canonical
+                        decision = llm_decision
+                        matched_id = llm_matched_id
+                        source_used = "LLM"
+                        print(f"    [LLM] SUCCESS: \"{canonical_name}\" (decision: {decision})")
+                    else:
+                        print(f"    [LLM] FAILED: {llm_error or 'Unknown error'}")
+                    
+                    # Log to llm_product_decisions table (for backward compatibility)
                     log_llm_decision(
                         market_id=market_id,
                         ncm=ncm,
@@ -685,18 +948,33 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                         existing_products=[{'id': p['id'], 'name': p['product_name'], 'market': p.get('market_id')} for p in existing_products] if existing_products else None,
                         llm_prompt=llm_prompt,
                         llm_response=llm_response,
-                        decision=decision if decision else "SKIPPED",
-                        matched_product_id=matched_id,
-                        success=decision is not None,
-                        error_message=error_msg,
-                        execution_time_ms=exec_time
+                        decision=llm_decision if llm_decision else "SKIPPED",
+                        matched_product_id=llm_matched_id,
+                        success=llm_decision is not None,
+                        error_message=llm_error,
+                        execution_time_ms=llm_time
                     )
-                    
-                    # Handle LLM failure -> skip product
-                    if decision is None:
-                        print(f"  [SKIP] [{idx}/{len(products)}] SKIPPED (LLM error): {original_product_name[:50]}")
-                        skipped_products += 1
-                        continue
+                
+                # Log detailed product lookup to new table
+                log_product_lookup(
+                    nfce_url=nfce_url,
+                    market_id=market_id,
+                    gtin=ean,
+                    ncm=ncm,
+                    original_name=original_product_name,
+                    final_name=canonical_name,
+                    cosmos_result=cosmos_result,
+                    off_result=off_result,
+                    llm_result=llm_result,
+                    source_used=source_used,
+                    success=canonical_name is not None
+                )
+                
+                # Handle complete failure -> skip product but continue with others
+                if canonical_name is None:
+                    print(f"    [FINAL] SKIPPED - All sources failed")
+                    skipped_products += 1
+                    continue
                 
                 # Use canonical name for storage (or original if both failed)
                 product_name = canonical_name if canonical_name else original_product_name
@@ -750,36 +1028,15 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 print(f"[ERROR] Processing product {idx}: {str(e)}")
                 raise Exception(f"Failed at product {idx}: {str(e)}")
         
-        print(f"\n{'='*60}")
-        print(f"[OK] COMPLETED:")
-        print(f"     Purchases: {saved_to_purchases}")
-        print(f"     Unique: {created_unique} new, {updated_unique} updated, {skipped_products} skipped")
-        print(f"     Names: {off_hits} from Open Food Facts, {llm_calls} from LLM")
-        print(f"[OK] All products committed to database")
-        print(f"{'='*60}\n")
-        
         return {
-            'saved_to_purchases': saved_to_purchases,
             'updated_unique': updated_unique,
             'created_unique': created_unique,
             'skipped_products': skipped_products,
             'off_hits': off_hits,
             'llm_calls': llm_calls
         }
-    
     except Exception as e:
-        print(f"\n{'='*60}")
-        print(f"[ERROR] TRANSACTION FAILED - ROLLING BACK")
-        print(f"{'='*60}")
-        
-        if inserted_purchase_ids:
-            try:
-                for purchase_id in inserted_purchase_ids:
-                    supabase.table('purchases').delete().eq('id', purchase_id).execute()
-                print(f"[OK] Rolled back purchases")
-            except Exception as rb_error:
-                print(f"[FAIL] Rollback purchases failed: {rb_error}")
-        
+        # Rollback logic for unique products
         if inserted_unique_ids:
             try:
                 for unique_id in inserted_unique_ids:
@@ -796,8 +1053,6 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
                 print(f"[OK] Restored updated products")
             except Exception as rb_error:
                 print(f"[FAIL] Restore failed: {rb_error}")
-        
-        print(f"{'='*60}\n")
         raise
 
 
@@ -930,114 +1185,114 @@ def extract_nfce():
             return jsonify({'error': f'Failed to start processing: {str(e)}'}), 500
     
     # ========== SYNC MODE ==========
-    url_record_id = None
-    try:
-        if data.get('save'):
-            existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', data['url']).execute()
-            if existing_url.data:
-                url_data = existing_url.data[0]
-                return jsonify({
-                    'error': 'This NFCe has already been processed',
-                    'message': 'URL already exists in database',
-                    'status': url_data.get('status', 'unknown'),
-                    'processed_at': url_data['processed_at'],
-                    'market_id': url_data['market_id'],
-                    'products_count': url_data['products_count']
-                }), 409
-            
-            temp_url_data = {
-                'nfce_url': data['url'],
-                'market_id': 'PROCESSING',
+        url_record_id = None
+        try:
+            if data.get('save'):
+                existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', data['url']).execute()
+                if existing_url.data:
+                    url_data = existing_url.data[0]
+                    return jsonify({
+                        'error': 'This NFCe has already been processed',
+                        'message': 'URL already exists in database',
+                        'status': url_data.get('status', 'unknown'),
+                        'processed_at': url_data['processed_at'],
+                        'market_id': url_data['market_id'],
+                        'products_count': url_data['products_count']
+                    }), 409
+                
+                temp_url_data = {
+                    'nfce_url': data['url'],
+                    'market_id': 'PROCESSING',
                 'market_name': '',
-                'products_count': 0,
-                'status': 'processing',
-                'processed_at': datetime.utcnow().isoformat()
-            }
-            url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
-            url_record_id = url_insert.data[0]['id']
-        
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-        from nfce_extractor import extract_full_nfce_data
-        
-        result = extract_full_nfce_data(data['url'], headless=True)
-        
-        market_info = result.get('market_info', {})
-        products = result.get('products', [])
-        
-        if not products:
-            if url_record_id:
-                supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-            return jsonify({'error': 'No products extracted from NFCe'}), 400
-        
-        if data.get('save'):
-            if not market_info.get('name') or not market_info.get('address'):
+                    'products_count': 0,
+                    'status': 'processing',
+                    'processed_at': datetime.utcnow().isoformat()
+                }
+                url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
+                url_record_id = url_insert.data[0]['id']
+            
+            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+            from nfce_extractor import extract_full_nfce_data
+            
+            result = extract_full_nfce_data(data['url'], headless=True)
+            
+            market_info = result.get('market_info', {})
+            products = result.get('products', [])
+            
+            if not products:
                 if url_record_id:
                     supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-                return jsonify({'error': 'Could not extract market information'}), 400
+                return jsonify({'error': 'No products extracted from NFCe'}), 400
             
-            market_result = supabase.table('markets').select('*').match({
-                'name': market_info['name'],
-                'address': market_info['address']
-            }).execute()
-            
-            if market_result.data:
-                market = market_result.data[0]
-                market_action = 'matched'
-            else:
-                new_market_id = generate_market_id()
-                while True:
-                    check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
-                    if not check.data:
-                        break
-                    new_market_id = generate_market_id()
+            if data.get('save'):
+                if not market_info.get('name') or not market_info.get('address'):
+                    if url_record_id:
+                        supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
+                    return jsonify({'error': 'Could not extract market information'}), 400
                 
-                market_data = {'market_id': new_market_id, 'name': market_info['name'], 'address': market_info['address']}
-                market_insert = supabase.table('markets').insert(market_data).execute()
-                market = market_insert.data[0]
-                market_action = 'created'
+                market_result = supabase.table('markets').select('*').match({
+                    'name': market_info['name'],
+                    'address': market_info['address']
+                }).execute()
+                
+                if market_result.data:
+                    market = market_result.data[0]
+                    market_action = 'matched'
+                else:
+                    new_market_id = generate_market_id()
+                    while True:
+                        check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
+                        if not check.data:
+                            break
+                        new_market_id = generate_market_id()
+                    
+                    market_data = {'market_id': new_market_id, 'name': market_info['name'], 'address': market_info['address']}
+                    market_insert = supabase.table('markets').insert(market_data).execute()
+                    market = market_insert.data[0]
+                    market_action = 'created'
+                
+                save_result = save_products_to_supabase(market['market_id'], products, data['url'])
+                
+                if url_record_id:
+                    supabase.table('processed_urls').update({
+                        'market_id': market['market_id'],
+                        'market_name': market['name'],
+                        'products_count': len(products),
+                        'status': 'success'
+                    }).eq('id', url_record_id).execute()
+                
+                return jsonify({
+                    'message': 'NFCe data extracted and saved successfully',
+                    'record_id': url_record_id,
+                    'market': {
+                        'id': market['id'],
+                        'market_id': market['market_id'],
+                        'name': market['name'],
+                        'address': market['address'],
+                        'action': market_action
+                    },
+                    'products': products,
+                    'statistics': {
+                        'products_saved_to_main': save_result['saved_to_purchases'],
+                        'unique_products_created': save_result['created_unique'],
+                        'unique_products_updated': save_result['updated_unique'],
+                        'unique_products_skipped': save_result.get('skipped_products', 0),
+                        'market_action': market_action
+                    }
+                }), 201
+            else:
+                return jsonify({
+                    'message': 'NFCe data extracted successfully (not saved)',
+                    'market_info': market_info,
+                    'products': products
+                }), 200
             
-            save_result = save_products_to_supabase(market['market_id'], products, data['url'])
-            
+        except Exception as e:
             if url_record_id:
-                supabase.table('processed_urls').update({
-                    'market_id': market['market_id'],
-                    'market_name': market['name'],
-                    'products_count': len(products),
-                    'status': 'success'
-                }).eq('id', url_record_id).execute()
-            
-            return jsonify({
-                'message': 'NFCe data extracted and saved successfully',
-                'record_id': url_record_id,
-                'market': {
-                    'id': market['id'],
-                    'market_id': market['market_id'],
-                    'name': market['name'],
-                    'address': market['address'],
-                    'action': market_action
-                },
-                'products': products,
-                'statistics': {
-                    'products_saved_to_main': save_result['saved_to_purchases'],
-                    'unique_products_created': save_result['created_unique'],
-                    'unique_products_updated': save_result['updated_unique'],
-                    'unique_products_skipped': save_result.get('skipped_products', 0),
-                    'market_action': market_action
-                }
-            }), 201
-        else:
-            return jsonify({
-                'message': 'NFCe data extracted successfully (not saved)',
-                'market_info': market_info,
-                'products': products
-            }), 200
-        
-    except Exception as e:
-        if url_record_id:
-            supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+                supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/nfce/status/<int:record_id>', methods=['GET'])
