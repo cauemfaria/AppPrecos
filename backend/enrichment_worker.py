@@ -155,6 +155,14 @@ def enrich_single_purchase(item):
                     'search_used': True, 'found_gtin': search_gtin
                 }
                 logger.info(f"Found GTIN {search_gtin} via search for '{original_product_name}'")
+            else:
+                # Log the search attempt failure if it wasn't a rate limit
+                if not is_rate_limited:
+                    cosmos_result = {
+                        'success': False, 'product_name': None,
+                        'brand': None, 'time_ms': search_time, 'error': search_error,
+                        'search_used': True
+                    }
 
         if is_rate_limited:
             return 'rate_limited'

@@ -172,14 +172,14 @@ def search_product_on_cosmos(query, ncm_filter=None):
                         # If multiple NCM matches, just take the first one (usually most relevant from Cosmos)
                         selected_product = ncm_matches[0]
                         print(f"  [COSMOS-SEARCH] Found NCM match for '{query}': {selected_product.get('description')}")
-                
-                # 2. Fallback: If no NCM match (or no filter), just take the first result
-                if not selected_product:
-                    selected_product = products[0]
-                    if ncm_filter:
-                        print(f"  [COSMOS-SEARCH] No NCM match for '{query}'. Using first result: {selected_product.get('description')}")
                     else:
-                        print(f"  [COSMOS-SEARCH] Found result for '{query}': {selected_product.get('description')}")
+                        # If NCM filter was provided but no match found, do NOT fallback
+                        print(f"  [COSMOS-SEARCH] No NCM match for '{query}'. Moving to backlog for accuracy.")
+                        return False, None, None, None, execution_time_ms, "No NCM match found"
+                else:
+                    # 2. No filter provided: just take the first result
+                    selected_product = products[0]
+                    print(f"  [COSMOS-SEARCH] Found result for '{query}': {selected_product.get('description')}")
 
                 return (
                     True, 
