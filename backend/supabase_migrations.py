@@ -1,6 +1,6 @@
 """
-Supabase Migration Script - Full Architecture
-Creates: markets, purchases, unique_products, processed_urls, product_backlog, product_lookup_log
+Supabase Migration Script - Full Architecture (RESTORED)
+Creates: markets, purchases, unique_products, processed_urls, product_backlog, product_lookup_log, llm_product_decisions, gtin_cache
 """
 
 import os
@@ -21,13 +21,15 @@ def create_tables():
 -- DROP OLD SCHEMA (if exists)
 -- ============================================================================
 
-DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS product_backlog CASCADE;
 DROP TABLE IF EXISTS product_lookup_log CASCADE;
 DROP TABLE IF EXISTS unique_products CASCADE;
 DROP TABLE IF EXISTS purchases CASCADE;
 DROP TABLE IF EXISTS processed_urls CASCADE;
 DROP TABLE IF EXISTS markets CASCADE;
+DROP TABLE IF EXISTS llm_product_decisions CASCADE;
+DROP TABLE IF EXISTS gtin_cache CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
 
 -- ============================================================================
 -- CREATE NEW SCHEMA
@@ -73,7 +75,6 @@ CREATE INDEX idx_purchases_ean ON purchases(ean);
 CREATE INDEX idx_purchases_enriched ON purchases(enriched);
 
 -- TABLE 3: Unique Products (Latest Prices)
--- Matches products by market_id AND ean (Deterministic)
 CREATE TABLE unique_products (
     id BIGSERIAL PRIMARY KEY,
     market_id VARCHAR(20) NOT NULL REFERENCES markets(market_id),
@@ -97,8 +98,10 @@ CREATE TABLE processed_urls (
     id BIGSERIAL PRIMARY KEY,
     nfce_url VARCHAR(1000) UNIQUE NOT NULL,
     market_id VARCHAR(20) NOT NULL,
+    market_name VARCHAR(200),
     products_count INTEGER DEFAULT 0,
     status VARCHAR(20) DEFAULT 'processing',
+    error_message TEXT,
     processed_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -136,12 +139,39 @@ CREATE TABLE product_lookup_log (
     api_product_name VARCHAR(500),
     api_brand VARCHAR(200),
     api_error TEXT,
+    api_from_cache BOOLEAN DEFAULT false,
     api_time_ms INTEGER,
+    -- Legacy LLM Columns (Restored for safety)
+    llm_attempted BOOLEAN DEFAULT false,
+    llm_success BOOLEAN DEFAULT false,
+    llm_decision TEXT,
+    llm_matched_id BIGINT,
+    llm_error TEXT,
+    llm_time_ms INTEGER,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX idx_lookup_log_gtin ON product_lookup_log(gtin);
 CREATE INDEX idx_lookup_log_success ON product_lookup_log(success);
+
+-- TABLE 7: LLM Product Decisions (Legacy)
+CREATE TABLE llm_product_decisions (
+    id BIGSERIAL PRIMARY KEY,
+    original_name VARCHAR(500),
+    ncm VARCHAR(8),
+    decision TEXT,
+    confidence FLOAT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- TABLE 8: GTIN Cache (Legacy)
+CREATE TABLE gtin_cache (
+    gtin VARCHAR(50) PRIMARY KEY,
+    product_name VARCHAR(500),
+    brand VARCHAR(200),
+    ncm VARCHAR(8),
+    last_updated TIMESTAMP DEFAULT NOW()
+);
 """
     
     print("\nCopy and run this SQL in Supabase SQL Editor:")

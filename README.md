@@ -62,14 +62,16 @@ AppPrecos/
 
 ## 📊 Database Schema (Supabase)
 
-The system uses 6 key tables for data persistence and auditing:
+The system uses 8 key tables for data persistence and auditing:
 
 1.  **`markets`**: Stores market metadata (unique by name + address).
 2.  **`purchases`**: Raw purchase history. Tracks `enriched` status (boolean).
-3.  **`unique_products`**: Standardized products with the **latest** price per market (matched by GTIN).
+3.  **`unique_products`**: Standardized products with the **latest** price per market.
 4.  **`processed_urls`**: Tracks receipt URLs and extraction status (lock mechanism).
-5.  **`product_backlog`**: Stores items that failed enrichment for manual review.
-6.  **`product_lookup_log`**: Audit trail of every API lookup and lookup decision.
+5.  **`product_lookup_log`**: Audit trail of every API lookup (Cosmos, LLM).
+6.  **`gtin_cache`**: Cache for EAN/GTIN lookups to save API credits.
+7.  **`product_backlog`**: Stores items that failed enrichment for manual review.
+8.  **`llm_product_decisions`**: Logs AI reasoning for product matching.
 
 ---
 

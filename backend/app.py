@@ -363,6 +363,7 @@ def log_product_lookup(nfce_url, market_id, gtin, ncm, original_name, final_name
                 'api_product_name': cosmos_result.get('product_name'),
                 'api_brand': cosmos_result.get('brand'),
                 'api_error': cosmos_result.get('error'),
+                'api_from_cache': False,
                 'api_time_ms': cosmos_result.get('time_ms'),
             })
         
