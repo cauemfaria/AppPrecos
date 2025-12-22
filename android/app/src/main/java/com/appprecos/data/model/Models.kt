@@ -67,8 +67,6 @@ data class Product(
 
 data class Statistics(
     val products_saved_to_main: Int,
-    val unique_products_created: Int,
-    val unique_products_updated: Int,
     val market_action: String
 )
 
@@ -91,12 +89,12 @@ data class ProductDetail(
     val ncm: String,
     val ean: String? = null,
     val product_name: String? = null,
-    val quantity: Double,
+    val quantity: Double? = null,
     val unidade_comercial: String,
     val price: Double,
     val nfce_url: String?,
-    val purchase_date: String,
-    val created_at: String,
+    val purchase_date: String? = null,
+    val created_at: String? = null,
     val last_updated: String? = null
 )
 

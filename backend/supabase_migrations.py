@@ -1,6 +1,6 @@
 """
-Supabase Migration Script - 3-Table Architecture + LLM Logging
-Creates: markets, purchases, unique_products, processed_urls, llm_product_decisions
+Supabase Migration Script - Full Architecture
+Creates: markets, purchases, unique_products, processed_urls, product_backlog, product_lookup_log
 """
 
 import os
@@ -13,7 +13,7 @@ def create_tables():
     """Display SQL to create all necessary tables in Supabase"""
     
     print("=" * 77)
-    print(" Supabase Migration - 3-Table Architecture")
+    print(" Supabase Migration - Full Architecture")
     print("=" * 77)
     
     sql_command = """
@@ -22,11 +22,15 @@ def create_tables():
 -- ============================================================================
 
 DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS product_backlog CASCADE;
+DROP TABLE IF EXISTS product_lookup_log CASCADE;
+DROP TABLE IF EXISTS unique_products CASCADE;
+DROP TABLE IF EXISTS purchases CASCADE;
 DROP TABLE IF EXISTS processed_urls CASCADE;
 DROP TABLE IF EXISTS markets CASCADE;
 
 -- ============================================================================
--- CREATE NEW SCHEMA - 3-Table Design
+-- CREATE NEW SCHEMA
 -- ============================================================================
 
 -- TABLE 1: Markets
@@ -54,17 +58,22 @@ CREATE TABLE purchases (
     unit_price FLOAT NOT NULL,
     nfce_url VARCHAR(1000),
     purchase_date TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    -- Enrichment Tracking
+    enriched BOOLEAN DEFAULT false,
+    enrichment_status VARCHAR(20) DEFAULT 'pending',
+    enrichment_error TEXT
 );
 
 CREATE INDEX idx_purchases_market_id ON purchases(market_id);
 CREATE INDEX idx_purchases_ncm ON purchases(ncm);
 CREATE INDEX idx_purchases_date ON purchases(purchase_date);
 CREATE INDEX idx_purchases_product_name ON purchases(product_name);
+CREATE INDEX idx_purchases_ean ON purchases(ean);
+CREATE INDEX idx_purchases_enriched ON purchases(enriched);
 
 -- TABLE 3: Unique Products (Latest Prices)
--- NOTE: No unique constraint on (market_id, ncm) because multiple products can share same NCM
--- LLM-based matching determines if products are the same or different
+-- Matches products by market_id AND ean (Deterministic)
 CREATE TABLE unique_products (
     id BIGSERIAL PRIMARY KEY,
     market_id VARCHAR(20) NOT NULL REFERENCES markets(market_id),
@@ -80,7 +89,8 @@ CREATE TABLE unique_products (
 CREATE INDEX idx_unique_products_market_id ON unique_products(market_id);
 CREATE INDEX idx_unique_products_ncm ON unique_products(ncm);
 CREATE INDEX idx_unique_products_product_name ON unique_products(product_name);
-CREATE INDEX idx_unique_products_market_ncm ON unique_products(market_id, ncm);
+CREATE INDEX idx_unique_products_market_ean ON unique_products(market_id, ean);
+CREATE INDEX idx_unique_products_ean ON unique_products(ean);
 
 -- TABLE 4: Processed URLs (with Status Tracking)
 CREATE TABLE processed_urls (
@@ -96,30 +106,42 @@ CREATE INDEX idx_processed_urls_nfce ON processed_urls(nfce_url);
 CREATE INDEX idx_processed_urls_market ON processed_urls(market_id);
 CREATE INDEX idx_processed_urls_status ON processed_urls(status);
 
--- TABLE 5: LLM Product Decisions (Debugging/Logging)
--- Logs all LLM calls for product identification decisions
-CREATE TABLE llm_product_decisions (
+-- TABLE 5: Product Backlog (Items that failed enrichment)
+CREATE TABLE product_backlog (
     id BIGSERIAL PRIMARY KEY,
-    market_id VARCHAR(20) NOT NULL,
-    ncm VARCHAR(8) NOT NULL,
-    new_product_name VARCHAR(200),
-    existing_products JSONB,  -- Array of {id, name} objects
-    llm_prompt TEXT,
-    llm_response TEXT,
-    decision VARCHAR(50),     -- "CREATE_NEW" or "UPDATE:{id}" or "SKIPPED"
-    matched_product_id BIGINT,
-    success BOOLEAN DEFAULT true,
-    error_message TEXT,
-    execution_time_ms INTEGER,
+    purchase_id BIGINT REFERENCES purchases(id),
+    market_id VARCHAR(20) REFERENCES markets(market_id),
+    original_product_name VARCHAR(200),
+    ncm VARCHAR(8),
+    ean VARCHAR(50),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_llm_decisions_market ON llm_product_decisions(market_id);
-CREATE INDEX idx_llm_decisions_ncm ON llm_product_decisions(ncm);
-CREATE INDEX idx_llm_decisions_created ON llm_product_decisions(created_at);
-CREATE INDEX idx_llm_decisions_success ON llm_product_decisions(success);
+CREATE INDEX idx_backlog_purchase ON product_backlog(purchase_id);
 
-COMMENT ON TABLE llm_product_decisions IS 'Log of all LLM calls for product identification decisions';
+-- TABLE 6: Product Lookup Log (Debug & API tracking)
+CREATE TABLE product_lookup_log (
+    id BIGSERIAL PRIMARY KEY,
+    nfce_url VARCHAR(1000),
+    market_id VARCHAR(20),
+    gtin VARCHAR(50),
+    ncm VARCHAR(8),
+    original_name VARCHAR(500),
+    final_name VARCHAR(500),
+    source_used VARCHAR(50),
+    success BOOLEAN,
+    -- API Details
+    api_attempted BOOLEAN DEFAULT false,
+    api_success BOOLEAN DEFAULT false,
+    api_product_name VARCHAR(500),
+    api_brand VARCHAR(200),
+    api_error TEXT,
+    api_time_ms INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_lookup_log_gtin ON product_lookup_log(gtin);
+CREATE INDEX idx_lookup_log_success ON product_lookup_log(success);
 """
     
     print("\nCopy and run this SQL in Supabase SQL Editor:")
@@ -131,7 +153,7 @@ COMMENT ON TABLE llm_product_decisions IS 'Log of all LLM calls for product iden
     print(" Instructions:")
     print("=" * 77)
     print("\n1. Go to https://app.supabase.com")
-    print("2. Select your project: gqfnbhhlvyrljfmfdcsf")
+    print("2. Select your project")
     print("3. Go to SQL Editor")
     print("4. Click 'New Query'")
     print("5. Paste the SQL above")

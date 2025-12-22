@@ -15,9 +15,7 @@ from supabase import create_client
 from app import (
     supabase, 
     get_product_from_cosmos, 
-    get_product_from_open_food_facts,
-    call_llm_for_product_match,
-    log_llm_decision,
+    search_product_on_cosmos,
     log_product_lookup
 )
 
@@ -55,9 +53,9 @@ def process_pending_purchases():
             
             for item in pending_items:
                 # Tentativa de enriquecimento
-                success = enrich_single_purchase(item)
+                status = enrich_single_purchase(item)
                 
-                if success:
+                if status == 'completed':
                     # Mark as enriched
                     supabase.table('purchases').update({
                         'enriched': True,
@@ -65,11 +63,34 @@ def process_pending_purchases():
                         'enrichment_error': None
                     }).eq('id', item['id']).execute()
                     logger.info(f"Successfully enriched item {item['id']}")
+                elif status == 'rate_limited':
+                    # STOP EVERYTHING immediately
+                    logger.error("!!! RATE LIMIT REACHED IN ALL TOKENS !!! Stopping worker to avoid backlog misclassification.")
+                    return # Exit the function and script
+                elif status == 'backlog':
+                    # Mark as backlog in purchases
+                    supabase.table('purchases').update({
+                        'enriched': True, # Mark as enriched True so it doesn't try again in next batch
+                        'enrichment_status': 'backlog',
+                        'enrichment_error': 'No GTIN found via direct lookup or search'
+                    }).eq('id', item['id']).execute()
+                    
+                    # Insert into product_backlog
+                    backlog_data = {
+                        'purchase_id': item['id'],
+                        'market_id': item['market_id'],
+                        'original_product_name': item['product_name'],
+                        'ncm': item['ncm'],
+                        'ean': item['ean'], # Original EAN (likely SEM GTIN)
+                        'created_at': datetime.utcnow().isoformat()
+                    }
+                    supabase.table('product_backlog').insert(backlog_data).execute()
+                    logger.info(f"Item {item['id']} moved to backlog")
                 else:
                     # Mark as failed
                     supabase.table('purchases').update({
                         'enrichment_status': 'failed',
-                        'enrichment_error': 'All enrichment sources failed or limit reached'
+                        'enrichment_error': 'All enrichment sources failed or request error'
                     }).eq('id', item['id']).execute()
                     logger.warning(f"Failed to enrich item {item['id']}")
             
@@ -83,7 +104,7 @@ def process_pending_purchases():
 def enrich_single_purchase(item):
     """
     Perform enrichment for a single purchase item and upsert to unique_products
-    Returns: success_bool
+    Returns: status string ('completed', 'backlog', 'failed', 'rate_limited')
     """
     market_id = item['market_id']
     original_product_name = item['product_name']
@@ -94,11 +115,10 @@ def enrich_single_purchase(item):
     canonical_name = None
     source_used = None
     cosmos_result = None
-    off_result = None
-    llm_result = None
+    is_rate_limited = False
     
     try:
-        # STEP 1: Bluesoft Cosmos
+        # STEP 1: Bluesoft Cosmos (Direct GTIN lookup)
         if ean and ean != 'SEM GTIN' and len(ean) >= 8:
             cosmos_success, cosmos_product_name, cosmos_brand, cosmos_time, cosmos_error = get_product_from_cosmos(ean)
             
@@ -106,60 +126,53 @@ def enrich_single_purchase(item):
                 'success': cosmos_success, 'product_name': cosmos_product_name,
                 'brand': cosmos_brand, 'time_ms': cosmos_time, 'error': cosmos_error
             }
+            
+            if cosmos_error == "TOKENS_EXHAUSTED":
+                is_rate_limited = True
+            
             if cosmos_success and cosmos_product_name:
                 canonical_name = cosmos_product_name
                 source_used = "COSMOS_BLUE"
         
-        # STEP 2: Open Food Facts (Fallback)
-        if not canonical_name and ean and ean != 'SEM GTIN' and len(ean) >= 8:
-            off_success, off_product_name, off_time = get_product_from_open_food_facts(ean)
-            off_result = {
-                'success': off_success, 'product_name': off_product_name,
-                'time_ms': off_time, 'error': None if off_success else 'Not found'
-            }
-            if off_success and off_product_name:
-                canonical_name = off_product_name
-                source_used = "OPEN_FOOD_FACTS"
-        
-        # STEP 3: LLM (Final Fallback)
-        if not canonical_name:
-            # Query existing products with same NCM from ALL markets
-            response = supabase.table('unique_products').select('*').eq('ncm', ncm).execute()
-            existing_products = response.data if response.data else []
-            
-            llm_decision, llm_matched_id, llm_canonical, llm_prompt, llm_response, llm_time, llm_error = call_llm_for_product_match(
-                new_product_name=original_product_name,
-                existing_products=existing_products
+        # STEP 2: Bluesoft Cosmos (Search by Name + NCM filter)
+        if not canonical_name and not is_rate_limited:
+            # Try searching by name since GTIN is missing or wasn't found
+            search_success, search_name, search_gtin, search_brand, search_time, search_error = search_product_on_cosmos(
+                query=original_product_name,
+                ncm_filter=ncm
             )
-            llm_result = {
-                'success': llm_canonical is not None, 'decision': llm_decision,
-                'matched_id': llm_matched_id, 'time_ms': llm_time, 'error': llm_error
-            }
-            if llm_canonical:
-                canonical_name = llm_canonical
-                source_used = "LLM"
             
-            log_llm_decision(
-                market_id=market_id, ncm=ncm, new_product_name=original_product_name,
-                canonical_name=canonical_name, existing_products=existing_products,
-                llm_prompt=llm_prompt, llm_response=llm_response,
-                decision=llm_decision, matched_product_id=llm_matched_id,
-                success=llm_canonical is not None, error_message=llm_error,
-                execution_time_ms=llm_time
-            )
-        
+            if search_error == "TOKENS_EXHAUSTED":
+                is_rate_limited = True
+            
+            if search_success:
+                canonical_name = search_name
+                source_used = "COSMOS_SEARCH"
+                ean = str(search_gtin) # Update EAN with the one found via search
+                cosmos_result = {
+                    'success': True, 'product_name': search_name,
+                    'brand': search_brand, 'time_ms': search_time, 'error': None,
+                    'search_used': True, 'found_gtin': search_gtin
+                }
+                logger.info(f"Found GTIN {search_gtin} via search for '{original_product_name}'")
+
+        if is_rate_limited:
+            return 'rate_limited'
+
         # Log lookup
         log_product_lookup(
             nfce_url=nfce_url, market_id=market_id, gtin=ean, ncm=ncm,
             original_name=original_product_name, final_name=canonical_name,
-            cosmos_result=cosmos_result, off_result=off_result, llm_result=llm_result,
+            cosmos_result=cosmos_result,
             source_used=source_used, success=canonical_name is not None
         )
         
+        # STEP 3: Handle Fallback to Backlog
         if not canonical_name:
-            return False
+            logger.info(f"No GTIN found for '{original_product_name}'. Moving to backlog.")
+            return 'backlog'
             
-        # Upsert to unique_products
+        # STEP 4: Deterministic Upsert to unique_products (Market + GTIN)
         unique_data = {
             'market_id': market_id,
             'ncm': ncm,
@@ -171,23 +184,24 @@ def enrich_single_purchase(item):
             'last_updated': datetime.utcnow().isoformat()
         }
         
-        # Check if exists in this market
+        # Check if exists in this market by market_id AND ean (Deterministic)
         existing = supabase.table('unique_products').select('id').match({
             'market_id': market_id,
-            'ncm': ncm,
-            'product_name': canonical_name
+            'ean': ean
         }).execute()
         
         if existing.data:
             supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
+            logger.info(f"Updated existing product {existing.data[0]['id']} in market {market_id}")
         else:
             supabase.table('unique_products').insert(unique_data).execute()
+            logger.info(f"Inserted new product with GTIN {ean} in market {market_id}")
             
-        return True
+        return 'completed'
         
     except Exception as e:
         logger.error(f"Error enriching item {item['id']}: {e}")
-        return False
+        return 'failed'
 
 if __name__ == "__main__":
     process_pending_purchases()

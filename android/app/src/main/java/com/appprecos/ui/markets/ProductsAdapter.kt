@@ -49,45 +49,44 @@ class ProductsAdapter : ListAdapter<ProductDetail, ProductsAdapter.ProductViewHo
             }
             binding.textProductQuantity.text = unitText
             
-            // Display total price
+            // Display price (which is now stored as unit price in the backend for unique_products)
             binding.textProductPrice.text = String.format("R$ %.2f", product.price)
             
-            // Calculate and display unit price (only if quantity is valid and > 0)
-            if (product.quantity > 0 && product.quantity.isFinite()) {
-                val unitPrice = product.price / product.quantity
-                // Check if unitPrice is valid (not infinity or NaN)
-                if (unitPrice.isFinite() && !unitPrice.isNaN()) {
-                    val unitPriceText = when (product.unidade_comercial.uppercase()) {
-                        "UN" -> String.format("R$ %.2f/un", unitPrice)
-                        "KG" -> String.format("R$ %.2f/Kg", unitPrice)
-                        else -> String.format("R$ %.2f/${product.unidade_comercial}", unitPrice)
-                    }
-                    binding.textProductUnitPrice.text = unitPriceText
-                    binding.textProductUnitPrice.visibility = android.view.View.VISIBLE
-                } else {
-                    binding.textProductUnitPrice.visibility = android.view.View.GONE
+            // Handle unit price display
+            val quantity = product.quantity ?: 1.0
+            if (quantity > 0 && quantity.isFinite()) {
+                val unitPriceText = when (product.unidade_comercial.uppercase()) {
+                    "UN" -> String.format("R$ %.2f/un", product.price)
+                    "KG" -> String.format("R$ %.2f/Kg", product.price)
+                    else -> String.format("R$ %.2f/${product.unidade_comercial}", product.price)
                 }
+                binding.textProductUnitPrice.text = unitPriceText
+                binding.textProductUnitPrice.visibility = android.view.View.VISIBLE
             } else {
                 binding.textProductUnitPrice.visibility = android.view.View.GONE
             }
             
             // Format and display last_updated date (or fall back to purchase_date)
             val dateToDisplay = product.last_updated ?: product.purchase_date
-            try {
-                val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
-                val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-                val date = inputFormat.parse(dateToDisplay.replace(" ", "T").substring(0, 19))
-                binding.textProductUpdated.text = "Updated: ${outputFormat.format(date ?: Date())}"
-            } catch (e: Exception) {
-                // Try alternative format
+            if (dateToDisplay != null) {
                 try {
-                    val inputFormat2 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                    val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
                     val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-                    val date = inputFormat2.parse(dateToDisplay.substring(0, 19))
+                    val date = inputFormat.parse(dateToDisplay.replace(" ", "T").substring(0, 19))
                     binding.textProductUpdated.text = "Updated: ${outputFormat.format(date ?: Date())}"
-                } catch (e2: Exception) {
-                    binding.textProductUpdated.text = "Updated: $dateToDisplay"
+                } catch (e: Exception) {
+                    // Try alternative format
+                    try {
+                        val inputFormat2 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                        val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                        val date = inputFormat2.parse(dateToDisplay.substring(0, 19))
+                        binding.textProductUpdated.text = "Updated: ${outputFormat.format(date ?: Date())}"
+                    } catch (e2: Exception) {
+                        binding.textProductUpdated.text = "Updated: $dateToDisplay"
+                    }
                 }
+            } else {
+                binding.textProductUpdated.text = ""
             }
         }
     }
