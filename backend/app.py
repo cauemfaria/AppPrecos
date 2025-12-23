@@ -679,111 +679,111 @@ def extract_nfce():
             return jsonify({'error': f'Failed to start processing: {str(e)}'}), 500
     
     # ========== SYNC MODE (Legacy/Fallback) ==========
-    url_record_id = None
-    try:
-        if data.get('save'):
-            existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', data['url']).execute()
-            if existing_url.data:
-                url_data = existing_url.data[0]
-                return jsonify({
-                    'error': 'This NFCe has already been processed',
-                    'message': 'URL already exists in database',
-                    'status': url_data.get('status', 'unknown'),
-                    'processed_at': url_data['processed_at'],
-                    'market_id': url_data['market_id'],
-                    'products_count': url_data['products_count']
-                }), 409
-            
-            temp_url_data = {
-                'nfce_url': data['url'],
-                'market_id': 'PROCESSING',
+        url_record_id = None
+        try:
+            if data.get('save'):
+                existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', data['url']).execute()
+                if existing_url.data:
+                    url_data = existing_url.data[0]
+                    return jsonify({
+                        'error': 'This NFCe has already been processed',
+                        'message': 'URL already exists in database',
+                        'status': url_data.get('status', 'unknown'),
+                        'processed_at': url_data['processed_at'],
+                        'market_id': url_data['market_id'],
+                        'products_count': url_data['products_count']
+                    }), 409
+                
+                temp_url_data = {
+                    'nfce_url': data['url'],
+                    'market_id': 'PROCESSING',
                 'market_name': '',
-                'products_count': 0,
-                'status': 'processing',
-                'processed_at': datetime.utcnow().isoformat()
-            }
-            url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
-            url_record_id = url_insert.data[0]['id']
-        
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-        from nfce_extractor import extract_full_nfce_data
-        
-        result = extract_full_nfce_data(data['url'], headless=True)
-        
-        market_info = result.get('market_info', {})
-        products = result.get('products', [])
-        
-        if not products:
-            if url_record_id:
-                supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-            return jsonify({'error': 'No products extracted from NFCe'}), 400
-        
-        if data.get('save'):
-            if not market_info.get('name') or not market_info.get('address'):
+                    'products_count': 0,
+                    'status': 'processing',
+                    'processed_at': datetime.utcnow().isoformat()
+                }
+                url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
+                url_record_id = url_insert.data[0]['id']
+            
+            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+            from nfce_extractor import extract_full_nfce_data
+            
+            result = extract_full_nfce_data(data['url'], headless=True)
+            
+            market_info = result.get('market_info', {})
+            products = result.get('products', [])
+            
+            if not products:
                 if url_record_id:
                     supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-                return jsonify({'error': 'Could not extract market information'}), 400
+                return jsonify({'error': 'No products extracted from NFCe'}), 400
             
-            market_result = supabase.table('markets').select('*').match({
-                'name': market_info['name'],
-                'address': market_info['address']
-            }).execute()
-            
-            if market_result.data:
-                market = market_result.data[0]
-                market_action = 'matched'
-            else:
-                new_market_id = generate_market_id()
-                while True:
-                    check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
-                    if not check.data:
-                        break
-                    new_market_id = generate_market_id()
+            if data.get('save'):
+                if not market_info.get('name') or not market_info.get('address'):
+                    if url_record_id:
+                        supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
+                    return jsonify({'error': 'Could not extract market information'}), 400
                 
-                market_data = {'market_id': new_market_id, 'name': market_info['name'], 'address': market_info['address']}
-                market_insert = supabase.table('markets').insert(market_data).execute()
-                market = market_insert.data[0]
-                market_action = 'created'
+                market_result = supabase.table('markets').select('*').match({
+                    'name': market_info['name'],
+                    'address': market_info['address']
+                }).execute()
+                
+                if market_result.data:
+                    market = market_result.data[0]
+                    market_action = 'matched'
+                else:
+                    new_market_id = generate_market_id()
+                    while True:
+                        check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
+                        if not check.data:
+                            break
+                        new_market_id = generate_market_id()
+                    
+                    market_data = {'market_id': new_market_id, 'name': market_info['name'], 'address': market_info['address']}
+                    market_insert = supabase.table('markets').insert(market_data).execute()
+                    market = market_insert.data[0]
+                    market_action = 'created'
+                
+                save_result = save_products_to_supabase(market['market_id'], products, data['url'])
+                
+                if url_record_id:
+                    supabase.table('processed_urls').update({
+                        'market_id': market['market_id'],
+                        'market_name': market['name'],
+                        'products_count': len(products),
+                        'status': 'success'
+                    }).eq('id', url_record_id).execute()
+                
+                return jsonify({
+                    'message': 'NFCe data extracted and saved successfully',
+                    'record_id': url_record_id,
+                    'market': {
+                        'id': market['id'],
+                        'market_id': market['market_id'],
+                        'name': market['name'],
+                        'address': market['address'],
+                        'action': market_action
+                    },
+                    'products': products,
+                    'statistics': {
+                        'products_saved_to_main': save_result['saved_to_purchases'],
+                        'market_action': market_action
+                    }
+                }), 201
+            else:
+                return jsonify({
+                    'message': 'NFCe data extracted successfully (not saved)',
+                    'market_info': market_info,
+                    'products': products
+                }), 200
             
-            save_result = save_products_to_supabase(market['market_id'], products, data['url'])
-            
+        except Exception as e:
             if url_record_id:
-                supabase.table('processed_urls').update({
-                    'market_id': market['market_id'],
-                    'market_name': market['name'],
-                    'products_count': len(products),
-                    'status': 'success'
-                }).eq('id', url_record_id).execute()
-            
-            return jsonify({
-                'message': 'NFCe data extracted and saved successfully',
-                'record_id': url_record_id,
-                'market': {
-                    'id': market['id'],
-                    'market_id': market['market_id'],
-                    'name': market['name'],
-                    'address': market['address'],
-                    'action': market_action
-                },
-                'products': products,
-                'statistics': {
-                    'products_saved_to_main': save_result['saved_to_purchases'],
-                    'market_action': market_action
-                }
-            }), 201
-        else:
-            return jsonify({
-                'message': 'NFCe data extracted successfully (not saved)',
-                'market_info': market_info,
-                'products': products
-            }), 200
-        
-    except Exception as e:
-        if url_record_id:
-            supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+                supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/nfce/status/<int:record_id>', methods=['GET'])

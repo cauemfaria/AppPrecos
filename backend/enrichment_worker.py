@@ -118,8 +118,39 @@ def enrich_single_purchase(item):
     is_rate_limited = False
     
     try:
-        # STEP 1: Bluesoft Cosmos (Direct GTIN lookup)
+        # --- OPTIMIZATION: LOCAL DATABASE LOOKUP ---
+        
+        # 1. If we have a GTIN, check if we already enriched it in ANY market before
         if ean and ean != 'SEM GTIN' and len(ean) >= 8:
+            # We look for the most recent enrichment for this GTIN
+            local_match = supabase.table('unique_products').select('product_name, ncm').eq('ean', ean).limit(1).execute()
+            if local_match.data:
+                canonical_name = local_match.data[0]['product_name']
+                # We use the NCM from the registry to ensure consistency, 
+                # but keep the original NCM if the match doesn't have one (unlikely)
+                if local_match.data[0].get('ncm'):
+                    ncm = local_match.data[0]['ncm']
+                source_used = "LOCAL_REGISTRY"
+                logger.info(f"Reusing local registry data for GTIN {ean}: {canonical_name}")
+
+        # 2. If it's a "SEM GTIN", check if we previously found a GTIN for this specific name/NCM
+        if not canonical_name and ean == 'SEM GTIN':
+            local_log = supabase.table('product_lookup_log').select('final_name, gtin').match({
+                'original_name': original_product_name,
+                'ncm': ncm,
+                'success': True
+            }).order('created_at', desc=True).limit(1).execute()
+            
+            if local_log.data and local_log.data[0].get('gtin'):
+                canonical_name = local_log.data[0]['final_name']
+                ean = local_log.data[0]['gtin']
+                source_used = "LOCAL_LOG"
+                logger.info(f"Reusing discovered GTIN {ean} from logs for '{original_product_name}'")
+
+        # --- EXTERNAL API LOOKUP (Only if local lookup failed) ---
+        
+        # STEP 1: Bluesoft Cosmos (Direct GTIN lookup)
+        if not canonical_name and ean and ean != 'SEM GTIN' and len(ean) >= 8:
             cosmos_success, cosmos_product_name, cosmos_brand, cosmos_time, cosmos_error = get_product_from_cosmos(ean)
             
             cosmos_result = {
@@ -166,7 +197,7 @@ def enrich_single_purchase(item):
 
         if is_rate_limited:
             return 'rate_limited'
-
+        
         # Log lookup
         log_product_lookup(
             nfce_url=nfce_url, market_id=market_id, gtin=ean, ncm=ncm,
