@@ -176,7 +176,7 @@ const MarketsPage: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-blue-600">R$ {product.price.toFixed(2)}</p>
+                        <p className="font-bold text-blue-600">R$ {(product.price || 0).toFixed(2)}</p>
                       </div>
                     </div>
                   ))}

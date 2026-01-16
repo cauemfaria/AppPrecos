@@ -207,7 +207,7 @@ const ShoppingListPage: React.FC = () => {
                       {product.unidade_comercial}
                     </span>
                     <span className="text-xs text-gray-400">
-                      Est. R$ {product.min_price.toFixed(2)} - R$ {product.max_price.toFixed(2)}
+                      Est. R$ {product.min_price?.toFixed(2) || '0.00'} - R$ {product.max_price?.toFixed(2) || '0.00'}
                     </span>
                   </div>
                 </div>
@@ -476,7 +476,7 @@ const ShoppingListPage: React.FC = () => {
                             
                             return (
                               <td key={mId} className="px-6 py-4 text-center whitespace-nowrap">
-                                {price === null ? (
+                                {price == null ? (
                                   <span className="text-gray-300 text-xs italic">N/A</span>
                                 ) : (
                                   <div className="flex flex-col items-center">

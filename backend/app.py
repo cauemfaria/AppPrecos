@@ -109,19 +109,19 @@ def get_product_from_cosmos(gtin):
                 
             elif response.status_code == 404:
                 print(f"  [COSMOS] Product {gtin} not found (404)")
-                return False, None, None, execution_time_ms, "Product not found"
+                return False, None, None, None, execution_time_ms, "Product not found"
                 
             else:
                 error_msg = f"HTTP {response.status_code}"
                 print(f"  [COSMOS] Error: {error_msg} for GTIN {gtin}")
-                return False, None, None, execution_time_ms, error_msg
+                return False, None, None, None, execution_time_ms, error_msg
                 
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             print(f"  [COSMOS] Request Error: {e}")
-            return False, None, None, execution_time_ms, str(e)
+            return False, None, None, None, execution_time_ms, str(e)
             
-    return False, None, None, 0, "TOKENS_EXHAUSTED"
+    return False, None, None, None, 0, "TOKENS_EXHAUSTED"
 
 
 def search_product_on_cosmos(query, ncm_filter=None):
@@ -162,7 +162,7 @@ def search_product_on_cosmos(query, ncm_filter=None):
                 products = data.get('products', [])
                 
                 if not products:
-                    return False, None, None, None, execution_time_ms, "No products found"
+                    return False, None, None, None, None, execution_time_ms, "No products found"
                 
                 # NCM-Aware Matching Logic with Fuzzy String Similarity
                 selected_product = None
@@ -174,7 +174,7 @@ def search_product_on_cosmos(query, ncm_filter=None):
                     candidates = [p for p in products if p.get('ncm', {}).get('code') == ncm_filter]
                     if not candidates:
                         print(f"  [COSMOS-SEARCH] No NCM match for '{query}'. Moving to backlog for accuracy.")
-                        return False, None, None, None, execution_time_ms, "No NCM match found"
+                        return False, None, None, None, None, execution_time_ms, "No NCM match found"
                 else:
                     candidates = products
 
@@ -215,14 +215,14 @@ def search_product_on_cosmos(query, ncm_filter=None):
                 
             else:
                 error_msg = f"HTTP {response.status_code}"
-                return False, None, None, None, execution_time_ms, error_msg
+                return False, None, None, None, None, execution_time_ms, error_msg
                 
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             print(f"  [COSMOS-SEARCH] Request Error: {e}")
-            return False, None, None, None, execution_time_ms, str(e)
+            return False, None, None, None, None, execution_time_ms, str(e)
             
-    return False, None, None, None, 0, "TOKENS_EXHAUSTED"
+    return False, None, None, None, None, 0, "TOKENS_EXHAUSTED"
 
 
 # ============================================================================

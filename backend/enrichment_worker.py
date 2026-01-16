@@ -67,32 +67,27 @@ def process_pending_purchases():
                     # STOP EVERYTHING immediately
                     logger.error("!!! RATE LIMIT REACHED IN ALL TOKENS !!! Stopping worker to avoid backlog misclassification.")
                     return # Exit the function and script
-                elif status == 'backlog':
-                    # Mark as backlog in purchases
+                elif status in ['backlog', 'failed']:
+                    # Mark as processed in purchases
+                    error_msg = item.get('enrichment_error') or ('No GTIN found' if status == 'backlog' else 'Unexpected processing error')
+                    
                     supabase.table('purchases').update({
-                        'enriched': True, # Mark as enriched True so it doesn't try again in next batch
-                        'enrichment_status': 'backlog',
-                        'enrichment_error': 'No GTIN found via direct lookup or search'
+                        'enriched': True,
+                        'enrichment_status': status,
+                        'enrichment_error': error_msg
                     }).eq('id', item['id']).execute()
                     
-                    # Insert into product_backlog
+                    # Insert into product_backlog so it's visible to the user
                     backlog_data = {
                         'purchase_id': item['id'],
                         'market_id': item['market_id'],
                         'original_product_name': item['product_name'],
                         'ncm': item['ncm'],
-                        'ean': item['ean'], # Original EAN (likely SEM GTIN)
+                        'ean': item['ean'],
                         'created_at': datetime.utcnow().isoformat()
                     }
                     supabase.table('product_backlog').insert(backlog_data).execute()
-                    logger.info(f"Item {item['id']} moved to backlog")
-                else:
-                    # Mark as failed
-                    supabase.table('purchases').update({
-                        'enrichment_status': 'failed',
-                        'enrichment_error': 'All enrichment sources failed or request error'
-                    }).eq('id', item['id']).execute()
-                    logger.warning(f"Failed to enrich item {item['id']}")
+                    logger.info(f"Item {item['id']} moved to backlog (status: {status})")
             
             logger.info(f"Batch completed. Sleeping for {SLEEP_BETWEEN_BATCHES}s...")
             time.sleep(SLEEP_BETWEEN_BATCHES)
