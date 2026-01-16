@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 import requests
+import difflib
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -64,15 +65,15 @@ def get_product_from_cosmos(gtin):
     Handles multiple tokens and 429 rate limits.
     
     Returns:
-        tuple: (success, product_name, brand_name, execution_time_ms, error_msg)
+        tuple: (success, product_name, brand_name, image_url, execution_time_ms, error_msg)
     """
     global _current_cosmos_token_idx
     
     if not gtin or gtin == 'SEM GTIN' or len(gtin) < 8:
-        return False, None, None, 0, "Invalid GTIN"
+        return False, None, None, None, 0, "Invalid GTIN"
     
     if not COSMOS_TOKENS:
-        return False, None, None, 0, "No Cosmos tokens available"
+        return False, None, None, None, 0, "No Cosmos tokens available"
 
     start_time = time.time()
     
@@ -96,8 +97,9 @@ def get_product_from_cosmos(gtin):
                 data = response.json()
                 product_name = data.get('description')
                 brand_name = data.get('brand', {}).get('name')
+                image_url = data.get('thumbnail')
                 print(f"  [COSMOS] Found: \"{product_name}\" [{brand_name}] for GTIN {gtin} ({execution_time_ms}ms)")
-                return True, product_name, brand_name, execution_time_ms, None
+                return True, product_name, brand_name, image_url, execution_time_ms, None
                 
             elif response.status_code == 429:
                 print(f"  [COSMOS] Limit exceeded for token index {_current_cosmos_token_idx}. Rotating...")
@@ -128,15 +130,15 @@ def search_product_on_cosmos(query, ncm_filter=None):
     Prioritizes results that match the provided NCM.
     
     Returns:
-        tuple: (success, product_name, gtin, brand_name, execution_time_ms, error_msg)
+        tuple: (success, product_name, gtin, brand_name, image_url, execution_time_ms, error_msg)
     """
     global _current_cosmos_token_idx
     
     if not query or len(query.strip()) < 3:
-        return False, None, None, None, 0, "Query too short"
+        return False, None, None, None, None, 0, "Query too short"
         
     if not COSMOS_TOKENS:
-        return False, None, None, None, 0, "No Cosmos tokens available"
+        return False, None, None, None, None, 0, "No Cosmos tokens available"
 
     start_time = time.time()
     tokens_to_try = len(COSMOS_TOKENS)
@@ -162,33 +164,49 @@ def search_product_on_cosmos(query, ncm_filter=None):
                 if not products:
                     return False, None, None, None, execution_time_ms, "No products found"
                 
-                # NCM-Aware Matching Logic
+                # NCM-Aware Matching Logic with Fuzzy String Similarity
                 selected_product = None
                 
+                # Candidates for matching
+                candidates = []
                 if ncm_filter:
-                    # 1. Try to find a product with EXACT NCM match
-                    ncm_matches = [p for p in products if p.get('ncm', {}).get('code') == ncm_filter]
-                    if ncm_matches:
-                        # If multiple NCM matches, just take the first one (usually most relevant from Cosmos)
-                        selected_product = ncm_matches[0]
-                        print(f"  [COSMOS-SEARCH] Found NCM match for '{query}': {selected_product.get('description')}")
-                    else:
-                        # If NCM filter was provided but no match found, do NOT fallback
+                    # Filter by exact NCM match
+                    candidates = [p for p in products if p.get('ncm', {}).get('code') == ncm_filter]
+                    if not candidates:
                         print(f"  [COSMOS-SEARCH] No NCM match for '{query}'. Moving to backlog for accuracy.")
                         return False, None, None, None, execution_time_ms, "No NCM match found"
                 else:
-                    # 2. No filter provided: just take the first result
-                    selected_product = products[0]
-                    print(f"  [COSMOS-SEARCH] Found result for '{query}': {selected_product.get('description')}")
+                    candidates = products
 
-                return (
-                    True, 
-                    selected_product.get('description'), 
-                    selected_product.get('gtin'),
-                    selected_product.get('brand', {}).get('name'),
-                    execution_time_ms, 
-                    None
-                )
+                # Find the best match among candidates using string similarity
+                best_score = -1
+                
+                for candidate in candidates:
+                    candidate_name = candidate.get('description', '')
+                    # Calculate similarity ratio (0.0 to 1.0)
+                    score = difflib.SequenceMatcher(None, query.upper(), candidate_name.upper()).ratio()
+                    
+                    if score > best_score:
+                        best_score = score
+                        selected_product = candidate
+                
+                # Minimum threshold to avoid weak matches (e.g. 0.8 or 80%)
+                SIMILARITY_THRESHOLD = 0.8
+                
+                if selected_product and best_score >= SIMILARITY_THRESHOLD:
+                    print(f"  [COSMOS-SEARCH] Best match for '{query}' (score: {best_score:.2f}): {selected_product.get('description')}")
+                    return (
+                        True, 
+                        selected_product.get('description'), 
+                        selected_product.get('gtin'),
+                        selected_product.get('brand', {}).get('name'),
+                        selected_product.get('thumbnail'),
+                        execution_time_ms, 
+                        None
+                    )
+                else:
+                    print(f"  [COSMOS-SEARCH] No confident match for '{query}' (best score: {best_score:.2f}).")
+                    return False, None, None, None, None, execution_time_ms, "No confident similarity match"
                 
             elif response.status_code == 429:
                 print(f"  [COSMOS-SEARCH] Limit exceeded for token index {_current_cosmos_token_idx}. Rotating...")
@@ -362,12 +380,22 @@ def log_product_lookup(nfce_url, market_id, gtin, ncm, original_name, final_name
                 'api_success': cosmos_result.get('success', False),
                 'api_product_name': cosmos_result.get('product_name'),
                 'api_brand': cosmos_result.get('brand'),
+                'api_image_url': cosmos_result.get('image_url'), # New field
                 'api_error': cosmos_result.get('error'),
                 'api_from_cache': False,
                 'api_time_ms': cosmos_result.get('time_ms'),
             })
         
-        supabase.table('product_lookup_log').insert(log_data).execute()
+        # We use a try-except here because the column might not exist yet
+        try:
+            supabase.table('product_lookup_log').insert(log_data).execute()
+        except Exception as insert_error:
+            # If it failed, maybe it's the new column. Try without it.
+            if 'api_image_url' in log_data:
+                del log_data['api_image_url']
+                supabase.table('product_lookup_log').insert(log_data).execute()
+            else:
+                raise insert_error
         
     except Exception as e:
         # Don't fail the main process if logging fails
@@ -824,7 +852,7 @@ def search_products():
     try:
         # Search unique_products by product_name (case-insensitive)
         result = supabase.table('unique_products').select(
-            'id, product_name, ean, ncm, price, unidade_comercial, market_id'
+            'id, product_name, ean, ncm, price, unidade_comercial, market_id, image_url'
         ).ilike('product_name', f'%{name_query}%').limit(limit).execute()
         
         # Group by product (ean or ncm+product_name if no ean)
@@ -844,12 +872,17 @@ def search_products():
                     'unidade_comercial': p['unidade_comercial'],
                     'markets_count': 0,
                     'min_price': p['price'],
-                    'max_price': p['price']
+                    'max_price': p['price'],
+                    'image_url': p.get('image_url')
                 }
             
             products_map[key]['markets_count'] += 1
             products_map[key]['min_price'] = min(products_map[key]['min_price'], p['price'])
             products_map[key]['max_price'] = max(products_map[key]['max_price'], p['price'])
+            
+            # If the current entry has an image but the map entry doesn't, update it
+            if not products_map[key]['image_url'] and p.get('image_url'):
+                products_map[key]['image_url'] = p.get('image_url')
         
         return jsonify({
             'query': name_query,
@@ -892,6 +925,7 @@ def compare_products():
                 'product_name': product.get('product_name', ''),
                 'ean': product.get('ean', ''),
                 'ncm': product.get('ncm', ''),
+                'image_url': None,
                 'prices': {}
             }
             
@@ -900,16 +934,18 @@ def compare_products():
                 
                 # Try to find by EAN first (if available and not "SEM GTIN")
                 if product.get('ean') and product['ean'] != 'SEM GTIN':
-                    result = supabase.table('unique_products').select('price').match({
+                    result = supabase.table('unique_products').select('price, image_url').match({
                         'market_id': market_id,
                         'ean': product['ean']
                     }).execute()
                     if result.data:
                         price = result.data[0]['price']
+                        if not product_row['image_url']:
+                            product_row['image_url'] = result.data[0].get('image_url')
                 
                 # Fallback to NCM if no EAN match
                 if price is None and product.get('ncm'):
-                    result = supabase.table('unique_products').select('price, product_name').match({
+                    result = supabase.table('unique_products').select('price, product_name, image_url').match({
                         'market_id': market_id,
                         'ncm': product['ncm']
                     }).execute()
@@ -919,9 +955,13 @@ def compare_products():
                             for r in result.data:
                                 if product['product_name'].lower() in r['product_name'].lower():
                                     price = r['price']
+                                    if not product_row['image_url']:
+                                        product_row['image_url'] = r.get('image_url')
                                     break
                         if price is None:
                             price = result.data[0]['price']
+                            if not product_row['image_url']:
+                                product_row['image_url'] = result.data[0].get('image_url')
                 
                 product_row['prices'][market_id] = price
             

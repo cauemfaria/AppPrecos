@@ -13,6 +13,7 @@ export interface Product {
   product_name: string;
   price: number;
   unidade_comercial: string;
+  image_url?: string;
 }
 
 export interface MarketProductsResponse {
@@ -29,6 +30,7 @@ export interface ProductSearchItem {
   markets_count: number;
   min_price: number;
   max_price: number;
+  image_url?: string;
 }
 
 export interface ProductSearchResponse {
@@ -52,6 +54,7 @@ export interface ComparisonProductRow {
   product_name: string;
   ean: string;
   ncm: string;
+  image_url?: string | null;
   prices: Record<string, number | null>;
   min_price: number | null;
   max_price: number | null;
@@ -84,6 +87,7 @@ export interface NFCeResponse {
 export interface NFCeStatusResponse {
   record_id: number;
   status: 'processing' | 'extracting' | 'success' | 'error' | 'unknown';
+  nfce_url?: string;
   market_id?: string;
   market_name?: string;
   products_count?: number;

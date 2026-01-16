@@ -10,7 +10,6 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <index element={<ScannerPage />} />
           <Route index element={<ScannerPage />} />
           <Route path="markets" element={<MarketsPage />} />
           <Route path="shopping-list" element={<ShoppingListPage />} />

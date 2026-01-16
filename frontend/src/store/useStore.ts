@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProductSearchItem, Market } from '../types';
+import type { ProductSearchItem } from '../types';
 
 interface AppState {
   // Shopping List
@@ -18,6 +18,10 @@ interface AppState {
   searchResults: ProductSearchItem[];
   setSearchResults: (results: ProductSearchItem[]) => void;
   clearSearchResults: () => void;
+  
+  // Search loading
+  isSearching: boolean;
+  setIsSearching: (loading: boolean) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -26,11 +30,13 @@ export const useStore = create<AppState>()(
       // Shopping List
       shoppingList: [],
       addToShoppingList: (product) => 
-        set((state) => ({
-          shoppingList: state.shoppingList.some(p => p.ean === product.ean && p.product_name === product.product_name)
-            ? state.shoppingList
-            : [...state.shoppingList, product]
-        })),
+        set((state) => {
+          // Fixed: Check for duplicate atomically within set
+          const exists = state.shoppingList.some(p => p.ean === product.ean && p.product_name === product.product_name);
+          return {
+            shoppingList: exists ? state.shoppingList : [...state.shoppingList, product]
+          };
+        }),
       removeFromShoppingList: (product) =>
         set((state) => ({
           shoppingList: state.shoppingList.filter(p => 
@@ -53,6 +59,10 @@ export const useStore = create<AppState>()(
       searchResults: [],
       setSearchResults: (results) => set({ searchResults: results }),
       clearSearchResults: () => set({ searchResults: [] }),
+      
+      // Search loading
+      isSearching: false,
+      setIsSearching: (loading) => set({ isSearching: loading }),
     }),
     {
       name: 'app-precos-storage',

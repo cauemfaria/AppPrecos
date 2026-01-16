@@ -18,7 +18,7 @@ def create_tables():
     
     sql_command = """
 -- ============================================================================
--- DROP OLD SCHEMA (if exists)
+-- DROP OLD SCHEMA
 -- ============================================================================
 
 DROP TABLE IF EXISTS product_backlog CASCADE;
@@ -32,10 +32,10 @@ DROP TABLE IF EXISTS gtin_cache CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 
 -- ============================================================================
--- CREATE NEW SCHEMA
+-- CREATE CLEAN SCHEMA (Current Architecture)
 -- ============================================================================
 
--- TABLE 1: Markets
+-- 1. Markets
 CREATE TABLE markets (
     id BIGSERIAL PRIMARY KEY,
     market_id VARCHAR(20) UNIQUE NOT NULL,
@@ -45,9 +45,19 @@ CREATE TABLE markets (
     CONSTRAINT unique_market_name_address UNIQUE (name, address)
 );
 
-CREATE INDEX idx_market_id ON markets(market_id);
+-- 2. Processed URLs (NFCe Tracking & Locking)
+CREATE TABLE processed_urls (
+    id BIGSERIAL PRIMARY KEY,
+    nfce_url VARCHAR(1000) UNIQUE NOT NULL,
+    market_id VARCHAR(20) NOT NULL,
+    market_name VARCHAR(200),
+    products_count INTEGER DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'processing',
+    error_message TEXT,
+    processed_at TIMESTAMP DEFAULT NOW()
+);
 
--- TABLE 2: Purchases (Full History - Raw Data)
+-- 3. Purchases (Raw Scan History)
 CREATE TABLE purchases (
     id BIGSERIAL PRIMARY KEY,
     market_id VARCHAR(20) NOT NULL REFERENCES markets(market_id),
@@ -61,20 +71,12 @@ CREATE TABLE purchases (
     nfce_url VARCHAR(1000),
     purchase_date TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT NOW(),
-    -- Enrichment Tracking
     enriched BOOLEAN DEFAULT false,
     enrichment_status VARCHAR(20) DEFAULT 'pending',
     enrichment_error TEXT
 );
 
-CREATE INDEX idx_purchases_market_id ON purchases(market_id);
-CREATE INDEX idx_purchases_ncm ON purchases(ncm);
-CREATE INDEX idx_purchases_date ON purchases(purchase_date);
-CREATE INDEX idx_purchases_product_name ON purchases(product_name);
-CREATE INDEX idx_purchases_ean ON purchases(ean);
-CREATE INDEX idx_purchases_enriched ON purchases(enriched);
-
--- TABLE 3: Unique Products (Latest Prices)
+-- 4. Unique Products (Enriched Data & Images)
 CREATE TABLE unique_products (
     id BIGSERIAL PRIMARY KEY,
     market_id VARCHAR(20) NOT NULL REFERENCES markets(market_id),
@@ -84,32 +86,11 @@ CREATE TABLE unique_products (
     unidade_comercial VARCHAR(10),
     price FLOAT NOT NULL,
     nfce_url VARCHAR(1000),
+    image_url TEXT,
     last_updated TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_unique_products_market_id ON unique_products(market_id);
-CREATE INDEX idx_unique_products_ncm ON unique_products(ncm);
-CREATE INDEX idx_unique_products_product_name ON unique_products(product_name);
-CREATE INDEX idx_unique_products_market_ean ON unique_products(market_id, ean);
-CREATE INDEX idx_unique_products_ean ON unique_products(ean);
-
--- TABLE 4: Processed URLs (with Status Tracking)
-CREATE TABLE processed_urls (
-    id BIGSERIAL PRIMARY KEY,
-    nfce_url VARCHAR(1000) UNIQUE NOT NULL,
-    market_id VARCHAR(20) NOT NULL,
-    market_name VARCHAR(200),
-    products_count INTEGER DEFAULT 0,
-    status VARCHAR(20) DEFAULT 'processing',
-    error_message TEXT,
-    processed_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_processed_urls_nfce ON processed_urls(nfce_url);
-CREATE INDEX idx_processed_urls_market ON processed_urls(market_id);
-CREATE INDEX idx_processed_urls_status ON processed_urls(status);
-
--- TABLE 5: Product Backlog (Items that failed enrichment)
+-- 5. Product Backlog (Failed matches for manual review)
 CREATE TABLE product_backlog (
     id BIGSERIAL PRIMARY KEY,
     purchase_id BIGINT REFERENCES purchases(id),
@@ -120,9 +101,7 @@ CREATE TABLE product_backlog (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_backlog_purchase ON product_backlog(purchase_id);
-
--- TABLE 6: Product Lookup Log (Debug & API tracking)
+-- 6. Product Lookup Log (API Debugging)
 CREATE TABLE product_lookup_log (
     id BIGSERIAL PRIMARY KEY,
     nfce_url VARCHAR(1000),
@@ -133,45 +112,25 @@ CREATE TABLE product_lookup_log (
     final_name VARCHAR(500),
     source_used VARCHAR(50),
     success BOOLEAN,
-    -- API Details
     api_attempted BOOLEAN DEFAULT false,
     api_success BOOLEAN DEFAULT false,
     api_product_name VARCHAR(500),
     api_brand VARCHAR(200),
+    api_image_url TEXT,
     api_error TEXT,
     api_from_cache BOOLEAN DEFAULT false,
     api_time_ms INTEGER,
-    -- Legacy LLM Columns (Restored for safety)
-    llm_attempted BOOLEAN DEFAULT false,
-    llm_success BOOLEAN DEFAULT false,
-    llm_decision TEXT,
-    llm_matched_id BIGINT,
-    llm_error TEXT,
-    llm_time_ms INTEGER,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_lookup_log_gtin ON product_lookup_log(gtin);
-CREATE INDEX idx_lookup_log_success ON product_lookup_log(success);
-
--- TABLE 7: LLM Product Decisions (Legacy)
-CREATE TABLE llm_product_decisions (
-    id BIGSERIAL PRIMARY KEY,
-    original_name VARCHAR(500),
-    ncm VARCHAR(8),
-    decision TEXT,
-    confidence FLOAT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- TABLE 8: GTIN Cache (Legacy)
-CREATE TABLE gtin_cache (
-    gtin VARCHAR(50) PRIMARY KEY,
-    product_name VARCHAR(500),
-    brand VARCHAR(200),
-    ncm VARCHAR(8),
-    last_updated TIMESTAMP DEFAULT NOW()
-);
+-- Indexes for performance
+CREATE INDEX idx_market_id ON markets(market_id);
+CREATE INDEX idx_purchases_enriched ON purchases(enriched);
+CREATE INDEX idx_unique_products_market_ean ON unique_products(market_id, ean);
+CREATE INDEX idx_unique_products_ean ON unique_products(ean);
+CREATE INDEX idx_unique_products_name ON unique_products(product_name);
+CREATE INDEX idx_processed_status ON processed_urls(status);
+"""
 """
     
     print("\nCopy and run this SQL in Supabase SQL Editor:")

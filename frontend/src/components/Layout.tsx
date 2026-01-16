@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Scan, Store, ShoppingBasket, Settings } from 'lucide-react';
+import { Scan, Store, ShoppingBasket, Settings, type LucideProps } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -48,7 +48,7 @@ const Layout: React.FC = () => {
 
 interface NavLinkProps {
   to: string;
-  icon: React.ReactNode;
+  icon: ReactElement<LucideProps>;
   label: string;
 }
 
@@ -64,7 +64,7 @@ const DesktopNavLink: React.FC<NavLinkProps> = ({ to, icon, label }) => (
       )
     }
   >
-    {React.cloneElement(icon as React.ReactElement, { className: "w-5 h-5" })}
+    {React.cloneElement(icon, { size: 20 })}
     {label}
   </NavLink>
 );
@@ -83,7 +83,7 @@ const MobileNavLink: React.FC<NavLinkProps> = ({ to, icon, label }) => (
       "p-2 rounded-full transition-all duration-200",
       "active:scale-90"
     )}>
-      {React.cloneElement(icon as React.ReactElement, { className: "w-6 h-6" })}
+      {React.cloneElement(icon, { size: 24 })}
     </div>
     <span className="text-[10px] font-medium uppercase tracking-wider">{label}</span>
   </NavLink>

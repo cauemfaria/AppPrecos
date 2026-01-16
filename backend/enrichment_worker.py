@@ -151,11 +151,12 @@ def enrich_single_purchase(item):
         
         # STEP 1: Bluesoft Cosmos (Direct GTIN lookup)
         if not canonical_name and ean and ean != 'SEM GTIN' and len(ean) >= 8:
-            cosmos_success, cosmos_product_name, cosmos_brand, cosmos_time, cosmos_error = get_product_from_cosmos(ean)
+            cosmos_success, cosmos_product_name, cosmos_brand, cosmos_image, cosmos_time, cosmos_error = get_product_from_cosmos(ean)
             
             cosmos_result = {
                 'success': cosmos_success, 'product_name': cosmos_product_name,
-                'brand': cosmos_brand, 'time_ms': cosmos_time, 'error': cosmos_error
+                'brand': cosmos_brand, 'image_url': cosmos_image, 
+                'time_ms': cosmos_time, 'error': cosmos_error
             }
             
             if cosmos_error == "TOKENS_EXHAUSTED":
@@ -168,7 +169,7 @@ def enrich_single_purchase(item):
         # STEP 2: Bluesoft Cosmos (Search by Name + NCM filter)
         if not canonical_name and not is_rate_limited:
             # Try searching by name since GTIN is missing or wasn't found
-            search_success, search_name, search_gtin, search_brand, search_time, search_error = search_product_on_cosmos(
+            search_success, search_name, search_gtin, search_brand, search_image, search_time, search_error = search_product_on_cosmos(
                 query=original_product_name,
                 ncm_filter=ncm
             )
@@ -182,7 +183,8 @@ def enrich_single_purchase(item):
                 ean = str(search_gtin) # Update EAN with the one found via search
                 cosmos_result = {
                     'success': True, 'product_name': search_name,
-                    'brand': search_brand, 'time_ms': search_time, 'error': None,
+                    'brand': search_brand, 'image_url': search_image,
+                    'time_ms': search_time, 'error': None,
                     'search_used': True, 'found_gtin': search_gtin
                 }
                 logger.info(f"Found GTIN {search_gtin} via search for '{original_product_name}'")
@@ -191,7 +193,8 @@ def enrich_single_purchase(item):
                 if not is_rate_limited:
                     cosmos_result = {
                         'success': False, 'product_name': None,
-                        'brand': None, 'time_ms': search_time, 'error': search_error,
+                        'brand': None, 'image_url': None,
+                        'time_ms': search_time, 'error': search_error,
                         'search_used': True
                     }
 
@@ -223,6 +226,10 @@ def enrich_single_purchase(item):
             'last_updated': datetime.utcnow().isoformat()
         }
         
+        # Add image_url if found in cosmos_result
+        if cosmos_result and cosmos_result.get('image_url'):
+            unique_data['image_url'] = cosmos_result['image_url']
+        
         # Check if exists in this market by market_id AND ean (Deterministic)
         existing = supabase.table('unique_products').select('id').match({
             'market_id': market_id,
@@ -230,10 +237,26 @@ def enrich_single_purchase(item):
         }).execute()
         
         if existing.data:
-            supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
+            # Try updating, fallback if image_url column doesn't exist
+            try:
+                supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
+            except Exception as e:
+                if 'image_url' in unique_data:
+                    del unique_data['image_url']
+                    supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
+                else:
+                    raise e
             logger.info(f"Updated existing product {existing.data[0]['id']} in market {market_id}")
         else:
-            supabase.table('unique_products').insert(unique_data).execute()
+            # Try inserting, fallback if image_url column doesn't exist
+            try:
+                supabase.table('unique_products').insert(unique_data).execute()
+            except Exception as e:
+                if 'image_url' in unique_data:
+                    del unique_data['image_url']
+                    supabase.table('unique_products').insert(unique_data).execute()
+                else:
+                    raise e
             logger.info(f"Inserted new product with GTIN {ean} in market {market_id}")
             
         return 'completed'

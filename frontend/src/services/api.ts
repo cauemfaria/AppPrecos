@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { 
+import type { 
   Market, 
   MarketProductsResponse, 
   ProductSearchResponse, 
@@ -11,14 +11,36 @@ import {
 } from '../types';
 
 // In a real app, this would be an environment variable
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://appprecos.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 second timeout
 });
+
+// Global error interceptor for network failures
+api.interceptors.response.use(
+  response => response,
+  error => {
+    // Handle network errors (backend unreachable)
+    if (!error.response) {
+      const message = error.code === 'ECONNABORTED' 
+        ? 'Request timed out - backend is not responding'
+        : 'Backend server is unreachable. Check your internet connection.';
+      
+      console.error('[API Error]', message, error.message);
+      
+      // Add custom error property for UI to detect backend down
+      (error as any).isBackendDown = true;
+      (error as any).backendErrorMessage = message;
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
 export const marketService = {
   getMarkets: async () => {

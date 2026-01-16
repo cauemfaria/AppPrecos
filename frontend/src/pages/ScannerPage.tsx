@@ -1,13 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { nfceService } from '../services/api';
-import { NFCeStatusResponse } from '../types';
-import { Loader2, CheckCircle2, XCircle, Clock, ExternalLink } from 'lucide-react';
+import type { NFCeStatusResponse } from '../types';
+import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink } from 'lucide-react';
+
+interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'status'> {
+  record_id: number;
+  url: string;
+  status: 'queued' | 'sending' | 'processing' | 'extracting' | 'success' | 'error' | 'duplicate';
+  addedAt: number;
+}
 
 const ScannerPage: React.FC = () => {
   const [manualUrl, setManualUrl] = useState('');
-  const [processingQueue, setProcessingQueue] = useState<NFCeStatusResponse[]>([]);
+  const [processingQueue, setProcessingQueue] = useState<ProcessingItem[]>([]);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const recentScansRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     scannerRef.current = new Html5QrcodeScanner(
@@ -20,7 +28,7 @@ const ScannerPage: React.FC = () => {
       (decodedText) => {
         handleUrlSubmitted(decodedText);
       },
-      (error) => {
+      () => {
         // Handle error silently or log if needed
       }
     );
@@ -32,56 +40,113 @@ const ScannerPage: React.FC = () => {
     };
   }, []);
 
-  const handleUrlSubmitted = async (url: string) => {
+  const handleUrlSubmitted = useCallback(async (url: string) => {
     if (!url.trim()) return;
     
+    const now = Date.now();
+    const DEBOUNCE_MS = 3000;
+    
+    // Debounce check
+    if (recentScansRef.current[url] && now - recentScansRef.current[url] < DEBOUNCE_MS) {
+      console.log("URL debounced");
+      return;
+    }
+    
+    // Check if already in queue
+    if (processingQueue.some(item => item.url === url)) {
+      console.log("URL already in queue");
+      return;
+    }
+
+    recentScansRef.current[url] = now;
+    
+    // Fixed: Use timestamp + random for unique ID, avoid collisions
+    const tempId = -Date.now() - Math.random();
+    
+    const newItem: ProcessingItem = {
+      record_id: tempId,
+      url,
+      status: 'sending',
+      addedAt: now,
+      processed_at: new Date().toISOString()
+    };
+
+    setProcessingQueue(prev => [newItem, ...prev]);
+
     try {
       const response = await nfceService.extractNFCe({ url, save: true, async: true });
-      if (response.record_id) {
-        // Initial status
-        const initialStatus: NFCeStatusResponse = {
-          record_id: response.record_id,
-          status: 'processing',
-          nfce_url: url, // Assuming we add this for UI
-          processed_at: new Date().toISOString()
-        } as any;
-        
-        setProcessingQueue(prev => [initialStatus, ...prev]);
-        setManualUrl('');
-      }
+      
+      setProcessingQueue(prev => prev.map(item => 
+        item.record_id === tempId 
+          ? { ...item, record_id: response.record_id!, status: 'processing' } 
+          : item
+      ));
+
+      if (url === manualUrl) setManualUrl('');
+      
     } catch (error: any) {
-      alert(`Error: ${error.response?.data?.error || error.message}`);
+      const status = error.response?.status === 409 ? 'duplicate' : 'error';
+      const errorMessage = error.response?.data?.error || error.message;
+      
+      setProcessingQueue(prev => prev.map(item => 
+        item.record_id === tempId 
+          ? { ...item, status, error_message: errorMessage } 
+          : item
+      ));
+
+      // Schedule removal for failed/duplicate items
+      setTimeout(() => {
+        setProcessingQueue(prev => prev.filter(i => i.record_id !== tempId));
+      }, 5000);
     }
-  };
+  }, [manualUrl, processingQueue]);
 
   // Polling for processing items
   useEffect(() => {
+    const pendingItems = processingQueue.filter(item => 
+      item.status === 'processing' || item.status === 'extracting'
+    );
+
+    // Fixed: Only create interval if there are pending items
+    if (pendingItems.length === 0) return;
+
     const pollInterval = setInterval(async () => {
-      const pendingItems = processingQueue.filter(item => 
-        item.status === 'processing' || item.status === 'extracting'
-      );
-
-      if (pendingItems.length === 0) return;
-
       const updatedQueue = [...processingQueue];
+      let hasChanges = false;
       
       for (const item of pendingItems) {
         try {
           const status = await nfceService.getNfceStatus(item.record_id);
           const index = updatedQueue.findIndex(i => i.record_id === item.record_id);
-          if (index !== -1) {
-            updatedQueue[index] = status;
+          
+          if (index !== -1 && (status.status as any) !== updatedQueue[index].status) {
+            updatedQueue[index] = { 
+              ...updatedQueue[index], 
+              ...status, 
+              status: status.status as any 
+            };
+            hasChanges = true;
+
+            // If success or error, schedule removal
+            if (status.status === 'success' || status.status === 'error') {
+              setTimeout(() => {
+                setProcessingQueue(prev => prev.filter(i => i.record_id !== item.record_id));
+              }, 5000);
+            }
           }
         } catch (error) {
           console.error("Failed to poll status", error);
         }
       }
 
-      setProcessingQueue(updatedQueue);
+      if (hasChanges) {
+        setProcessingQueue(updatedQueue);
+      }
     }, 3000);
 
+    // Fixed: Proper cleanup - clear interval on unmount or when pending items change
     return () => clearInterval(pollInterval);
-  }, [processingQueue]);
+  }, [processingQueue.filter(item => item.status === 'processing' || item.status === 'extracting').length]);
 
   return (
     <div className="p-6 space-y-6">
@@ -89,72 +154,147 @@ const ScannerPage: React.FC = () => {
         <h2 className="text-2xl font-bold">NFCe Scanner</h2>
         
         <div className="flex gap-2">
-          <input 
-            type="text" 
-            placeholder="Paste NFCe URL manually..."
-            className="flex-1 md:w-64 px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            value={manualUrl}
-            onChange={(e) => setManualUrl(e.target.value)}
-          />
+          <div className="relative flex-1 md:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Paste NFCe URL manually..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+              value={manualUrl}
+              onChange={(e) => setManualUrl(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmitted(manualUrl)}
+            />
+          </div>
           <button 
             onClick={() => handleUrlSubmitted(manualUrl)}
-            className="bg-blue-600 text-white px-6 py-2 rounded-xl font-medium hover:bg-blue-700 transition-colors"
+            disabled={!manualUrl.trim()}
+            className="bg-blue-600 text-white px-6 py-2 rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
           >
-            Submit
+            Add URL
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Scanner View */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-          <div id="reader" className="overflow-hidden rounded-2xl border-0"></div>
-          <p className="mt-4 text-center text-sm text-gray-500">
-            Point your camera at the QR code on the receipt
-          </p>
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col">
+          <div id="reader" className="overflow-hidden rounded-2xl border-0 bg-black aspect-square"></div>
+          <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            Point camera at QR code
+          </div>
         </div>
 
         {/* Processing Queue */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-blue-600" />
-            Recent Scans
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col h-[500px]">
+          <h3 className="text-lg font-bold mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" />
+              Processing Queue
+            </div>
+            {processingQueue.length > 0 && (
+              <span className="bg-blue-50 text-blue-600 text-xs px-2 py-1 rounded-full">
+                {processingQueue.length} items
+              </span>
+            )}
           </h3>
           
-          <div className="space-y-4 max-h-[400px] overflow-auto pr-2">
+          <div className="flex-1 overflow-auto pr-2 space-y-3">
             {processingQueue.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <p>No recent scans to show.</p>
+              <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 p-8">
+                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                  <Clock className="w-8 h-8 opacity-20" />
+                </div>
+                <p className="font-medium text-gray-500">No active processes</p>
+                <p className="text-sm max-w-[200px] mt-1">Scanned receipts will appear here while processing.</p>
               </div>
             ) : (
               processingQueue.map((item) => (
-                <div key={item.record_id} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">
-                      {item.market_name || 'Processing Market...'}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {item.products_count ? `${item.products_count} products` : 'Extracting data...'}
-                    </p>
+                <div key={item.record_id} className={`p-4 rounded-2xl border transition-all ${
+                  item.status === 'success' ? 'bg-green-50 border-green-100' :
+                  item.status === 'error' ? 'bg-red-50 border-red-100' :
+                  item.status === 'duplicate' ? 'bg-orange-50 border-orange-100' :
+                  'bg-gray-50 border-gray-100'
+                }`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className={`font-bold truncate ${
+                          item.status === 'success' ? 'text-green-800' :
+                          item.status === 'error' ? 'text-red-800' :
+                          item.status === 'duplicate' ? 'text-orange-800' :
+                          'text-gray-800'
+                        }`}>
+                          {item.market_name || (
+                            item.status === 'sending' ? 'Sending to server...' :
+                            item.status === 'duplicate' ? 'Already in system' :
+                            'Processing market...'
+                          )}
+                        </p>
+                      </div>
+                      
+                      {item.status === 'error' ? (
+                        <p className="text-xs text-red-500 line-clamp-2">{item.error_message}</p>
+                      ) : item.status === 'duplicate' ? (
+                        <p className="text-xs text-orange-500">This receipt was already added.</p>
+                      ) : (
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          {item.products_count ? (
+                            <span className="font-medium text-blue-600">{item.products_count} products</span>
+                          ) : (
+                            <span className="flex items-center gap-1 italic">
+                              {item.status === 'extracting' ? 'Extracting items...' : 'Connecting...'}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="shrink-0 pt-1">
+                      {item.status === 'success' ? (
+                        <CheckCircle2 className="w-6 h-6 text-green-500" />
+                      ) : item.status === 'error' ? (
+                        <XCircle className="w-6 h-6 text-red-500" />
+                      ) : item.status === 'duplicate' ? (
+                        <AlertCircle className="w-6 h-6 text-orange-500" />
+                      ) : (
+                        <div className="relative">
+                          <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    {item.status === 'success' ? (
-                      <CheckCircle2 className="w-6 h-6 text-green-500" />
-                    ) : item.status === 'error' ? (
-                      <XCircle className="w-6 h-6 text-red-500" />
-                    ) : (
-                      <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
-                    )}
-                  </div>
+                  {item.status === 'success' && (
+                    <div className="mt-3 pt-3 border-t border-green-100 flex justify-end">
+                      <button className="text-[10px] font-bold text-green-700 uppercase tracking-wider flex items-center gap-1 hover:underline">
+                        View market <ExternalLink className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
           </div>
+          
+          {processingQueue.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">
+                Items are removed automatically after 5s
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
+// Add AlertCircle to imports
+import { AlertCircle } from 'lucide-react';
+
 export default ScannerPage;
+
