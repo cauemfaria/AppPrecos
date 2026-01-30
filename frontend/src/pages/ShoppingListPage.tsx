@@ -5,7 +5,8 @@ import type { ProductSearchItem, Market, CompareResponse } from '../types';
 import { 
   Search, Plus, Trash2, Store, 
   ArrowRightLeft, Check, X,
-  TrendingDown, AlertCircle, ShoppingBasket
+  TrendingDown, AlertCircle, ShoppingBasket,
+  Package
 } from 'lucide-react';
 
 const MAX_MARKETS_FOR_COMPARISON = 5;
