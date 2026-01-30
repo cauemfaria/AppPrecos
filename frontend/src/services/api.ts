@@ -10,8 +10,8 @@ import type {
   NFCeStatusResponse 
 } from '../types';
 
-// In a real app, this would be an environment variable
-const API_BASE_URL = 'https://appprecos.onrender.com/api';
+// Use environment variable for API base URL, fallback to existing one
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://appprecos.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
