@@ -2,19 +2,18 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { nfceService } from '../services/api';
 import { useStore } from '../store/useStore';
-import type { NFCeStatusResponse } from '../types';
+import type { NFCeStatusResponse, ProcessingItem } from '../types';
 import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink, AlertCircle } from 'lucide-react';
-
-interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'status'> {
-  record_id: number;
-  url: string;
-  status: 'queued' | 'sending' | 'processing' | 'extracting' | 'success' | 'error' | 'duplicate';
-  addedAt: number;
-}
 
 const ScannerPage: React.FC = () => {
   const [manualUrl, setManualUrl] = useState('');
-  const { processingQueue, setProcessingQueue } = useStore();
+  const { 
+    processingQueue, 
+    addToProcessingQueue, 
+    updateProcessingItem, 
+    removeFromProcessingQueue 
+  } = useStore();
+  
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const recentScansRef = useRef<Record<string, number>>({});
 
@@ -72,16 +71,15 @@ const ScannerPage: React.FC = () => {
       processed_at: new Date().toISOString()
     };
 
-    setProcessingQueue([newItem, ...processingQueue]);
+    addToProcessingQueue(newItem);
 
     try {
       const response = await nfceService.extractNFCe({ url, save: true, async: true });
       
-      setProcessingQueue(processingQueue.map(item => 
-        item.record_id === tempId 
-          ? { ...item, record_id: response.record_id!, status: 'processing' } 
-          : item
-      ));
+      updateProcessingItem(tempId, { 
+        record_id: response.record_id!, 
+        status: 'processing' 
+      });
 
       if (url === manualUrl) setManualUrl('');
       
@@ -89,65 +87,17 @@ const ScannerPage: React.FC = () => {
       const status = error.response?.status === 409 ? 'duplicate' : 'error';
       const errorMessage = error.response?.data?.error || error.message;
       
-      setProcessingQueue(processingQueue.map(item => 
-        item.record_id === tempId 
-          ? { ...item, status, error_message: errorMessage } 
-          : item
-      ));
+      updateProcessingItem(tempId, { 
+        status: status as any, 
+        error_message: errorMessage 
+      });
 
       // Schedule removal for failed/duplicate items
       setTimeout(() => {
-        setProcessingQueue(processingQueue.filter(i => i.record_id !== tempId));
+        removeFromProcessingQueue(tempId);
       }, 5000);
     }
-  }, [manualUrl, processingQueue, setProcessingQueue]);
-
-  // Polling for processing items
-  useEffect(() => {
-    const pendingItems = processingQueue.filter(item => 
-      item.status === 'processing' || item.status === 'extracting'
-    );
-
-    // Fixed: Only create interval if there are pending items
-    if (pendingItems.length === 0) return;
-
-    const pollInterval = setInterval(async () => {
-      const updatedQueue = [...processingQueue];
-      let hasChanges = false;
-      
-      for (const item of pendingItems) {
-        try {
-          const status = await nfceService.getNfceStatus(item.record_id);
-          const index = updatedQueue.findIndex(i => i.record_id === item.record_id);
-          
-          if (index !== -1 && (status.status as any) !== updatedQueue[index].status) {
-            updatedQueue[index] = { 
-              ...updatedQueue[index], 
-              ...status, 
-              status: status.status as any 
-            };
-            hasChanges = true;
-
-            // If success or error, schedule removal
-            if (status.status === 'success' || status.status === 'error') {
-              setTimeout(() => {
-                setProcessingQueue(processingQueue.filter(i => i.record_id !== item.record_id));
-              }, 5000);
-            }
-          }
-        } catch (error) {
-          console.error("Failed to poll status", error);
-        }
-      }
-
-      if (hasChanges) {
-        setProcessingQueue(updatedQueue);
-      }
-    }, 3000);
-
-    // Fixed: Proper cleanup - clear interval on unmount or when pending items change
-    return () => clearInterval(pollInterval);
-  }, [processingQueue, setProcessingQueue]);
+  }, [manualUrl, processingQueue, addToProcessingQueue, updateProcessingItem, removeFromProcessingQueue]);
 
   return (
     <div className="p-6 space-y-6">

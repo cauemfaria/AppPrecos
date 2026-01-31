@@ -94,3 +94,10 @@ export interface NFCeStatusResponse {
   error_message?: string;
   processed_at: string;
 }
+
+export interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'status'> {
+  record_id: number;
+  url: string;
+  status: 'queued' | 'sending' | 'processing' | 'extracting' | 'success' | 'error' | 'duplicate';
+  addedAt: number;
+}

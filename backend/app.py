@@ -6,7 +6,7 @@ Using Supabase REST API
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import string
 import random
@@ -833,6 +833,39 @@ def get_nfce_status(record_id):
             'error_message': record.get('error_message'),
             'processed_at': record['processed_at']
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/nfce/processing', methods=['GET'])
+def get_processing_nfces():
+    """Get all currently processing NFCe URLs"""
+    try:
+        # Fetch items with status 'processing' or 'extracting'
+        # We only want items from the last 10 minutes to avoid showing stale stuck ones
+        ten_minutes_ago = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
+        
+        result = supabase.table('processed_urls')\
+            .select('*')\
+            .in_('status', ['processing', 'extracting'])\
+            .gt('processed_at', ten_minutes_ago)\
+            .execute()
+            
+        # Transform result to match get_nfce_status format
+        processing_items = []
+        for record in result.data:
+            processing_items.append({
+                'record_id': record['id'],
+                'url': record['nfce_url'],
+                'status': record['status'],
+                'market_id': record.get('market_id'),
+                'market_name': record.get('market_name', ''),
+                'products_count': record.get('products_count', 0),
+                'error_message': record.get('error_message'),
+                'processed_at': record['processed_at']
+            })
+            
+        return jsonify(processing_items)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

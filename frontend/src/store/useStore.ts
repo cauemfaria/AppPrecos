@@ -1,13 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ProductSearchItem, NFCeStatusResponse } from '../types';
-
-interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'status'> {
-  record_id: number;
-  url: string;
-  status: 'queued' | 'sending' | 'processing' | 'extracting' | 'success' | 'error' | 'duplicate';
-  addedAt: number;
-}
+import type { ProductSearchItem, ProcessingItem } from '../types';
 
 interface AppState {
   // Shopping List
@@ -30,9 +23,12 @@ interface AppState {
   isSearching: boolean;
   setIsSearching: (loading: boolean) => void;
 
-  // Processing Queue
+  // NFCe Processing Queue
   processingQueue: ProcessingItem[];
-  setProcessingQueue: (queue: ProcessingItem[]) => void;
+  addToProcessingQueue: (item: ProcessingItem) => void;
+  updateProcessingItem: (recordId: number, updates: Partial<ProcessingItem>) => void;
+  removeFromProcessingQueue: (recordId: number) => void;
+  setProcessingQueue: (items: ProcessingItem[]) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -75,9 +71,23 @@ export const useStore = create<AppState>()(
       isSearching: false,
       setIsSearching: (loading) => set({ isSearching: loading }),
 
-      // Processing Queue
+      // NFCe Processing Queue
       processingQueue: [],
-      setProcessingQueue: (queue) => set({ processingQueue: queue }),
+      addToProcessingQueue: (item) => 
+        set((state) => ({ 
+          processingQueue: [item, ...state.processingQueue.filter(i => i.url !== item.url)] 
+        })),
+      updateProcessingItem: (recordId, updates) =>
+        set((state) => ({
+          processingQueue: state.processingQueue.map(item =>
+            item.record_id === recordId ? { ...item, ...updates } : item
+          )
+        })),
+      removeFromProcessingQueue: (recordId) =>
+        set((state) => ({
+          processingQueue: state.processingQueue.filter(i => i.record_id !== recordId)
+        })),
+      setProcessingQueue: (items) => set({ processingQueue: items }),
     }),
     {
       name: 'app-precos-storage',

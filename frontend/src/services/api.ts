@@ -78,6 +78,11 @@ export const nfceService = {
     const response = await api.get<NFCeStatusResponse>(`/nfce/status/${recordId}`);
     return response.data;
   },
+
+  getProcessingNfces: async () => {
+    const response = await api.get<NFCeStatusResponse[]>('/nfce/processing');
+    return response.data;
+  },
 };
 
 export default api;

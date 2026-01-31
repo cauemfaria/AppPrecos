@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { marketService } from '../services/api';
+import { useStore } from '../store/useStore';
 import type { Market, Product } from '../types';
-import { Store, ChevronRight, Search, Package, MapPin, X } from 'lucide-react';
+import { Store, ChevronRight, Search, Package, MapPin, X, Loader2 } from 'lucide-react';
 
 const MarketsPage: React.FC = () => {
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -11,6 +12,14 @@ const MarketsPage: React.FC = () => {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  
+  const { processingQueue } = useStore();
+
+  const processingMarkets = useMemo(() => {
+    return processingQueue.filter(item => 
+      item.status === 'processing' || item.status === 'extracting' || item.status === 'sending'
+    );
+  }, [processingQueue]);
 
   useEffect(() => {
     fetchMarkets();
@@ -77,6 +86,25 @@ const MarketsPage: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Processing Markets */}
+          {processingMarkets.map((item) => (
+            <div
+              key={item.record_id}
+              className="bg-gray-50 p-5 rounded-3xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-center animate-pulse"
+            >
+              <div className="p-3 bg-blue-100 rounded-2xl text-blue-600 mb-3">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+              <h3 className="font-bold text-gray-800 truncate w-full">
+                {item.market_name || 'Processing Market...'}
+              </h3>
+              <p className="text-xs text-blue-600 font-medium mt-1">
+                {item.status === 'extracting' ? 'Extracting items...' : 'Connecting...'}
+              </p>
+            </div>
+          ))}
+
+          {/* Available Markets */}
           {filteredMarkets.map((market) => (
             <button
               key={market.market_id}
@@ -96,7 +124,7 @@ const MarketsPage: React.FC = () => {
               </p>
             </button>
           ))}
-          {filteredMarkets.length === 0 && (
+          {filteredMarkets.length === 0 && processingMarkets.length === 0 && (
             <div className="col-span-full text-center py-20 text-gray-400">
               <Store className="w-12 h-12 mx-auto mb-4 opacity-20" />
               <p>No markets found matching your search.</p>
