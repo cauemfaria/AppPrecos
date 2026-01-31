@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { nfceService } from '../services/api';
+import { useStore } from '../store/useStore';
 import type { NFCeStatusResponse } from '../types';
-import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink, AlertCircle } from 'lucide-react';
 
 interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'status'> {
   record_id: number;
@@ -13,7 +14,7 @@ interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'status'> {
 
 const ScannerPage: React.FC = () => {
   const [manualUrl, setManualUrl] = useState('');
-  const [processingQueue, setProcessingQueue] = useState<ProcessingItem[]>([]);
+  const { processingQueue, setProcessingQueue } = useStore();
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const recentScansRef = useRef<Record<string, number>>({});
 
@@ -71,12 +72,12 @@ const ScannerPage: React.FC = () => {
       processed_at: new Date().toISOString()
     };
 
-    setProcessingQueue(prev => [newItem, ...prev]);
+    setProcessingQueue([newItem, ...processingQueue]);
 
     try {
       const response = await nfceService.extractNFCe({ url, save: true, async: true });
       
-      setProcessingQueue(prev => prev.map(item => 
+      setProcessingQueue(processingQueue.map(item => 
         item.record_id === tempId 
           ? { ...item, record_id: response.record_id!, status: 'processing' } 
           : item
@@ -88,7 +89,7 @@ const ScannerPage: React.FC = () => {
       const status = error.response?.status === 409 ? 'duplicate' : 'error';
       const errorMessage = error.response?.data?.error || error.message;
       
-      setProcessingQueue(prev => prev.map(item => 
+      setProcessingQueue(processingQueue.map(item => 
         item.record_id === tempId 
           ? { ...item, status, error_message: errorMessage } 
           : item
@@ -99,7 +100,7 @@ const ScannerPage: React.FC = () => {
         setProcessingQueue(prev => prev.filter(i => i.record_id !== tempId));
       }, 5000);
     }
-  }, [manualUrl, processingQueue]);
+  }, [manualUrl, processingQueue, setProcessingQueue]);
 
   // Polling for processing items
   useEffect(() => {
@@ -146,7 +147,7 @@ const ScannerPage: React.FC = () => {
 
     // Fixed: Proper cleanup - clear interval on unmount or when pending items change
     return () => clearInterval(pollInterval);
-  }, [processingQueue.filter(item => item.status === 'processing' || item.status === 'extracting').length]);
+  }, [processingQueue, setProcessingQueue]);
 
   return (
     <div className="p-6 space-y-6">
@@ -292,9 +293,6 @@ const ScannerPage: React.FC = () => {
     </div>
   );
 };
-
-// Add AlertCircle to imports
-import { AlertCircle } from 'lucide-react';
 
 export default ScannerPage;
 

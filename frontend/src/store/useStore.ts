@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ProductSearchItem } from '../types';
+import type { ProductSearchItem, NFCeStatusResponse } from '../types';
+
+interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'status'> {
+  record_id: number;
+  url: string;
+  status: 'queued' | 'sending' | 'processing' | 'extracting' | 'success' | 'error' | 'duplicate';
+  addedAt: number;
+}
 
 interface AppState {
   // Shopping List
@@ -22,6 +29,10 @@ interface AppState {
   // Search loading
   isSearching: boolean;
   setIsSearching: (loading: boolean) => void;
+
+  // Processing Queue
+  processingQueue: ProcessingItem[];
+  setProcessingQueue: (queue: ProcessingItem[]) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -63,12 +74,17 @@ export const useStore = create<AppState>()(
       // Search loading
       isSearching: false,
       setIsSearching: (loading) => set({ isSearching: loading }),
+
+      // Processing Queue
+      processingQueue: [],
+      setProcessingQueue: (queue) => set({ processingQueue: queue }),
     }),
     {
       name: 'app-precos-storage',
       partialize: (state) => ({ 
         shoppingList: state.shoppingList, 
-        selectedMarketIds: state.selectedMarketIds 
+        selectedMarketIds: state.selectedMarketIds,
+        processingQueue: state.processingQueue
       }),
     }
   )
