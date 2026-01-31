@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { nfceService } from '../services/api';
 import type { ProcessingItem } from '../types';

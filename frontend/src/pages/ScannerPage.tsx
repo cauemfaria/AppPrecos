@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { nfceService } from '../services/api';
 import { useStore } from '../store/useStore';
-import type { NFCeStatusResponse, ProcessingItem } from '../types';
+import type { ProcessingItem } from '../types';
 import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink, AlertCircle } from 'lucide-react';
 
 const ScannerPage: React.FC = () => {
