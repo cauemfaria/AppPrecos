@@ -97,7 +97,7 @@ const ScannerPage: React.FC = () => {
 
       // Schedule removal for failed/duplicate items
       setTimeout(() => {
-        setProcessingQueue(prev => prev.filter(i => i.record_id !== tempId));
+        setProcessingQueue(processingQueue.filter(i => i.record_id !== tempId));
       }, 5000);
     }
   }, [manualUrl, processingQueue, setProcessingQueue]);
@@ -131,7 +131,7 @@ const ScannerPage: React.FC = () => {
             // If success or error, schedule removal
             if (status.status === 'success' || status.status === 'error') {
               setTimeout(() => {
-                setProcessingQueue(prev => prev.filter(i => i.record_id !== item.record_id));
+                setProcessingQueue(processingQueue.filter(i => i.record_id !== item.record_id));
               }, 5000);
             }
           }
