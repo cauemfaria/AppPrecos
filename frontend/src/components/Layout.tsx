@@ -10,7 +10,7 @@ function cn(...inputs: ClassValue[]) {
 
 const Layout: React.FC = () => {
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 pb-20 md:pb-0 md:pl-64">
+    <div className="flex flex-col min-h-screen bg-gray-50 pb-28 md:pb-0 md:pl-64">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 fixed h-full left-0 top-0 z-50">
         <div className="p-6">
@@ -36,7 +36,7 @@ const Layout: React.FC = () => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-2 flex justify-around items-center z-50 shadow-lg">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-4 flex justify-around items-center z-50 shadow-lg">
         <MobileNavLink to="/" icon={<Scan />} label="Scanner" />
         <MobileNavLink to="/markets" icon={<Store />} label="Markets" />
         <MobileNavLink to="/shopping-list" icon={<ShoppingBasket />} label="List" />
