@@ -10,7 +10,7 @@ function cn(...inputs: ClassValue[]) {
 
 const Layout: React.FC = () => {
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 pb-24 md:pb-0 md:pl-64">
+    <div className="flex flex-col min-h-screen bg-gray-50 pb-20 md:pb-0 md:pl-64">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 fixed h-full left-0 top-0 z-50">
         <div className="p-6">
@@ -36,7 +36,7 @@ const Layout: React.FC = () => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 pb-6 flex justify-between items-center z-50 shadow-lg">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-2 flex justify-around items-center z-50 shadow-lg">
         <MobileNavLink to="/" icon={<Scan />} label="Scanner" />
         <MobileNavLink to="/markets" icon={<Store />} label="Markets" />
         <MobileNavLink to="/shopping-list" icon={<ShoppingBasket />} label="List" />
@@ -69,23 +69,17 @@ const DesktopNavLink: React.FC<NavLinkProps> = ({ to, icon, label }) => (
   </NavLink>
 );
 
-const MobileNavLink: React.FC<NavLinkProps> = ({ to, icon, label }) => (
+const MobileNavLink: React.FC<NavLinkProps> = ({ to, icon }) => (
   <NavLink
     to={to}
     className={({ isActive }) =>
       cn(
-        "flex flex-col items-center gap-0.5 transition-all duration-200",
+        "flex items-center justify-center transition-all duration-200 p-2",
         isActive ? "text-blue-600" : "text-gray-400"
       )
     }
   >
-    <div className={cn(
-      "p-2 rounded-full transition-all duration-200",
-      "active:scale-90"
-    )}>
-      {React.cloneElement(icon, { size: 24 })}
-    </div>
-    <span className="text-[10px] font-medium uppercase tracking-wider">{label}</span>
+    {React.cloneElement(icon, { size: 24 })}
   </NavLink>
 );
 
