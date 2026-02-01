@@ -74,7 +74,7 @@ const MobileNavLink: React.FC<NavLinkProps> = ({ to, icon, label }) => (
     to={to}
     className={({ isActive }) =>
       cn(
-        "flex flex-col items-center gap-1 transition-all duration-200",
+        "flex flex-col items-center gap-0.5 transition-all duration-200",
         isActive ? "text-blue-600" : "text-gray-400"
       )
     }
