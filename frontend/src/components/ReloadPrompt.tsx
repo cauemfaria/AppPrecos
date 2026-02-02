@@ -8,7 +8,7 @@ const ReloadPrompt: React.FC = () => {
     needUpdate: [needUpdate, setNeedUpdate],
     updateServiceWorker,
   } = useRegisterSW({
-    onRegistered(r) {
+    onRegistered(r: ServiceWorkerRegistration | undefined) {
       // eslint-disable-next-line no-console
       console.log('SW Registered: ' + r)
       
@@ -19,7 +19,7 @@ const ReloadPrompt: React.FC = () => {
         }, 60 * 60 * 1000)
       }
     },
-    onRegisterError(error) {
+    onRegisterError(error: any) {
       // eslint-disable-next-line no-console
       console.log('SW registration error', error)
     },
