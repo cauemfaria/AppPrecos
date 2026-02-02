@@ -5,7 +5,7 @@ import { RefreshCw, X } from 'lucide-react'
 const ReloadPrompt: React.FC = () => {
   const {
     offlineReady: [offlineReady, setOfflineReady],
-    needUpdate: [needUpdate, setNeedUpdate],
+    needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r: ServiceWorkerRegistration | undefined) {
@@ -27,7 +27,7 @@ const ReloadPrompt: React.FC = () => {
 
   const close = () => {
     setOfflineReady(false)
-    setNeedUpdate(false)
+    setNeedRefresh(false)
   }
 
   // Also check for updates when the tab becomes visible again
@@ -45,7 +45,7 @@ const ReloadPrompt: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  if (!offlineReady && !needUpdate) return null
+  if (!offlineReady && !needRefresh) return null
 
   return (
     <div className="fixed bottom-24 left-4 right-4 md:bottom-8 md:right-8 md:left-auto z-[100] animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -73,7 +73,7 @@ const ReloadPrompt: React.FC = () => {
           </button>
         </div>
 
-        {needUpdate && (
+        {needRefresh && (
           <div className="flex gap-2 mt-1">
             <button
               onClick={() => updateServiceWorker(true)}
