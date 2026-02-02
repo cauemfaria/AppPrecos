@@ -5,11 +5,13 @@ import MarketsPage from './pages/MarketsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
 import SettingsPage from './pages/SettingsPage'
 import QueueManager from './components/QueueManager'
+import ReloadPrompt from './components/ReloadPrompt'
 
 function App() {
   return (
     <BrowserRouter>
       <QueueManager />
+      <ReloadPrompt />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<ScannerPage />} />
