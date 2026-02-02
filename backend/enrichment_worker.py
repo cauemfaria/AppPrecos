@@ -1,7 +1,7 @@
 """
 Enrichment Worker Script
 Processes pending items in the purchases table and performs product enrichment.
-Handles Bluesoft Cosmos API token rotation.
+Handles Bluesoft Cosmos API token rotation and singleton execution via database lock.
 """
 
 import os
@@ -9,14 +9,15 @@ import time
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
-from supabase import create_client
 
-# Import enrichment logic from app.py
-from app import (
+# Import enrichment logic from enrichment_service
+from enrichment_service import (
     supabase, 
     get_product_from_cosmos, 
     search_product_on_cosmos,
-    log_product_lookup
+    log_product_lookup,
+    acquire_enrichment_lock,
+    release_enrichment_lock
 )
 
 # Setup logging
@@ -34,67 +35,74 @@ load_dotenv()
 BATCH_SIZE = 10
 SLEEP_BETWEEN_BATCHES = 5
 
-def process_pending_purchases():
+def process_pending_purchases(worker_id="manual"):
     """Main loop to process pending purchases until the queue is empty (One-Shot)"""
     
-    logger.info("Starting Enrichment Worker (Cosmos Blue Mode - One-Shot)...")
+    if not acquire_enrichment_lock(worker_id):
+        logger.info(f"Enrichment already in progress or locked (ID: {worker_id}). Skipping.")
+        return
+
+    logger.info(f"Starting Enrichment Worker ({worker_id} - One-Shot)...")
     
-    while True:
-        try:
-            # Fetch batch of unenriched products
-            response = supabase.table('purchases').select('*').eq('enriched', False).limit(BATCH_SIZE).execute()
-            pending_items = response.data
-            
-            if not pending_items:
-                logger.info("Queue is empty. Enrichment complete.")
-                break
-            
-            logger.info(f"Processing batch of {len(pending_items)} items...")
-            
-            for item in pending_items:
-                # Tentativa de enriquecimento
-                status = enrich_single_purchase(item)
+    try:
+        while True:
+            try:
+                # Fetch batch of unenriched products
+                response = supabase.table('purchases').select('*').eq('enriched', False).limit(BATCH_SIZE).execute()
+                pending_items = response.data
                 
-                if status == 'completed':
-                    # Mark as enriched
-                    supabase.table('purchases').update({
-                        'enriched': True,
-                        'enrichment_status': 'completed',
-                        'enrichment_error': None
-                    }).eq('id', item['id']).execute()
-                    logger.info(f"Successfully enriched item {item['id']}")
-                elif status == 'rate_limited':
-                    # STOP EVERYTHING immediately
-                    logger.error("!!! RATE LIMIT REACHED IN ALL TOKENS !!! Stopping worker to avoid backlog misclassification.")
-                    return # Exit the function and script
-                elif status in ['backlog', 'failed']:
-                    # Mark as processed in purchases
-                    error_msg = item.get('enrichment_error') or ('No GTIN found' if status == 'backlog' else 'Unexpected processing error')
+                if not pending_items:
+                    logger.info("Queue is empty. Enrichment complete.")
+                    break
+                
+                logger.info(f"Processing batch of {len(pending_items)} items...")
+                
+                for item in pending_items:
+                    # Tentativa de enriquecimento
+                    status = enrich_single_purchase(item)
                     
-                    supabase.table('purchases').update({
-                        'enriched': True,
-                        'enrichment_status': status,
-                        'enrichment_error': error_msg
-                    }).eq('id', item['id']).execute()
-                    
-                    # Insert into product_backlog so it's visible to the user
-                    backlog_data = {
-                        'purchase_id': item['id'],
-                        'market_id': item['market_id'],
-                        'original_product_name': item['product_name'],
-                        'ncm': item['ncm'],
-                        'ean': item['ean'],
-                        'created_at': datetime.utcnow().isoformat()
-                    }
-                    supabase.table('product_backlog').insert(backlog_data).execute()
-                    logger.info(f"Item {item['id']} moved to backlog (status: {status})")
-            
-            logger.info(f"Batch completed. Sleeping for {SLEEP_BETWEEN_BATCHES}s...")
-            time.sleep(SLEEP_BETWEEN_BATCHES)
-            
-        except Exception as e:
-            logger.error(f"Error in main loop: {e}")
-            time.sleep(30)
+                    if status == 'completed':
+                        # Mark as enriched
+                        supabase.table('purchases').update({
+                            'enriched': True,
+                            'enrichment_status': 'completed',
+                            'enrichment_error': None
+                        }).eq('id', item['id']).execute()
+                        logger.info(f"Successfully enriched item {item['id']}")
+                    elif status == 'rate_limited':
+                        # STOP EVERYTHING immediately
+                        logger.error("!!! RATE LIMIT REACHED IN ALL TOKENS !!! Stopping worker to avoid backlog misclassification.")
+                        return # Exit the function and script
+                    elif status in ['backlog', 'failed']:
+                        # Mark as processed in purchases
+                        error_msg = item.get('enrichment_error') or ('No GTIN found' if status == 'backlog' else 'Unexpected processing error')
+                        
+                        supabase.table('purchases').update({
+                            'enriched': True,
+                            'enrichment_status': status,
+                            'enrichment_error': error_msg
+                        }).eq('id', item['id']).execute()
+                        
+                        # Insert into product_backlog so it's visible to the user
+                        backlog_data = {
+                            'purchase_id': item['id'],
+                            'market_id': item['market_id'],
+                            'original_product_name': item['product_name'],
+                            'ncm': item['ncm'],
+                            'ean': item['ean'],
+                            'created_at': datetime.utcnow().isoformat()
+                        }
+                        supabase.table('product_backlog').insert(backlog_data).execute()
+                        logger.info(f"Item {item['id']} moved to backlog (status: {status})")
+                
+                logger.info(f"Batch completed. Sleeping for {SLEEP_BETWEEN_BATCHES}s...")
+                time.sleep(SLEEP_BETWEEN_BATCHES)
+                
+            except Exception as e:
+                logger.error(f"Error in main loop: {e}")
+                time.sleep(30)
+    finally:
+        release_enrichment_lock()
 
 def enrich_single_purchase(item):
     """
@@ -121,8 +129,6 @@ def enrich_single_purchase(item):
             local_match = supabase.table('unique_products').select('product_name, ncm').eq('ean', ean).limit(1).execute()
             if local_match.data:
                 canonical_name = local_match.data[0]['product_name']
-                # We use the NCM from the registry to ensure consistency, 
-                # but keep the original NCM if the match doesn't have one (unlikely)
                 if local_match.data[0].get('ncm'):
                     ncm = local_match.data[0]['ncm']
                 source_used = "LOCAL_REGISTRY"
@@ -221,18 +227,15 @@ def enrich_single_purchase(item):
             'last_updated': datetime.utcnow().isoformat()
         }
         
-        # Add image_url if found in cosmos_result
         if cosmos_result and cosmos_result.get('image_url'):
             unique_data['image_url'] = cosmos_result['image_url']
         
-        # Check if exists in this market by market_id AND ean (Deterministic)
         existing = supabase.table('unique_products').select('id').match({
             'market_id': market_id,
             'ean': ean
         }).execute()
         
         if existing.data:
-            # Try updating, fallback if image_url column doesn't exist
             try:
                 supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
             except Exception as e:
@@ -243,7 +246,6 @@ def enrich_single_purchase(item):
                     raise e
             logger.info(f"Updated existing product {existing.data[0]['id']} in market {market_id}")
         else:
-            # Try inserting, fallback if image_url column doesn't exist
             try:
                 supabase.table('unique_products').insert(unique_data).execute()
             except Exception as e:
@@ -261,4 +263,4 @@ def enrich_single_purchase(item):
         return 'failed'
 
 if __name__ == "__main__":
-    process_pending_purchases()
+    process_pending_purchases("manual")

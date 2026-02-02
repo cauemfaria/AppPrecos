@@ -74,176 +74,17 @@ def resolve_nfce_url(url: str) -> str:
 
 
 # ============================================================================
-# Bluesoft Cosmos API - Get product name from GTIN/EAN
+# Enrichment Service - Product data enhancement (GTIN, Images, Names)
 # ============================================================================
-COSMOS_TOKENS = os.getenv('COSMOS_TOKENS', '').split(',') if os.getenv('COSMOS_TOKENS') else []
-COSMOS_USER_AGENT = os.getenv('COSMOS_USER_AGENT', 'Cosmos-API-Request')
-_current_cosmos_token_idx = 0
+from enrichment_service import (
+    get_product_from_cosmos,
+    search_product_on_cosmos,
+    log_product_lookup
+)
 
-def get_product_from_cosmos(gtin):
-    """
-    Query Bluesoft Cosmos API to get product name from GTIN/EAN barcode.
-    Handles multiple tokens and 429 rate limits.
-    
-    Returns:
-        tuple: (success, product_name, brand_name, image_url, execution_time_ms, error_msg)
-    """
-    global _current_cosmos_token_idx
-    
-    if not gtin or gtin == 'SEM GTIN' or len(gtin) < 8:
-        return False, None, None, None, 0, "GTIN inválido"
-    
-    if not COSMOS_TOKENS:
-        return False, None, None, None, 0, "Nenhum token do Cosmos disponível"
-
-    start_time = time.time()
-    
-    # Try each available token if we hit 429
-    tokens_to_try = len(COSMOS_TOKENS)
-    
-    for _ in range(tokens_to_try):
-        token = COSMOS_TOKENS[_current_cosmos_token_idx].strip()
-        url = f"https://api.cosmos.bluesoft.com.br/gtins/{gtin}.json"
-        headers = {
-            "X-Cosmos-Token": token,
-            "User-Agent": COSMOS_USER_AGENT,
-            "Content-Type": "application/json"
-        }
-        
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            execution_time_ms = int((time.time() - start_time) * 1000)
-            
-            if response.status_code == 200:
-                data = response.json()
-                product_name = data.get('description')
-                brand_name = data.get('brand', {}).get('name')
-                image_url = data.get('thumbnail')
-                print(f"  [COSMOS] Encontrado: \"{product_name}\" [{brand_name}] para GTIN {gtin} ({execution_time_ms}ms)")
-                return True, product_name, brand_name, image_url, execution_time_ms, None
-                
-            elif response.status_code == 429:
-                print(f"  [COSMOS] Limite excedido para o token de índice {_current_cosmos_token_idx}. Rotacionando...")
-                _current_cosmos_token_idx = (_current_cosmos_token_idx + 1) % len(COSMOS_TOKENS)
-                # After rotating, the next loop iteration will try the next token
-                continue
-                
-            elif response.status_code == 404:
-                print(f"  [COSMOS] Produto {gtin} não encontrado (404)")
-                return False, None, None, None, execution_time_ms, "Produto não encontrado"
-                
-            else:
-                error_msg = f"HTTP {response.status_code}"
-                print(f"  [COSMOS] Erro: {error_msg} para GTIN {gtin}")
-                return False, None, None, None, execution_time_ms, error_msg
-                
-        except Exception as e:
-            execution_time_ms = int((time.time() - start_time) * 1000)
-            print(f"  [COSMOS] Erro na Requisição: {e}")
-            return False, None, None, None, execution_time_ms, str(e)
-            
-    return False, None, None, None, 0, "TOKENS_EXHAUSTED"
-
-
-def search_product_on_cosmos(query, ncm_filter=None):
-    """
-    Search for a product on Cosmos API by its description.
-    Prioritizes results that match the provided NCM.
-    
-    Returns:
-        tuple: (success, product_name, gtin, brand_name, image_url, execution_time_ms, error_msg)
-    """
-    global _current_cosmos_token_idx
-    
-    if not query or len(query.strip()) < 3:
-        return False, None, None, None, None, 0, "Busca muito curta"
-        
-    if not COSMOS_TOKENS:
-        return False, None, None, None, None, 0, "Nenhum token do Cosmos disponível"
-
-    start_time = time.time()
-    tokens_to_try = len(COSMOS_TOKENS)
-    
-    for _ in range(tokens_to_try):
-        token = COSMOS_TOKENS[_current_cosmos_token_idx].strip()
-        url = "https://api.cosmos.bluesoft.com.br/products"
-        params = {"query": query}
-        headers = {
-            "X-Cosmos-Token": token,
-            "User-Agent": COSMOS_USER_AGENT,
-            "Content-Type": "application/json"
-        }
-        
-        try:
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-            execution_time_ms = int((time.time() - start_time) * 1000)
-            
-            if response.status_code == 200:
-                data = response.json()
-                products = data.get('products', [])
-                
-                if not products:
-                    return False, None, None, None, None, execution_time_ms, "Nenhum produto encontrado"
-                
-                # NCM-Aware Matching Logic with Fuzzy String Similarity
-                selected_product = None
-                
-                # Candidates for matching
-                candidates = []
-                if ncm_filter:
-                    # Filter by exact NCM match
-                    candidates = [p for p in products if p.get('ncm', {}).get('code') == ncm_filter]
-                    if not candidates:
-                        print(f"  [COSMOS-SEARCH] Nenhum match de NCM para '{query}'.")
-                        return False, None, None, None, None, execution_time_ms, "Nenhum match de NCM encontrado"
-                else:
-                    candidates = products
-
-                # Find the best match among candidates using string similarity
-                best_score = -1
-                
-                for candidate in candidates:
-                    candidate_name = candidate.get('description', '')
-                    # Calculate similarity ratio (0.0 to 1.0)
-                    score = difflib.SequenceMatcher(None, query.upper(), candidate_name.upper()).ratio()
-                    
-                    if score > best_score:
-                        best_score = score
-                        selected_product = candidate
-                
-                # Minimum threshold to avoid weak matches (e.g. 0.8 or 80%)
-                SIMILARITY_THRESHOLD = 0.8
-                
-                if selected_product and best_score >= SIMILARITY_THRESHOLD:
-                    print(f"  [COSMOS-SEARCH] Best match for '{query}' (score: {best_score:.2f}): {selected_product.get('description')}")
-                    return (
-                        True, 
-                        selected_product.get('description'), 
-                        selected_product.get('gtin'),
-                        selected_product.get('brand', {}).get('name'),
-                        selected_product.get('thumbnail'),
-                        execution_time_ms, 
-                        None
-                    )
-                else:
-                    print(f"  [COSMOS-SEARCH] No confident match for '{query}' (best score: {best_score:.2f}).")
-                    return False, None, None, None, None, execution_time_ms, "No confident similarity match"
-                
-            elif response.status_code == 429:
-                print(f"  [COSMOS-SEARCH] Limit exceeded for token index {_current_cosmos_token_idx}. Rotating...")
-                _current_cosmos_token_idx = (_current_cosmos_token_idx + 1) % len(COSMOS_TOKENS)
-                continue
-                
-            else:
-                error_msg = f"HTTP {response.status_code}"
-                return False, None, None, None, None, execution_time_ms, error_msg
-                
-        except Exception as e:
-            execution_time_ms = int((time.time() - start_time) * 1000)
-            print(f"  [COSMOS-SEARCH] Request Error: {e}")
-            return False, None, None, None, None, execution_time_ms, str(e)
-            
-    return False, None, None, None, None, 0, "TOKENS_EXHAUSTED"
+# ============================================================================
+# NFCe URL Resolution - Get final browser URL after redirect
+# ============================================================================
 
 
 # ============================================================================
@@ -377,51 +218,16 @@ def generate_market_id():
     return f"MKT{random_part}"
 
 
-def log_product_lookup(nfce_url, market_id, gtin, ncm, original_name, final_name,
-                       cosmos_result=None, source_used=None, success=False):
-    """
-    Log detailed product lookup to Supabase product_lookup_log table.
-    """
-    try:
-        log_data = {
-            'nfce_url': nfce_url,
-            'market_id': market_id,
-            'gtin': gtin if gtin != 'SEM GTIN' else None,
-            'ncm': ncm,
-            'original_name': original_name[:500] if original_name else None,
-            'final_name': final_name[:500] if final_name else None,
-            'source_used': source_used,
-            'success': success,
-        }
-        
-        # Bluesoft Cosmos details (generic api columns)
-        if cosmos_result:
-            log_data.update({
-                'api_attempted': True,
-                'api_success': cosmos_result.get('success', False),
-                'api_product_name': cosmos_result.get('product_name'),
-                'api_brand': cosmos_result.get('brand'),
-                'api_image_url': cosmos_result.get('image_url'), # New field
-                'api_error': cosmos_result.get('error'),
-                'api_from_cache': False,
-                'api_time_ms': cosmos_result.get('time_ms'),
-            })
-        
-        # We use a try-except here because the column might not exist yet
-        try:
-            supabase.table('product_lookup_log').insert(log_data).execute()
-        except Exception as insert_error:
-            # If it failed, maybe it's the new column. Try without it.
-            if 'api_image_url' in log_data:
-                del log_data['api_image_url']
-                supabase.table('product_lookup_log').insert(log_data).execute()
-            else:
-                raise insert_error
-        
-    except Exception as e:
-        # Don't fail the main process if logging fails
-        print(f"  [WARN] Failed to log product lookup: {e}")
-
+def trigger_enrichment(worker_id="auto"):
+    """Trigger enrichment process in a background thread if not already running"""
+    from enrichment_worker import process_pending_purchases
+    thread = threading.Thread(
+        target=process_pending_purchases,
+        args=(worker_id,),
+        daemon=True
+    )
+    thread.start()
+    return True
 
 def process_nfce_in_background(url, url_record_id):
     """Background task to process NFCe extraction and save to database"""
@@ -506,6 +312,10 @@ def process_nfce_in_background(url, url_record_id):
         
         total_time = time.time() - start_time
         print(f"[OK] [BACKGROUND #{url_record_id}] Complete in {total_time:.1f}s: {save_result['saved_to_purchases']} products saved")
+        
+        # TRIGGER ENRICHMENT WORKER
+        print(f"[BACKGROUND #{url_record_id}] Triggering product enrichment...")
+        trigger_enrichment(f"auto-{url_record_id}")
         
     except Exception as e:
         # Release lock with error status
@@ -613,6 +423,7 @@ def index():
             'nfce_status': '/api/nfce/status/{record_id}',
             'products_search': '/api/products/search',
             'products_compare': '/api/products/compare',
+            'enrich_trigger': '/api/enrich/trigger',
             'health': '/health'
         }
     })
@@ -948,6 +759,28 @@ def search_products():
             'results': list(products_map.values()),
             'total': len(products_map)
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/enrich/trigger', methods=['POST'])
+def manual_trigger_enrichment():
+    """Manually trigger the product enrichment process"""
+    try:
+        # Check if already locked
+        lock_record = supabase.table('processed_urls').select('status').eq('nfce_url', 'SYSTEM_ENRICHMENT_LOCK').execute()
+        
+        if lock_record.data and lock_record.data[0]['status'] == 'locked':
+            return jsonify({
+                'message': 'Enriquecimento já está em andamento',
+                'status': 'running'
+            }), 200
+            
+        trigger_enrichment("manual-api")
+        return jsonify({
+            'message': 'Enriquecimento de produtos iniciado em segundo plano',
+            'status': 'started'
+        }), 202
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

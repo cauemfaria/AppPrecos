@@ -85,4 +85,11 @@ export const nfceService = {
   },
 };
 
+export const enrichmentService = {
+  triggerEnrichment: async () => {
+    const response = await api.post<{message: string, status: string}>('/enrich/trigger');
+    return response.data;
+  },
+};
+
 export default api;

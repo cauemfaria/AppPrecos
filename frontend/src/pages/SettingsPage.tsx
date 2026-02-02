@@ -2,18 +2,33 @@ import React, { type ReactElement } from 'react';
 import { 
   User, Bell, Shield, 
   HelpCircle, Info, LogOut, ChevronRight,
-  Github, Globe, Heart, type LucideProps, Trash2, Database
+  Github, Globe, Heart, type LucideProps, Trash2, Database, Sparkles, Loader2
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { enrichmentService } from '../services/api';
+import { useState } from 'react';
 
 const SettingsPage: React.FC = () => {
   const { clearShoppingList, clearMarketSelection } = useStore();
+  const [isEnriching, setIsEnriching] = useState(false);
 
   const handleClearData = () => {
     if (window.confirm("Tem certeza que deseja limpar todos os dados locais do app? Isso esvaziará sua lista de compras e seleções de mercado.")) {
       clearShoppingList();
       clearMarketSelection();
       alert("Dados locais limpos com sucesso.");
+    }
+  };
+
+  const handleTriggerEnrichment = async () => {
+    setIsEnriching(true);
+    try {
+      const response = await enrichmentService.triggerEnrichment();
+      alert(response.message);
+    } catch (error: any) {
+      alert("Falha ao iniciar sincronização: " + (error.response?.data?.error || error.message));
+    } finally {
+      setIsEnriching(false);
     }
   };
 
@@ -36,6 +51,12 @@ const SettingsPage: React.FC = () => {
         <section className="space-y-2">
           <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Armazenamento e Dados</h3>
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <SettingsItem 
+              icon={isEnriching ? <Loader2 className="text-blue-500 animate-spin" /> : <Sparkles className="text-blue-500" />} 
+              label="Sincronizar Dados de Produtos" 
+              value={isEnriching ? "Processando..." : "Iniciar"}
+              onClick={handleTriggerEnrichment}
+            />
             <SettingsItem 
               icon={<Trash2 className="text-red-500" />} 
               label="Limpar Dados Locais" 
