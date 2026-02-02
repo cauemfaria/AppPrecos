@@ -53,6 +53,27 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 print("[OK] Supabase client initialized")
 
 # ============================================================================
+# NFCe URL Resolution - Get final browser URL after redirect
+# ============================================================================
+def resolve_nfce_url(url: str) -> str:
+    """
+    Resolve NFCe URL to its final browser URL by following redirects.
+    
+    QR code URLs redirect to browser URLs:
+    - Input:  https://www.nfce.fazenda.sp.gov.br/qrcode?p=...
+    - Output: https://www.nfce.fazenda.sp.gov.br/NFCeConsultaPublica/Paginas/ConsultaQRCode.aspx?p=...
+    
+    This ensures consistent URL storage and duplicate detection.
+    """
+    try:
+        response = requests.head(url, allow_redirects=True, timeout=10)
+        return response.url
+    except Exception as e:
+        print(f"[WARN] Failed to resolve NFCe URL, using original: {e}")
+        return url
+
+
+# ============================================================================
 # Bluesoft Cosmos API - Get product name from GTIN/EAN
 # ============================================================================
 COSMOS_TOKENS = os.getenv('COSMOS_TOKENS', '').split(',') if os.getenv('COSMOS_TOKENS') else []
@@ -659,11 +680,15 @@ def extract_nfce():
     # Force use_async to True for better stability, or respect data if provided
     use_async = data.get('async', True)
     
+    # Resolve URL to browser format (follows redirect from QR code URL)
+    resolved_url = resolve_nfce_url(data['url'])
+    data['url'] = resolved_url
+    
     # ========== ASYNC MODE ==========
     if data.get('save') and use_async:
         try:
             # Check if URL already processed
-            existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', data['url']).execute()
+            existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', resolved_url).execute()
             if existing_url.data:
                 url_data = existing_url.data[0]
                 return jsonify({
@@ -677,7 +702,7 @@ def extract_nfce():
             
             # Record URL with status='processing'
             temp_url_data = {
-                'nfce_url': data['url'],
+                'nfce_url': resolved_url,
                 'market_id': 'PROCESSING',
                 'market_name': '',
                 'products_count': 0,
@@ -710,7 +735,8 @@ def extract_nfce():
         url_record_id = None
         try:
             if data.get('save'):
-                existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', data['url']).execute()
+                # Check if URL already processed
+                existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', resolved_url).execute()
                 if existing_url.data:
                     url_data = existing_url.data[0]
                     return jsonify({
@@ -723,7 +749,7 @@ def extract_nfce():
                     }), 409
                 
                 temp_url_data = {
-                    'nfce_url': data['url'],
+                    'nfce_url': resolved_url,
                     'market_id': 'PROCESSING',
                 'market_name': '',
                     'products_count': 0,
