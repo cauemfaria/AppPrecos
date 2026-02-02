@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { nfceService } from '../services/api';
 import { useStore } from '../store/useStore';
 import type { ProcessingItem } from '../types';
-import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink, AlertCircle, Camera } from 'lucide-react';
 
 const ScannerPage: React.FC = () => {
   const [manualUrl, setManualUrl] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  
   const { 
     processingQueue, 
     addToProcessingQueue, 
@@ -14,30 +17,18 @@ const ScannerPage: React.FC = () => {
     removeFromProcessingQueue 
   } = useStore();
   
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const recentScansRef = useRef<Record<string, number>>({});
 
-  useEffect(() => {
-    scannerRef.current = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      /* verbose= */ false
-    );
-
-    scannerRef.current.render(
-      (decodedText) => {
-        handleUrlSubmitted(decodedText);
-      },
-      () => {
-        // Handle error silently or log if needed
+  const stopScanning = useCallback(async () => {
+    if (scannerRef.current && scannerRef.current.isScanning) {
+      try {
+        await scannerRef.current.stop();
+        setIsScanning(false);
+      } catch (err) {
+        console.error("Failed to stop scanner", err);
       }
-    );
-
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(err => console.error("Failed to clear scanner", err));
-      }
-    };
+    }
   }, []);
 
   const handleUrlSubmitted = useCallback(async (url: string) => {
@@ -46,21 +37,15 @@ const ScannerPage: React.FC = () => {
     const now = Date.now();
     const DEBOUNCE_MS = 3000;
     
-    // Debounce check
     if (recentScansRef.current[url] && now - recentScansRef.current[url] < DEBOUNCE_MS) {
-      console.log("URL debounced");
       return;
     }
     
-    // Check if already in queue
     if (processingQueue.some(item => item.url === url)) {
-      console.log("URL already in queue");
       return;
     }
 
     recentScansRef.current[url] = now;
-    
-    // Fixed: Use timestamp + random for unique ID, avoid collisions
     const tempId = -Date.now() - Math.random();
     
     const newItem: ProcessingItem = {
@@ -75,29 +60,79 @@ const ScannerPage: React.FC = () => {
 
     try {
       const response = await nfceService.extractNFCe({ url, save: true, async: true });
-      
       updateProcessingItem(tempId, { 
         record_id: response.record_id!, 
         status: 'processing' 
       });
-
       if (url === manualUrl) setManualUrl('');
-      
     } catch (error: any) {
       const status = error.response?.status === 409 ? 'duplicate' : 'error';
       const errorMessage = error.response?.data?.error || error.message;
-      
       updateProcessingItem(tempId, { 
         status: status as any, 
         error_message: errorMessage 
       });
-
-      // Schedule removal for failed/duplicate items
       setTimeout(() => {
         removeFromProcessingQueue(tempId);
       }, 5000);
     }
   }, [manualUrl, processingQueue, addToProcessingQueue, updateProcessingItem, removeFromProcessingQueue]);
+
+  const startScanning = async () => {
+    setScannerError(null);
+    setIsScanning(true);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initScanner = async () => {
+      if (isScanning && !scannerRef.current) {
+        try {
+          const scanner = new Html5Qrcode("reader");
+          scannerRef.current = scanner;
+          
+          await scanner.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+            },
+            async (decodedText) => {
+              if (isMounted) {
+                await stopScanning();
+                handleUrlSubmitted(decodedText);
+              }
+            },
+            () => {}
+          );
+        } catch (err: any) {
+          if (isMounted) {
+            console.error("Failed to start scanner", err);
+            setScannerError(err.message || "Failed to access camera");
+            setIsScanning(false);
+          }
+        }
+      }
+    };
+
+    if (isScanning) {
+      // Small delay to ensure DOM is updated with #reader
+      const timer = setTimeout(initScanner, 100);
+      return () => {
+        clearTimeout(timer);
+        isMounted = false;
+      };
+    }
+  }, [isScanning, stopScanning, handleUrlSubmitted]);
+
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(console.error);
+      }
+    };
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
@@ -128,12 +163,45 @@ const ScannerPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Scanner View */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col">
-          <div id="reader" className="overflow-hidden rounded-2xl border-0 bg-black aspect-square"></div>
-          <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            Point camera at QR code
-          </div>
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center min-h-[400px]">
+          {!isScanning ? (
+            <div className="flex flex-col items-center gap-6 text-center">
+              <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
+                <Camera className="w-10 h-10" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Ready to Scan</h3>
+                <p className="text-gray-500 max-w-[280px]">Scan the QR code on your printed receipt to automatically extract all products.</p>
+              </div>
+              <button 
+                onClick={startScanning}
+                className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <Camera className="w-5 h-5" />
+                Open Camera
+              </button>
+              {scannerError && (
+                <p className="text-red-500 text-sm bg-red-50 px-4 py-2 rounded-lg">{scannerError}</p>
+              )}
+            </div>
+          ) : (
+            <div className="w-full flex flex-col items-center gap-4">
+              <div id="reader" className="overflow-hidden rounded-2xl border-0 bg-black w-full aspect-square max-w-[400px]"></div>
+              <button 
+                onClick={stopScanning}
+                className="text-gray-500 font-medium hover:text-gray-700 px-4 py-2"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          
+          {isScanning && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+              Point camera at QR code
+            </div>
+          )}
         </div>
 
         {/* Processing Queue */}
