@@ -82,7 +82,6 @@ const ScannerPage: React.FC = () => {
     setScannerError(null);
     setIsScanning(true);
     
-    // Ensure scanner is stopped before restarting
     if (scannerRef.current && scannerRef.current.isScanning) {
       try {
         await scannerRef.current.stop();
@@ -98,25 +97,34 @@ const ScannerPage: React.FC = () => {
     const initScanner = async () => {
       if (isScanning) {
         try {
-          // Always create a new instance to avoid state issues between restarts
-          const scanner = new Html5Qrcode("reader");
+          const scanner = new Html5Qrcode("reader", { 
+            verbose: false,
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: true 
+            }
+          });
           scannerRef.current = scanner;
           
           await scanner.start(
             { facingMode: "environment" },
             {
-              fps: 10,
+              fps: 20,
               qrbox: (viewfinderWidth, viewFinderHeight) => {
-                const size = Math.min(viewfinderWidth, viewFinderHeight) * 0.7;
+                const size = Math.min(viewfinderWidth, viewFinderHeight) * 0.8;
                 return { width: size, height: size };
               },
-              aspectRatio: 1.0
+              aspectRatio: 1.0,
+              videoConstraints: {
+                width: { min: 640, ideal: 1280, max: 1920 },
+                height: { min: 480, ideal: 720, max: 1080 },
+                facingMode: "environment"
+              }
             },
             async (decodedText) => {
               if (isMounted) {
-                // SUCCESS!
                 console.log("QR Code detected:", decodedText);
-                // Try to stop first, then submit
+                if (navigator.vibrate) navigator.vibrate(100);
+                
                 try {
                   await scanner.stop();
                 } catch (e) {
@@ -126,14 +134,11 @@ const ScannerPage: React.FC = () => {
                 handleUrlSubmitted(decodedText);
               }
             },
-            () => {
-              // Silent failure for frames without QR
-            }
+            () => {}
           );
         } catch (err: any) {
           if (isMounted) {
             console.error("Failed to start scanner", err);
-            // Handle specific cases like camera in use or permission denied
             const errorMsg = err.toString().includes("Permission denied") 
               ? "Camera permission denied. Please enable it in browser settings."
               : "Failed to access camera. It might be in use by another app.";
@@ -145,7 +150,6 @@ const ScannerPage: React.FC = () => {
     };
 
     if (isScanning) {
-      // Small delay to ensure DOM is updated with #reader
       const timer = setTimeout(initScanner, 200);
       return () => {
         clearTimeout(timer);
@@ -341,4 +345,3 @@ const ScannerPage: React.FC = () => {
 };
 
 export default ScannerPage;
-
