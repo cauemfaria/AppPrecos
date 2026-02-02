@@ -1,128 +1,121 @@
-# AppPrecos - Brazilian Price Comparison App
+# AppPrecos - Comparador de Preços Brasileiro
 
-Price comparison application that extracts product data from NFCe receipts and uses AI-powered enrichment to standardize products across multiple markets.
+Aplicativo de comparação de preços que extrai dados de produtos de cupons fiscais (NFCe) e utiliza enriquecimento de dados para padronizar produtos entre diferentes mercados.
 
----
-
-## 🏗️ Architecture Overview
-
-AppPrecos uses a **decoupled architecture** to ensure a fast user experience while maintaining high data quality:
-
-1.  **Fast Extraction (Backend API):** Instantly extracts raw data from NFCe (receipts) using Playwright and saves it to a history table.
-2.  **Product Enrichment (Background Worker):** A separate worker process standardizes product names using the Bluesoft Cosmos API and LLMs (GPT-4o-mini).
-3.  **Mobile Frontend:** Android app (Kotlin) for scanning and price comparison.
-4.  **Database:** Supabase (PostgreSQL) as the central data hub.
+Este projeto foi convertido de um app nativo para uma **Web App Moderna (PWA)**, permitindo instalação em qualquer celular (Android/iOS) diretamente pelo navegador.
 
 ---
 
-## 🚀 Key Technical Features
+## 🏗️ Visão Geral da Arquitetura
 
-### ✅ Decoupled Data Flow
-The extraction process no longer waits for external product enrichment.
-- **NFCe Scan:** Extracted in ~15s and immediately available in history.
-- **Enrichment:** Handled by a "one-shot" worker that rotates through multiple API tokens to bypass rate limits.
+O AppPrecos utiliza uma arquitetura desacoplada para garantir uma experiência rápida ao usuário enquanto mantém alta qualidade de dados:
 
-### ✅ Smart Product Standardization
-Standardizes "ugly" receipt names (e.g., `QJ MUSS PARLAK`) into clean, standardized names in **UPPER CASE** (e.g., `QUEIJO MUSSARELA PARLAK`) using:
-- **Bluesoft Cosmos API:** Primary source for Brazilian product data (with intelligent token rotation).
-- **LLM Matching (GPT-4o-mini):** AI for matching similar products within the same NCM and formatting new entries in CAIXA ALTA.
-
-### ✅ Database-Backed Extraction Lock
-Prevents concurrent extractions of the same URL across multiple workers using a PostgreSQL-based status lock.
+1.  **Extração Rápida (Backend API):** Extrai instantaneamente os dados brutos da NFCe utilizando Playwright e salva no histórico.
+2.  **Enriquecimento de Produtos (Background Worker):** Um processo separado que padroniza nomes e busca imagens através da API Bluesoft Cosmos.
+3.  **Frontend PWA:** Interface React moderna instalável como aplicativo, com scanner de QR Code integrado.
+4.  **Banco de Dados:** Supabase (PostgreSQL) como hub central de dados.
 
 ---
 
-## 📂 Project Structure
+## 🚀 Principais Funcionalidades Técnicas
+
+### ✅ Fluxo de Dados Desacoplado
+O processo de extração não espera mais pelo enriquecimento externo.
+- **NFCe Scan:** Extraído em ~15s e imediatamente disponível no histórico.
+- **Enriquecimento:** Acionado automaticamente após o scan ou manualmente pelos Ajustes. Utiliza rotação de tokens para contornar limites de API.
+
+### ✅ Padronização Inteligente
+Transforma nomes "feios" de cupons (ex: `QJ MUSS PARLAK`) em nomes limpos e padronizados (ex: `QUEIJO MUSSARELA PARLAK`) usando a **API Bluesoft Cosmos**.
+
+### ✅ Progressive Web App (PWA)
+- Instalável na tela inicial do celular.
+- Funciona offline para consulta de listas.
+- Notificações de atualização automática.
+
+---
+
+## 📂 Estrutura do Projeto
 
 ```
 AppPrecos/
-├── android/                    # Android mobile app (Kotlin)
-│   └── app/src/main/          # UI, Scanner, API Client
+├── backend/                    # Backend Flask (Python)
+│   ├── app.py                  # Servidor API Principal
+│   ├── enrichment_service.py   # Lógica de busca de produtos (Cosmos)
+│   ├── enrichment_worker.py    # Processador de background
+│   ├── nfce_extractor.py       # Scraper Playwright para SEFAZ
+│   └── render.yaml             # Configuração de Deploy (Render)
 │
-└── backend/                    # Python Flask Backend
-    ├── app.py                  # Main REST API server & Enrichment Logic
-    ├── enrichment_worker.py    # Background worker (Cosmos Blue + LLM)
-    ├── nfce_extractor.py       # Playwright scraper for SEFAZ sites
-    ├── browser_profile/        # (Auto-generated) Playwright cache
-    ├── .env                    # Environment variables (Tokens, Keys)
-    └── pyproject.toml          # Dependency management (uv)
+├── frontend/                   # Frontend React (Vite + TS)
+│   ├── src/                    # Código fonte (Páginas, Componentes)
+│   ├── public/                 # Ícones e Manifest PWA
+│   └── vite.config.ts          # Configuração Vite e PWA
+│
+└── android/                    # (Legado) App nativo anterior
 ```
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ Stack Tecnológica
 
-- **Backend:** Python 3.13+, Flask, Playwright (Chromium)
-- **Frontend:** Android (Kotlin, Material Design 3, CameraX)
-- **Database:** Supabase (PostgreSQL)
-- **AI/APIs:** OpenAI (GPT-4o-mini), Bluesoft Cosmos
-- **Package Manager:** `uv` (faster than pip)
-
----
-
-## 📊 Database Schema (Supabase)
-
-The system uses 8 key tables for data persistence and auditing:
-
-1.  **`markets`**: Stores market metadata (unique by name + address).
-2.  **`purchases`**: Raw purchase history. Tracks `enriched` status (boolean).
-3.  **`unique_products`**: Standardized products with the **latest** price per market.
-4.  **`processed_urls`**: Tracks receipt URLs and extraction status (lock mechanism).
-5.  **`product_lookup_log`**: Audit trail of every API lookup (Cosmos, LLM).
-6.  **`gtin_cache`**: Cache for EAN/GTIN lookups to save API credits.
-7.  **`product_backlog`**: Stores items that failed enrichment for manual review.
-8.  **`llm_product_decisions`**: Logs AI reasoning for product matching.
+- **Backend:** Python 3.11+, Flask, Playwright (Chromium), Gunicorn.
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons.
+- **Database:** Supabase (PostgreSQL).
+- **APIs:** Bluesoft Cosmos (Dados de Produtos).
+- **Hospedagem:** Render (Web Service + Static Site).
 
 ---
 
-## ⚙️ Setup Instructions
+## ⚙️ Instruções de Configuração
 
-### Backend Setup (using `uv`)
+### 1. Backend (Python)
 
-1.  **Install `uv`** (if not installed):
-    ```bash
-    pip install uv
-    ```
-
-2.  **Sync Dependencies:**
+1.  **Instalar dependências:**
     ```bash
     cd backend
-    uv sync
+    pip install -r requirements.txt
     ```
 
-3.  **Install Playwright Browser:**
+2.  **Instalar Navegador Playwright:**
     ```bash
-    uv run playwright install chromium
+    playwright install chromium
     ```
 
-4.  **Configure Environment Variables (`.env`):**
+3.  **Configurar Variáveis de Ambiente (`.env`):**
     ```env
-    SUPABASE_URL=...
-    SUPABASE_SERVICE_ROLE_KEY=...
-    OPENAI_API_KEY=...
-    COSMOS_TOKENS=token1,token2,token3  # Supports rotation
+    SUPABASE_URL=https://your-project.supabase.co
+    SUPABASE_SERVICE_ROLE_KEY=your-secret-key
+    COSMOS_TOKENS=token1,token2,token3
     COSMOS_USER_AGENT=Cosmos-API-Request
     ```
 
-### Running the System
+### 2. Frontend (React)
 
--   **Start API Server:** `uv run python app.py`
--   **Run Enrichment Worker:** `uv run python enrichment_worker.py` (Processes pending products and terminates)
+1.  **Instalar dependências:**
+    ```bash
+    cd frontend
+    npm install
+    ```
+
+2.  **Configurar Variáveis de Ambiente (`.env`):**
+    ```env
+    VITE_API_BASE_URL=https://seu-backend.onrender.com/api
+    ```
+
+3.  **Rodar em Desenvolvimento:**
+    ```bash
+    npm run dev
+    ```
 
 ---
 
-## 🔄 Data Flow Detail
+## 🔄 Fluxo de Dados
 
-1.  **Extraction:**
-    - App scans QR → Backend checks `processed_urls`.
-    - Playwright navigates SEFAZ → Extracts raw name/EAN/Price.
-    - Saves to `purchases` with `enriched=False`.
-2.  **Enrichment (Worker):**
-    - Worker fetches items where `enriched=False`.
-    - **Step 1:** Cosmos Blue (tries Token 1, if 429 rotates to Token 2...).
-    - **Step 2:** LLM GPT-4o-mini (match with existing products or format new name in CAIXA ALTA).
-    - Upserts result to `unique_products` and marks `enriched=True`.
+1.  **Scanner:** O usuário escaneia o QR Code no app.
+2.  **Extração:** O backend recebe a URL, navega via Playwright, extrai os produtos e salva na tabela `purchases`.
+3.  **Gatilho:** Assim que o cupom é salvo, o backend inicia o `enrichment_worker` em uma thread separada.
+4.  **Enriquecimento:** O worker busca cada produto novo na API do Cosmos, recupera o nome oficial e a imagem, e atualiza a tabela `unique_products`.
+5.  **Interface:** O usuário vê o progresso em tempo real na aba Scanner e pode consultar os preços na aba Mercados ou Lista de Compras.
 
 ---
 
-**Built with a focus on data quality, speed, and resilient API integration.** ✨
+**Desenvolvido com foco em qualidade de dados, velocidade e resiliência.** 🛒✨
