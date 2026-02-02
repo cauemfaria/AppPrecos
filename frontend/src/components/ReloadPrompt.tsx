@@ -4,7 +4,6 @@ import { RefreshCw, X } from 'lucide-react'
 
 const ReloadPrompt: React.FC = () => {
   const {
-    offlineReady: [offlineReady, setOfflineReady],
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
@@ -26,7 +25,6 @@ const ReloadPrompt: React.FC = () => {
   })
 
   const close = () => {
-    setOfflineReady(false)
     setNeedRefresh(false)
   }
 
@@ -45,7 +43,7 @@ const ReloadPrompt: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  if (!offlineReady && !needRefresh) return null
+  if (!needRefresh) return null
 
   return (
     <div className="fixed bottom-24 left-4 right-4 md:bottom-8 md:right-8 md:left-auto z-[100] animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -56,12 +54,10 @@ const ReloadPrompt: React.FC = () => {
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-bold text-gray-900">
-              {offlineReady ? 'App Pronto para Offline' : 'Atualização Disponível'}
+              Atualização Disponível
             </h3>
             <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-              {offlineReady 
-                ? 'O app foi baixado e já funciona sem internet.' 
-                : 'Uma nova versão do AppPrecos está pronta. Deseja atualizar agora?'}
+              Uma nova versão do AppPrecos está pronta. Deseja atualizar agora?
             </p>
           </div>
           <button 
@@ -73,22 +69,20 @@ const ReloadPrompt: React.FC = () => {
           </button>
         </div>
 
-        {needRefresh && (
-          <div className="flex gap-2 mt-1">
-            <button
-              onClick={() => updateServiceWorker(true)}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm active:scale-95"
-            >
-              Atualizar Agora
-            </button>
-            <button
-              onClick={close}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold py-2.5 px-4 rounded-xl transition-all"
-            >
-              Depois
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2 mt-1">
+          <button
+            onClick={() => updateServiceWorker(true)}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm active:scale-95"
+          >
+            Atualizar Agora
+          </button>
+          <button
+            onClick={close}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold py-2.5 px-4 rounded-xl transition-all"
+          >
+            Depois
+          </button>
+        </div>
       </div>
     </div>
   )
