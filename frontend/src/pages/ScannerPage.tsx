@@ -81,14 +81,24 @@ const ScannerPage: React.FC = () => {
   const startScanning = async () => {
     setScannerError(null);
     setIsScanning(true);
+    
+    // Ensure scanner is stopped before restarting
+    if (scannerRef.current && scannerRef.current.isScanning) {
+      try {
+        await scannerRef.current.stop();
+      } catch (err) {
+        console.error("Failed to stop previous scanner", err);
+      }
+    }
   };
 
   useEffect(() => {
     let isMounted = true;
 
     const initScanner = async () => {
-      if (isScanning && !scannerRef.current) {
+      if (isScanning) {
         try {
+          // Always create a new instance to avoid state issues between restarts
           const scanner = new Html5Qrcode("reader");
           scannerRef.current = scanner;
           
@@ -96,20 +106,38 @@ const ScannerPage: React.FC = () => {
             { facingMode: "environment" },
             {
               fps: 10,
-              qrbox: { width: 250, height: 250 },
+              qrbox: (viewfinderWidth, viewFinderHeight) => {
+                const size = Math.min(viewfinderWidth, viewFinderHeight) * 0.7;
+                return { width: size, height: size };
+              },
+              aspectRatio: 1.0
             },
             async (decodedText) => {
               if (isMounted) {
-                await stopScanning();
+                // SUCCESS!
+                console.log("QR Code detected:", decodedText);
+                // Try to stop first, then submit
+                try {
+                  await scanner.stop();
+                } catch (e) {
+                  console.error("Error stopping after success", e);
+                }
+                setIsScanning(false);
                 handleUrlSubmitted(decodedText);
               }
             },
-            () => {}
+            () => {
+              // Silent failure for frames without QR
+            }
           );
         } catch (err: any) {
           if (isMounted) {
             console.error("Failed to start scanner", err);
-            setScannerError(err.message || "Failed to access camera");
+            // Handle specific cases like camera in use or permission denied
+            const errorMsg = err.toString().includes("Permission denied") 
+              ? "Camera permission denied. Please enable it in browser settings."
+              : "Failed to access camera. It might be in use by another app.";
+            setScannerError(errorMsg);
             setIsScanning(false);
           }
         }
@@ -118,13 +146,13 @@ const ScannerPage: React.FC = () => {
 
     if (isScanning) {
       // Small delay to ensure DOM is updated with #reader
-      const timer = setTimeout(initScanner, 100);
+      const timer = setTimeout(initScanner, 200);
       return () => {
         clearTimeout(timer);
         isMounted = false;
       };
     }
-  }, [isScanning, stopScanning, handleUrlSubmitted]);
+  }, [isScanning, handleUrlSubmitted]);
 
   useEffect(() => {
     return () => {
@@ -186,7 +214,7 @@ const ScannerPage: React.FC = () => {
             </div>
           ) : (
             <div className="w-full flex flex-col items-center gap-4">
-              <div id="reader" className="overflow-hidden rounded-2xl border-0 bg-black w-full aspect-square max-w-[400px]"></div>
+              <div id="reader" className="overflow-hidden rounded-2xl border-0 bg-black w-full aspect-square max-w-[400px] [&_video]:object-cover"></div>
               <button 
                 onClick={stopScanning}
                 className="text-gray-500 font-medium hover:text-gray-700 px-4 py-2"
