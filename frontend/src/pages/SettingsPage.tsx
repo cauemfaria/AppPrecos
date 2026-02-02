@@ -10,63 +10,63 @@ const SettingsPage: React.FC = () => {
   const { clearShoppingList, clearMarketSelection } = useStore();
 
   const handleClearData = () => {
-    if (window.confirm("Are you sure you want to clear all local app data? This will empty your shopping list and market selections.")) {
+    if (window.confirm("Tem certeza que deseja limpar todos os dados locais do app? Isso esvaziará sua lista de compras e seleções de mercado.")) {
       clearShoppingList();
       clearMarketSelection();
-      alert("Local data cleared successfully.");
+      alert("Dados locais limpos com sucesso.");
     }
   };
 
   return (
     <div className="p-6 space-y-6">
-      <h2 className="text-2xl font-bold mb-6">Settings</h2>
+      <h2 className="text-2xl font-bold mb-6">Configurações</h2>
 
       <div className="space-y-6 pb-20">
         {/* Account Section */}
         <section className="space-y-2">
-          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Account</h3>
+          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Conta</h3>
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <SettingsItem icon={<User className="text-blue-500" />} label="Profile" value="Guest User" />
-            <SettingsItem icon={<Bell className="text-orange-500" />} label="Notifications" />
-            <SettingsItem icon={<Shield className="text-green-500" />} label="Privacy & Security" />
+            <SettingsItem icon={<User className="text-blue-500" />} label="Perfil" value="Usuário Convidado" />
+            <SettingsItem icon={<Bell className="text-orange-500" />} label="Notificações" />
+            <SettingsItem icon={<Shield className="text-green-500" />} label="Privacidade e Segurança" />
           </div>
         </section>
 
         {/* Storage Section */}
         <section className="space-y-2">
-          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Storage & Data</h3>
+          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Armazenamento e Dados</h3>
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
             <SettingsItem 
               icon={<Trash2 className="text-red-500" />} 
-              label="Clear Local Data" 
+              label="Limpar Dados Locais" 
               onClick={handleClearData}
             />
-            <SettingsItem icon={<Database className="text-gray-500" />} label="Database Status" value="Online" isLast />
+            <SettingsItem icon={<Database className="text-gray-500" />} label="Status do Banco de Dados" value="Online" isLast />
           </div>
         </section>
 
         {/* App Section */}
         <section className="space-y-2">
-          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Application</h3>
+          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Aplicativo</h3>
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <SettingsItem icon={<Globe className="text-purple-500" />} label="Language" value="Portuguese (BR)" />
-            <SettingsItem icon={<Info className="text-blue-400" />} label="Version" value="1.0.0 (Web)" />
-            <SettingsItem icon={<Github className="text-gray-700" />} label="Source Code" />
+            <SettingsItem icon={<Globe className="text-purple-500" />} label="Idioma" value="Português (BR)" />
+            <SettingsItem icon={<Info className="text-blue-400" />} label="Versão" value="1.0.0 (Web)" />
+            <SettingsItem icon={<Github className="text-gray-700" />} label="Código Fonte" />
           </div>
         </section>
 
         {/* Support Section */}
         <section className="space-y-2">
-          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Support</h3>
+          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Suporte</h3>
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <SettingsItem icon={<HelpCircle className="text-teal-500" />} label="Help Center" />
-            <SettingsItem icon={<Heart className="text-red-500" />} label="About AppPrecos" isLast />
+            <SettingsItem icon={<HelpCircle className="text-teal-500" />} label="Central de Ajuda" />
+            <SettingsItem icon={<Heart className="text-red-500" />} label="Sobre o AppPrecos" isLast />
           </div>
         </section>
 
         <button className="w-full bg-red-50 text-red-600 font-bold py-4 rounded-3xl flex items-center justify-center gap-2 hover:bg-red-100 transition-colors">
           <LogOut className="w-5 h-5" />
-          Log Out
+          Sair
         </button>
       </div>
     </div>

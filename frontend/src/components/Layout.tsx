@@ -22,9 +22,9 @@ const Layout: React.FC = () => {
         
         <nav className="flex-1 px-4 py-4 space-y-2">
           <DesktopNavLink to="/" icon={<Scan />} label="Scanner" />
-          <DesktopNavLink to="/markets" icon={<Store />} label="Markets" />
-          <DesktopNavLink to="/shopping-list" icon={<ShoppingBasket />} label="Shopping List" />
-          <DesktopNavLink to="/settings" icon={<Settings />} label="Settings" />
+          <DesktopNavLink to="/markets" icon={<Store />} label="Mercados" />
+          <DesktopNavLink to="/shopping-list" icon={<ShoppingBasket />} label="Lista de Compras" />
+          <DesktopNavLink to="/settings" icon={<Settings />} label="Configurações" />
         </nav>
       </aside>
 
@@ -38,9 +38,9 @@ const Layout: React.FC = () => {
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 pt-3 pb-8 flex justify-around items-start z-50 shadow-lg">
         <MobileNavLink to="/" icon={<Scan />} label="Scanner" />
-        <MobileNavLink to="/markets" icon={<Store />} label="Markets" />
-        <MobileNavLink to="/shopping-list" icon={<ShoppingBasket />} label="List" />
-        <MobileNavLink to="/settings" icon={<Settings />} label="Settings" />
+        <MobileNavLink to="/markets" icon={<Store />} label="Mercados" />
+        <MobileNavLink to="/shopping-list" icon={<ShoppingBasket />} label="Lista" />
+        <MobileNavLink to="/settings" icon={<Settings />} label="Ajustes" />
       </nav>
     </div>
   );

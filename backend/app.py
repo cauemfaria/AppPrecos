@@ -91,10 +91,10 @@ def get_product_from_cosmos(gtin):
     global _current_cosmos_token_idx
     
     if not gtin or gtin == 'SEM GTIN' or len(gtin) < 8:
-        return False, None, None, None, 0, "Invalid GTIN"
+        return False, None, None, None, 0, "GTIN inválido"
     
     if not COSMOS_TOKENS:
-        return False, None, None, None, 0, "No Cosmos tokens available"
+        return False, None, None, None, 0, "Nenhum token do Cosmos disponível"
 
     start_time = time.time()
     
@@ -119,27 +119,27 @@ def get_product_from_cosmos(gtin):
                 product_name = data.get('description')
                 brand_name = data.get('brand', {}).get('name')
                 image_url = data.get('thumbnail')
-                print(f"  [COSMOS] Found: \"{product_name}\" [{brand_name}] for GTIN {gtin} ({execution_time_ms}ms)")
+                print(f"  [COSMOS] Encontrado: \"{product_name}\" [{brand_name}] para GTIN {gtin} ({execution_time_ms}ms)")
                 return True, product_name, brand_name, image_url, execution_time_ms, None
                 
             elif response.status_code == 429:
-                print(f"  [COSMOS] Limit exceeded for token index {_current_cosmos_token_idx}. Rotating...")
+                print(f"  [COSMOS] Limite excedido para o token de índice {_current_cosmos_token_idx}. Rotacionando...")
                 _current_cosmos_token_idx = (_current_cosmos_token_idx + 1) % len(COSMOS_TOKENS)
                 # After rotating, the next loop iteration will try the next token
                 continue
                 
             elif response.status_code == 404:
-                print(f"  [COSMOS] Product {gtin} not found (404)")
-                return False, None, None, None, execution_time_ms, "Product not found"
+                print(f"  [COSMOS] Produto {gtin} não encontrado (404)")
+                return False, None, None, None, execution_time_ms, "Produto não encontrado"
                 
             else:
                 error_msg = f"HTTP {response.status_code}"
-                print(f"  [COSMOS] Error: {error_msg} for GTIN {gtin}")
+                print(f"  [COSMOS] Erro: {error_msg} para GTIN {gtin}")
                 return False, None, None, None, execution_time_ms, error_msg
                 
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
-            print(f"  [COSMOS] Request Error: {e}")
+            print(f"  [COSMOS] Erro na Requisição: {e}")
             return False, None, None, None, execution_time_ms, str(e)
             
     return False, None, None, None, 0, "TOKENS_EXHAUSTED"
@@ -156,10 +156,10 @@ def search_product_on_cosmos(query, ncm_filter=None):
     global _current_cosmos_token_idx
     
     if not query or len(query.strip()) < 3:
-        return False, None, None, None, None, 0, "Query too short"
+        return False, None, None, None, None, 0, "Busca muito curta"
         
     if not COSMOS_TOKENS:
-        return False, None, None, None, None, 0, "No Cosmos tokens available"
+        return False, None, None, None, None, 0, "Nenhum token do Cosmos disponível"
 
     start_time = time.time()
     tokens_to_try = len(COSMOS_TOKENS)
@@ -183,7 +183,7 @@ def search_product_on_cosmos(query, ncm_filter=None):
                 products = data.get('products', [])
                 
                 if not products:
-                    return False, None, None, None, None, execution_time_ms, "No products found"
+                    return False, None, None, None, None, execution_time_ms, "Nenhum produto encontrado"
                 
                 # NCM-Aware Matching Logic with Fuzzy String Similarity
                 selected_product = None
@@ -194,8 +194,8 @@ def search_product_on_cosmos(query, ncm_filter=None):
                     # Filter by exact NCM match
                     candidates = [p for p in products if p.get('ncm', {}).get('code') == ncm_filter]
                     if not candidates:
-                        print(f"  [COSMOS-SEARCH] No NCM match for '{query}'. Moving to backlog for accuracy.")
-                        return False, None, None, None, None, execution_time_ms, "No NCM match found"
+                        print(f"  [COSMOS-SEARCH] Nenhum match de NCM para '{query}'.")
+                        return False, None, None, None, None, execution_time_ms, "Nenhum match de NCM encontrado"
                 else:
                     candidates = products
 
@@ -653,7 +653,7 @@ def get_market_products(market_id):
     try:
         market_result = supabase.table('markets').select('*').eq('market_id', market_id).execute()
         if not market_result.data:
-            return jsonify({'error': 'Market not found'}), 404
+            return jsonify({'error': 'Mercado não encontrado'}), 404
         
         products_result = supabase.table('unique_products').select('*').eq('market_id', market_id).execute()
         
@@ -663,7 +663,7 @@ def get_market_products(market_id):
             'total': len(products_result.data)
         })
     except Exception as e:
-        return jsonify({'error': f'Failed to fetch products: {e}'}), 500
+        return jsonify({'error': f'Falha ao buscar produtos: {e}'}), 500
 
 
 @app.route('/api/nfce/extract', methods=['POST'])
@@ -675,7 +675,7 @@ def extract_nfce():
     data = request.get_json()
     
     if not data.get('url'):
-        return jsonify({'error': 'NFCe URL is required'}), 400
+        return jsonify({'error': 'URL da NFCe é obrigatória'}), 400
     
     # Force use_async to True for better stability, or respect data if provided
     use_async = data.get('async', True)
@@ -692,8 +692,8 @@ def extract_nfce():
             if existing_url.data:
                 url_data = existing_url.data[0]
                 return jsonify({
-                    'error': 'This NFCe has already been processed',
-                    'message': 'URL already exists in database',
+                    'error': 'Esta NFCe já foi processada',
+                    'message': 'A URL já existe no banco de dados',
                     'status': url_data.get('status', 'unknown'),
                     'processed_at': url_data['processed_at'],
                     'market_id': url_data['market_id'],
@@ -721,7 +721,7 @@ def extract_nfce():
             thread.start()
             
             return jsonify({
-                'message': 'NFCe processing started',
+                'message': 'Processamento da NFCe iniciado',
                 'status': 'processing',
                 'record_id': url_record_id
             }), 202
@@ -729,7 +729,7 @@ def extract_nfce():
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return jsonify({'error': f'Failed to start processing: {str(e)}'}), 500
+            return jsonify({'error': f'Falha ao iniciar processamento: {str(e)}'}), 500
     
     # ========== SYNC MODE (Legacy/Fallback) ==========
         url_record_id = None
@@ -740,8 +740,8 @@ def extract_nfce():
                 if existing_url.data:
                     url_data = existing_url.data[0]
                     return jsonify({
-                        'error': 'This NFCe has already been processed',
-                        'message': 'URL already exists in database',
+                        'error': 'Esta NFCe já foi processada',
+                        'message': 'A URL já existe no banco de dados',
                         'status': url_data.get('status', 'unknown'),
                         'processed_at': url_data['processed_at'],
                         'market_id': url_data['market_id'],
@@ -770,13 +770,13 @@ def extract_nfce():
             if not products:
                 if url_record_id:
                     supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-                return jsonify({'error': 'No products extracted from NFCe'}), 400
+                return jsonify({'error': 'Nenhum produto extraído da NFCe'}), 400
             
             if data.get('save'):
                 if not market_info.get('name') or not market_info.get('address'):
                     if url_record_id:
                         supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-                    return jsonify({'error': 'Could not extract market information'}), 400
+                    return jsonify({'error': 'Não foi possível extrair informações do mercado'}), 400
                 
                 market_result = supabase.table('markets').select('*').match({
                     'name': market_info['name'],
@@ -810,7 +810,7 @@ def extract_nfce():
                     }).eq('id', url_record_id).execute()
                 
                 return jsonify({
-                    'message': 'NFCe data extracted and saved successfully',
+                    'message': 'Dados da NFCe extraídos e salvos com sucesso',
                     'record_id': url_record_id,
                     'market': {
                         'id': market['id'],
@@ -827,7 +827,7 @@ def extract_nfce():
                 }), 201
             else:
                 return jsonify({
-                    'message': 'NFCe data extracted successfully (not saved)',
+                    'message': 'Dados da NFCe extraídos com sucesso (não salvos)',
                     'market_info': market_info,
                     'products': products
                 }), 200
@@ -847,7 +847,7 @@ def get_nfce_status(record_id):
         result = supabase.table('processed_urls').select('*').eq('id', record_id).execute()
         
         if not result.data:
-            return jsonify({'error': 'Record not found'}), 404
+            return jsonify({'error': 'Registro não encontrado'}), 404
         
         record = result.data[0]
         return jsonify({
@@ -906,7 +906,7 @@ def search_products():
     limit = min(int(request.args.get('limit', 50)), 100)
     
     if not name_query or len(name_query) < 2:
-        return jsonify({'error': 'Search query must be at least 2 characters'}), 400
+        return jsonify({'error': 'A busca deve ter pelo menos 2 caracteres'}), 400
     
     try:
         # Search unique_products by product_name (case-insensitive)
@@ -968,9 +968,9 @@ def compare_products():
     market_ids = data.get('market_ids', [])
     
     if not products:
-        return jsonify({'error': 'At least one product is required'}), 400
+        return jsonify({'error': 'Pelo menos um produto é obrigatório'}), 400
     if not market_ids:
-        return jsonify({'error': 'At least one market is required'}), 400
+        return jsonify({'error': 'Pelo menos um mercado é obrigatório'}), 400
     
     try:
         # Get market info

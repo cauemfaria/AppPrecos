@@ -67,12 +67,12 @@ const MarketsPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold">Available Markets</h2>
+        <h2 className="text-2xl font-bold">Mercados Disponíveis</h2>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input 
             type="text" 
-            placeholder="Search markets..."
+            placeholder="Buscar mercados..."
             className="pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white md:w-64"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -96,10 +96,10 @@ const MarketsPage: React.FC = () => {
                 <Loader2 className="w-6 h-6 animate-spin" />
               </div>
               <h3 className="font-bold text-gray-800 truncate w-full">
-                {item.market_name || 'Processing Market...'}
+                {item.market_name || 'Processando Mercado...'}
               </h3>
               <p className="text-xs text-blue-600 font-medium mt-1">
-                {item.status === 'extracting' ? 'Extracting items...' : 'Connecting...'}
+                {item.status === 'extracting' ? 'Extraindo itens...' : 'Conectando...'}
               </p>
             </div>
           ))}
@@ -127,7 +127,7 @@ const MarketsPage: React.FC = () => {
           {filteredMarkets.length === 0 && processingMarkets.length === 0 && (
             <div className="col-span-full text-center py-20 text-gray-400">
               <Store className="w-12 h-12 mx-auto mb-4 opacity-20" />
-              <p>No markets found matching your search.</p>
+              <p>Nenhum mercado encontrado para sua busca.</p>
             </div>
           )}
         </div>
@@ -156,7 +156,7 @@ const MarketsPage: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input 
                   type="text" 
-                  placeholder="Search products by name or NCM..."
+                  placeholder="Buscar produtos por nome ou NCM..."
                   className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
                   value={productSearchTerm}
                   onChange={(e) => setProductSearchTerm(e.target.value)}
@@ -181,7 +181,7 @@ const MarketsPage: React.FC = () => {
                               alt={product.product_name}
                               className="w-full h-full object-contain"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://placehold.co/100x100?text=No+Image';
+                                (e.target as HTMLImageElement).src = 'https://placehold.co/100x100?text=Sem+Imagem';
                               }}
                             />
                           </div>
@@ -211,7 +211,7 @@ const MarketsPage: React.FC = () => {
                   {filteredProducts.length === 0 && (
                     <div className="text-center py-20 text-gray-400">
                       <Package className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                      <p>No products found.</p>
+                      <p>Nenhum produto encontrado.</p>
                     </div>
                   )}
                 </div>

@@ -28,8 +28,8 @@ api.interceptors.response.use(
     // Handle network errors (backend unreachable)
     if (!error.response) {
       const message = error.code === 'ECONNABORTED' 
-        ? 'Request timed out - backend is not responding'
-        : 'Backend server is unreachable. Check your internet connection.';
+        ? 'Tempo esgotado - o servidor não está respondendo'
+        : 'Servidor inacessível. Verifique sua conexão com a internet.';
       
       console.error('[API Error]', message, error.message);
       

@@ -264,7 +264,7 @@ const ScannerPage: React.FC = () => {
       const fallbackSuccess = await startFallbackScanner();
       
       if (!fallbackSuccess) {
-        setScannerError("Could not access camera. Please check permissions.");
+        setScannerError("Não foi possível acessar a câmera. Por favor, verifique as permissões.");
         setIsScanning(false);
       }
     }
@@ -280,14 +280,14 @@ const ScannerPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold">NFCe Scanner</h2>
+        <h2 className="text-2xl font-bold">Scanner de NFCe</h2>
         
         <div className="flex gap-2">
           <div className="relative flex-1 md:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text" 
-              placeholder="Paste NFCe URL manually..."
+              placeholder="Cole a URL da NFCe manualmente..."
               className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
               value={manualUrl}
               onChange={(e) => setManualUrl(e.target.value)}
@@ -299,7 +299,7 @@ const ScannerPage: React.FC = () => {
             disabled={!manualUrl.trim()}
             className="bg-blue-600 text-white px-6 py-2 rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
           >
-            Add URL
+            Adicionar URL
           </button>
         </div>
       </div>
@@ -313,15 +313,15 @@ const ScannerPage: React.FC = () => {
                 <Camera className="w-10 h-10" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Ready to Scan</h3>
-                <p className="text-gray-500 max-w-[280px]">Scan the QR code on your printed receipt to automatically extract all products.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Pronto para Escanear</h3>
+                <p className="text-gray-500 max-w-[280px]">Escaneie o QR code no seu cupom fiscal para extrair todos os produtos automaticamente.</p>
               </div>
               <button 
                 onClick={startScanning}
                 className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
               >
                 <Camera className="w-5 h-5" />
-                Open Camera
+                Abrir Câmera
               </button>
               {scannerError && (
                 <p className="text-red-500 text-sm bg-red-50 px-4 py-2 rounded-lg">{scannerError}</p>
@@ -359,13 +359,13 @@ const ScannerPage: React.FC = () => {
                 {/* Mode indicator */}
                 {scannerMode && (
                   <div className="absolute bottom-3 left-3 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                    {scannerMode === 'native' ? '📱 Native' : '🔍 Standard'}
+                    {scannerMode === 'native' ? '📱 Nativo' : '🔍 Padrão'}
                   </div>
                 )}
               </div>
               <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                Point camera at QR code
+                Aponte a câmera para o QR code
               </div>
             </div>
           )}
@@ -376,11 +376,11 @@ const ScannerPage: React.FC = () => {
           <h3 className="text-lg font-bold mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-blue-600" />
-              Processing Queue
+              Fila de Processamento
             </div>
             {processingQueue.length > 0 && (
               <span className="bg-blue-50 text-blue-600 text-xs px-2 py-1 rounded-full">
-                {processingQueue.length} items
+                {processingQueue.length} itens
               </span>
             )}
           </h3>
@@ -391,8 +391,8 @@ const ScannerPage: React.FC = () => {
                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
                   <Clock className="w-8 h-8 opacity-20" />
                 </div>
-                <p className="font-medium text-gray-500">No active processes</p>
-                <p className="text-sm max-w-[200px] mt-1">Scanned receipts will appear here while processing.</p>
+                <p className="font-medium text-gray-500">Nenhum processo ativo</p>
+                <p className="text-sm max-w-[200px] mt-1">Cupons escaneados aparecerão aqui durante o processamento.</p>
               </div>
             ) : (
               processingQueue.map((item) => (
@@ -412,9 +412,9 @@ const ScannerPage: React.FC = () => {
                           'text-gray-800'
                         }`}>
                           {item.market_name || (
-                            item.status === 'sending' ? 'Sending to server...' :
-                            item.status === 'duplicate' ? 'Already in system' :
-                            'Processing market...'
+                            item.status === 'sending' ? 'Enviando ao servidor...' :
+                            item.status === 'duplicate' ? 'Já existe no sistema' :
+                            'Processando mercado...'
                           )}
                         </p>
                       </div>
@@ -422,14 +422,14 @@ const ScannerPage: React.FC = () => {
                       {item.status === 'error' ? (
                         <p className="text-xs text-red-500 line-clamp-2">{item.error_message}</p>
                       ) : item.status === 'duplicate' ? (
-                        <p className="text-xs text-orange-500">This receipt was already added.</p>
+                        <p className="text-xs text-orange-500">Este cupom já foi adicionado.</p>
                       ) : (
                         <div className="flex items-center gap-3 text-xs text-gray-500">
                           {item.products_count ? (
-                            <span className="font-medium text-blue-600">{item.products_count} products</span>
+                            <span className="font-medium text-blue-600">{item.products_count} produtos</span>
                           ) : (
                             <span className="flex items-center gap-1 italic">
-                              {item.status === 'extracting' ? 'Extracting items...' : 'Connecting...'}
+                              {item.status === 'extracting' ? 'Extraindo itens...' : 'Conectando...'}
                             </span>
                           )}
                         </div>
@@ -457,7 +457,7 @@ const ScannerPage: React.FC = () => {
                   {item.status === 'success' && (
                     <div className="mt-3 pt-3 border-t border-green-100 flex justify-end">
                       <button className="text-[10px] font-bold text-green-700 uppercase tracking-wider flex items-center gap-1 hover:underline">
-                        View market <ExternalLink className="w-3 h-3" />
+                        Ver mercado <ExternalLink className="w-3 h-3" />
                       </button>
                     </div>
                   )}
@@ -469,7 +469,7 @@ const ScannerPage: React.FC = () => {
           {processingQueue.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">
-                Items are removed automatically after 5s
+                Itens são removidos automaticamente após 5s
               </p>
             </div>
           )}
