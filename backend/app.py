@@ -6,7 +6,7 @@ Using Supabase REST API
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import string
 import random
@@ -100,7 +100,6 @@ def cleanup_stale_locks():
         stale = supabase.table('processed_urls').select('id,processed_at').eq('status', 'extracting').execute()
         
         if stale.data:
-            from datetime import datetime, timezone
             now = datetime.now(timezone.utc)
             
             for record in stale.data:

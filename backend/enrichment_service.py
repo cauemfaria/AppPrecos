@@ -2,7 +2,7 @@ import os
 import time
 import requests
 import difflib
-from datetime import datetime
+from datetime import datetime, timezone
 from supabase import create_client
 
 # Load environment variables (just in case, though they should be loaded by the caller)
@@ -223,7 +223,6 @@ def acquire_enrichment_lock(worker_id="default", max_retries=15):
                 # Check if already locked
                 if record['status'] == 'locked':
                     # Check if lock is stale
-                    from datetime import datetime, timezone
                     processed_at_str = record['processed_at']
                     if processed_at_str.endswith('Z'):
                         processed_at_str = processed_at_str[:-1] + '+00:00'
