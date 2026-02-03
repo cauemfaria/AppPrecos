@@ -189,67 +189,85 @@ def search_product_on_cosmos(query, ncm_filter=None):
 ENRICHMENT_LOCK_URL = 'SYSTEM_ENRICHMENT_LOCK'
 STALE_ENRICHMENT_LOCK_SECONDS = 600  # 10 minutes
 
-def acquire_enrichment_lock(worker_id="default"):
+def acquire_enrichment_lock(worker_id="default", max_retries=15):
     """
     Try to acquire enrichment lock using processed_urls table.
-    Returns True if lock acquired, False if already locked.
+    Now with retry logic and jitter to handle high-frequency submissions.
     """
-    try:
-        # Check if lock record exists
-        lock_record = supabase.table('processed_urls').select('*').eq('nfce_url', ENRICHMENT_LOCK_URL).execute()
-        
-        now = datetime.utcnow().isoformat()
-        
-        if not lock_record.data:
-            # Create lock record if it doesn't exist
-            try:
-                supabase.table('processed_urls').insert({
-                    'nfce_url': ENRICHMENT_LOCK_URL,
-                    'market_id': 'SYSTEM',
+    import random
+    
+    for attempt in range(max_retries):
+        try:
+            # Check if lock record exists
+            lock_record = supabase.table('processed_urls').select('*').eq('nfce_url', ENRICHMENT_LOCK_URL).execute()
+            
+            now = datetime.utcnow().isoformat()
+            
+            if not lock_record.data:
+                # Create lock record if it doesn't exist
+                try:
+                    supabase.table('processed_urls').insert({
+                        'nfce_url': ENRICHMENT_LOCK_URL,
+                        'market_id': 'SYSTEM',
+                        'status': 'locked',
+                        'processed_at': now,
+                        'error_message': worker_id
+                    }).execute()
+                    return True
+                except:
+                    # Might have been created by another process
+                    pass
+            else:
+                record = lock_record.data[0]
+                
+                # Check if already locked
+                if record['status'] == 'locked':
+                    # Check if lock is stale
+                    from datetime import datetime, timezone
+                    processed_at_str = record['processed_at']
+                    if processed_at_str.endswith('Z'):
+                        processed_at_str = processed_at_str[:-1] + '+00:00'
+                    elif '+' not in processed_at_str and '-' not in processed_at_str[-6:]:
+                        processed_at_str = processed_at_str + '+00:00'
+                    
+                    processed_at = datetime.fromisoformat(processed_at_str)
+                    if processed_at.tzinfo is None:
+                        processed_at = processed_at.replace(tzinfo=timezone.utc)
+                        
+                    age_seconds = (datetime.now(timezone.utc) - processed_at).total_seconds()
+                    
+                    if age_seconds < STALE_ENRICHMENT_LOCK_SECONDS:
+                        # Lock is active and not stale. 
+                        # Wait and retry unless it's the last attempt
+                        if attempt < max_retries - 1:
+                            # Jittered wait between 2-10 seconds
+                            wait_time = 2 + (random.random() * 8)
+                            print(f"[LOCK] Enrichment locked by {record.get('error_message', 'unknown')}. Attempt {attempt+1}/{max_retries}. Retrying in {wait_time:.1f}s...")
+                            time.sleep(wait_time)
+                            continue
+                        else:
+                            return False
+                    
+                    print(f"[LOCK] Enrichment lock is stale ({age_seconds:.0f}s), breaking it.")
+                
+                # Try to claim the lock (either idle or stale)
+                result = supabase.table('processed_urls').update({
                     'status': 'locked',
                     'processed_at': now,
                     'error_message': worker_id
-                }).execute()
-                return True
-            except:
-                # Might have been created by another process
-                return False
-        
-        record = lock_record.data[0]
-        
-        # Check if already locked
-        if record['status'] == 'locked':
-            # Check if lock is stale
-            from datetime import datetime, timezone
-            processed_at_str = record['processed_at']
-            if processed_at_str.endswith('Z'):
-                processed_at_str = processed_at_str[:-1] + '+00:00'
-            elif '+' not in processed_at_str and '-' not in processed_at_str[-6:]:
-                processed_at_str = processed_at_str + '+00:00'
-            
-            processed_at = datetime.fromisoformat(processed_at_str)
-            if processed_at.tzinfo is None:
-                processed_at = processed_at.replace(tzinfo=timezone.utc)
+                }).eq('nfce_url', ENRICHMENT_LOCK_URL).execute()
                 
-            age_seconds = (datetime.now(timezone.utc) - processed_at).total_seconds()
-            
-            if age_seconds < STALE_ENRICHMENT_LOCK_SECONDS:
+                if len(result.data) > 0:
+                    return True
+
+        except Exception as e:
+            print(f"[LOCK] Error in acquire_enrichment_lock (attempt {attempt+1}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2)
+            else:
                 return False
-            
-            print(f"[LOCK] Enrichment lock is stale ({age_seconds:.0f}s), breaking it.")
-        
-        # Try to claim the lock
-        result = supabase.table('processed_urls').update({
-            'status': 'locked',
-            'processed_at': now,
-            'error_message': worker_id
-        }).eq('nfce_url', ENRICHMENT_LOCK_URL).execute()
-        
-        return len(result.data) > 0
-        
-    except Exception as e:
-        print(f"[LOCK] Error acquiring enrichment lock: {e}")
-        return False
+                
+    return False
 
 def release_enrichment_lock():
     """Release the enrichment lock"""

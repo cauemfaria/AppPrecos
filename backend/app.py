@@ -314,7 +314,7 @@ def process_nfce_in_background(url, url_record_id):
         print(f"[OK] [BACKGROUND #{url_record_id}] Complete in {total_time:.1f}s: {save_result['saved_to_purchases']} products saved")
         
         # TRIGGER ENRICHMENT WORKER
-        print(f"[BACKGROUND #{url_record_id}] Triggering product enrichment...")
+        print(f"[BACKGROUND #{url_record_id}] Triggering product enrichment (will retry if locked)...")
         trigger_enrichment(f"auto-{url_record_id}")
         
     except Exception as e:

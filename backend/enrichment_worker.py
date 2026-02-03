@@ -38,11 +38,12 @@ SLEEP_BETWEEN_BATCHES = 5
 def process_pending_purchases(worker_id="manual"):
     """Main loop to process pending purchases until the queue is empty (One-Shot)"""
     
+    logger.info(f"Worker {worker_id} attempting to acquire enrichment lock...")
     if not acquire_enrichment_lock(worker_id):
-        logger.info(f"Enrichment already in progress or locked (ID: {worker_id}). Skipping.")
+        logger.info(f"Enrichment already in progress or locked (ID: {worker_id}). Exiting after retries.")
         return
 
-    logger.info(f"Starting Enrichment Worker ({worker_id} - One-Shot)...")
+    logger.info(f"Lock acquired by {worker_id}. Starting Enrichment Worker...")
     
     try:
         while True:
@@ -52,8 +53,15 @@ def process_pending_purchases(worker_id="manual"):
                 pending_items = response.data
                 
                 if not pending_items:
-                    logger.info("Queue is empty. Enrichment complete.")
-                    break
+                    # Final safety check: see if anything was added in the last split second
+                    time.sleep(1)
+                    final_check = supabase.table('purchases').select('id').eq('enriched', False).limit(1).execute()
+                    if not final_check.data:
+                        logger.info("Queue is empty. Enrichment complete.")
+                        break
+                    else:
+                        logger.info("Found new items in final check, continuing loop.")
+                        continue
                 
                 logger.info(f"Processing batch of {len(pending_items)} items...")
                 
