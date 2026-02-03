@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { nfceService } from '../services/api';
 import { useStore } from '../store/useStore';
 import type { ProcessingItem } from '../types';
-import { Search, Camera, X } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink, AlertCircle, Camera, X } from 'lucide-react';
 
 // Type declarations for the native BarcodeDetector API
 interface BarcodeDetectorResult {
@@ -304,9 +304,9 @@ const ScannerPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col items-center justify-center max-w-2xl mx-auto w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Scanner View */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center min-h-[400px] w-full">
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center min-h-[400px]">
           {!isScanning ? (
             <div className="flex flex-col items-center gap-6 text-center">
               <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
@@ -367,6 +367,110 @@ const ScannerPage: React.FC = () => {
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                 Aponte a câmera para o QR code
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Processing Queue */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col h-[500px]">
+          <h3 className="text-lg font-bold mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" />
+              Fila de Processamento
+            </div>
+            {processingQueue.length > 0 && (
+              <span className="bg-blue-50 text-blue-600 text-xs px-2 py-1 rounded-full">
+                {processingQueue.length} itens
+              </span>
+            )}
+          </h3>
+          
+          <div className="flex-1 overflow-auto pr-2 space-y-3">
+            {processingQueue.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 p-8">
+                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                  <Clock className="w-8 h-8 opacity-20" />
+                </div>
+                <p className="font-medium text-gray-500">Nenhum processo ativo</p>
+                <p className="text-sm max-w-[200px] mt-1">Cupons escaneados aparecerão aqui durante o processamento.</p>
+              </div>
+            ) : (
+              processingQueue.map((item) => (
+                <div key={item.record_id} className={`p-4 rounded-2xl border transition-all ${
+                  item.status === 'success' ? 'bg-green-50 border-green-100' :
+                  item.status === 'error' ? 'bg-red-50 border-red-100' :
+                  item.status === 'duplicate' ? 'bg-orange-50 border-orange-100' :
+                  'bg-gray-50 border-gray-100'
+                }`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className={`font-bold truncate ${
+                          item.status === 'success' ? 'text-green-800' :
+                          item.status === 'error' ? 'text-red-800' :
+                          item.status === 'duplicate' ? 'text-orange-800' :
+                          'text-gray-800'
+                        }`}>
+                          {item.market_name || (
+                            item.status === 'sending' ? 'Enviando ao servidor...' :
+                            item.status === 'duplicate' ? 'Já existe no sistema' :
+                            'Processando mercado...'
+                          )}
+                        </p>
+                      </div>
+                      
+                      {item.status === 'error' ? (
+                        <p className="text-xs text-red-500 line-clamp-2">{item.error_message}</p>
+                      ) : item.status === 'duplicate' ? (
+                        <p className="text-xs text-orange-500">Este cupom já foi adicionado.</p>
+                      ) : (
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          {item.products_count ? (
+                            <span className="font-medium text-blue-600">{item.products_count} produtos</span>
+                          ) : (
+                            <span className="flex items-center gap-1 italic">
+                              {item.status === 'extracting' ? 'Extraindo itens...' : 'Conectando...'}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="shrink-0 pt-1">
+                      {item.status === 'success' ? (
+                        <CheckCircle2 className="w-6 h-6 text-green-500" />
+                      ) : item.status === 'error' ? (
+                        <XCircle className="w-6 h-6 text-red-500" />
+                      ) : item.status === 'duplicate' ? (
+                        <AlertCircle className="w-6 h-6 text-orange-500" />
+                      ) : (
+                        <div className="relative">
+                          <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {item.status === 'success' && (
+                    <div className="mt-3 pt-3 border-t border-green-100 flex justify-end">
+                      <button className="text-[10px] font-bold text-green-700 uppercase tracking-wider flex items-center gap-1 hover:underline">
+                        Ver mercado <ExternalLink className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          
+          {processingQueue.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">
+                Itens são removidos automaticamente após 5s
+              </p>
             </div>
           )}
         </div>
