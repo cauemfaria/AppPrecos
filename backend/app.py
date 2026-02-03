@@ -876,6 +876,112 @@ def compare_products():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/products/best-markets', methods=['POST'])
+def get_best_markets_for_product():
+    """
+    Find the best (cheapest) markets for a single product
+    Request body: {
+        "product": {"ean": "...", "ncm": "...", "product_name": "..."},
+        "limit": 3
+    }
+    Returns top markets sorted by price (lowest first)
+    """
+    data = request.get_json()
+    
+    product = data.get('product', {})
+    limit = min(data.get('limit', 3), 10)  # Max 10 markets
+    
+    if not product:
+        return jsonify({'error': 'Produto é obrigatório'}), 400
+    
+    try:
+        market_prices = []
+        
+        # Try to find by EAN first (if available and not "SEM GTIN")
+        if product.get('ean') and product['ean'] != 'SEM GTIN':
+            result = supabase.table('unique_products').select(
+                'market_id, price, product_name, image_url, unidade_comercial'
+            ).eq('ean', product['ean']).execute()
+            
+            if result.data:
+                for item in result.data:
+                    # Get market details
+                    market_result = supabase.table('markets').select('name, address').eq(
+                        'market_id', item['market_id']
+                    ).execute()
+                    
+                    if market_result.data:
+                        market = market_result.data[0]
+                        market_prices.append({
+                            'market_id': item['market_id'],
+                            'market_name': market['name'],
+                            'market_address': market['address'],
+                            'price': item['price'],
+                            'product_name': item['product_name'],
+                            'image_url': item.get('image_url'),
+                            'unidade_comercial': item['unidade_comercial']
+                        })
+        
+        # Fallback to NCM if no EAN matches found
+        if not market_prices and product.get('ncm'):
+            result = supabase.table('unique_products').select(
+                'market_id, price, product_name, image_url, unidade_comercial'
+            ).eq('ncm', product['ncm']).execute()
+            
+            if result.data:
+                # If we have a product name, try to match it
+                product_name = product.get('product_name', '').lower()
+                filtered_data = result.data
+                
+                if product_name:
+                    # Try exact match first
+                    exact_matches = [
+                        item for item in result.data 
+                        if product_name in item['product_name'].lower()
+                    ]
+                    if exact_matches:
+                        filtered_data = exact_matches
+                
+                for item in filtered_data:
+                    # Get market details
+                    market_result = supabase.table('markets').select('name, address').eq(
+                        'market_id', item['market_id']
+                    ).execute()
+                    
+                    if market_result.data:
+                        market = market_result.data[0]
+                        market_prices.append({
+                            'market_id': item['market_id'],
+                            'market_name': market['name'],
+                            'market_address': market['address'],
+                            'price': item['price'],
+                            'product_name': item['product_name'],
+                            'image_url': item.get('image_url'),
+                            'unidade_comercial': item['unidade_comercial']
+                        })
+        
+        # Sort by price (lowest first) and limit
+        market_prices.sort(key=lambda x: x['price'])
+        best_markets = market_prices[:limit]
+        
+        if not best_markets:
+            return jsonify({
+                'product': product,
+                'best_markets': [],
+                'message': 'Produto não encontrado em nenhum mercado'
+            }), 200
+        
+        return jsonify({
+            'product': product,
+            'best_markets': best_markets,
+            'total_markets_found': len(market_prices)
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     import io
     

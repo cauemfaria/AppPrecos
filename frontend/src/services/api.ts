@@ -7,7 +7,9 @@ import type {
   CompareResponse, 
   NFCeRequest, 
   NFCeResponse, 
-  NFCeStatusResponse 
+  NFCeStatusResponse,
+  CompareRequestProduct,
+  BestMarketsResponse
 } from '../types';
 
 // Use environment variable for API base URL, fallback to existing one
@@ -64,6 +66,14 @@ export const productService = {
 
   compareProducts: async (request: CompareRequest) => {
     const response = await api.post<CompareResponse>('/products/compare', request);
+    return response.data;
+  },
+
+  getBestMarketsForProduct: async (product: CompareRequestProduct, limit: number = 3) => {
+    const response = await api.post<BestMarketsResponse>('/products/best-markets', {
+      product,
+      limit,
+    });
     return response.data;
   },
 };

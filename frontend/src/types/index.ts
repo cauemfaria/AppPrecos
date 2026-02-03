@@ -101,3 +101,25 @@ export interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'statu
   status: 'queued' | 'sending' | 'processing' | 'extracting' | 'success' | 'error' | 'duplicate';
   addedAt: number;
 }
+
+export interface BestMarketItem {
+  market_id: string;
+  market_name: string;
+  market_address: string;
+  price: number;
+  product_name: string;
+  image_url?: string;
+  unidade_comercial: string;
+}
+
+export interface BestMarketsRequest {
+  product: CompareRequestProduct;
+  limit?: number;
+}
+
+export interface BestMarketsResponse {
+  product: CompareRequestProduct;
+  best_markets: BestMarketItem[];
+  total_markets_found: number;
+  message?: string;
+}
