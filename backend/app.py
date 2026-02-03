@@ -767,21 +767,18 @@ def search_products():
 def manual_trigger_enrichment():
     """Manually trigger the product enrichment process"""
     try:
-        # Check if already locked
-        lock_record = supabase.table('processed_urls').select('status').eq('nfce_url', 'SYSTEM_ENRICHMENT_LOCK').execute()
-        
-        if lock_record.data and lock_record.data[0]['status'] == 'locked':
-            return jsonify({
-                'message': 'Enriquecimento já está em andamento',
-                'status': 'running'
-            }), 200
-            
+        # Note: We no longer do a manual lock check here because acquire_enrichment_lock()
+        # inside the worker has built-in retry logic and handles stale locks correctly.
+        # This ensures the 'Sync' button always attempts to start a worker that can 
+        # break through ghost locks or wait for an active one.
         trigger_enrichment("manual-api")
+        
         return jsonify({
             'message': 'Enriquecimento de produtos iniciado em segundo plano',
             'status': 'started'
         }), 202
     except Exception as e:
+        print(f"[ERROR] Manual enrichment trigger failed: {e}")
         return jsonify({'error': str(e)}), 500
 
 
