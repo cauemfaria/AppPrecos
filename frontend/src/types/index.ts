@@ -121,5 +121,6 @@ export interface BestMarketsResponse {
   product: CompareRequestProduct;
   best_markets: BestMarketItem[];
   total_markets_found: number;
+  unique_price_points: number;
   message?: string;
 }

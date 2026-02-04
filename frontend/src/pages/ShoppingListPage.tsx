@@ -609,57 +609,86 @@ const ShoppingListPage: React.FC = () => {
                 </div>
               ) : bestPlacesResult && bestPlacesResult.best_markets.length > 0 ? (
                 <div className="space-y-3">
-                  {bestPlacesResult.best_markets.map((market, idx) => (
-                    <div 
-                      key={market.market_id} 
-                      className={`p-5 rounded-2xl border-2 transition-all ${
-                        idx === 0 
-                          ? 'bg-green-50 border-green-200' 
-                          : idx === 1 
-                          ? 'bg-blue-50 border-blue-200' 
-                          : 'bg-orange-50 border-orange-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                            idx === 0 
-                              ? 'bg-green-600 text-white' 
-                              : idx === 1 
-                              ? 'bg-blue-600 text-white' 
-                              : 'bg-orange-600 text-white'
-                          }`}>
-                            {idx === 0 ? <Award className="w-6 h-6" /> : <span className="font-bold text-lg">{idx + 1}</span>}
+                  {(() => {
+                    // Group markets by price and assign rank based on unique prices
+                    const priceGroups = bestPlacesResult.best_markets.reduce((acc, market) => {
+                      const priceKey = market.price.toFixed(2);
+                      if (!acc[priceKey]) {
+                        acc[priceKey] = [];
+                      }
+                      acc[priceKey].push(market);
+                      return acc;
+                    }, {} as Record<string, typeof bestPlacesResult.best_markets>);
+                    
+                    const uniquePrices = Object.keys(priceGroups).sort((a, b) => parseFloat(a) - parseFloat(b));
+                    
+                    return uniquePrices.flatMap((priceKey, priceRank) => 
+                      priceGroups[priceKey].map((market, marketIdx) => {
+                        const isFirstInGroup = marketIdx === 0;
+                        const groupSize = priceGroups[priceKey].length;
+                        const hasTie = groupSize > 1;
+                        
+                        // Color scheme based on rank
+                        const colors = {
+                          bg: priceRank === 0 ? 'bg-green-50' : priceRank === 1 ? 'bg-blue-50' : 'bg-orange-50',
+                          border: priceRank === 0 ? 'border-green-200' : priceRank === 1 ? 'border-blue-200' : 'border-orange-200',
+                          iconBg: priceRank === 0 ? 'bg-green-600' : priceRank === 1 ? 'bg-blue-600' : 'bg-orange-600',
+                          textTitle: priceRank === 0 ? 'text-green-900' : priceRank === 1 ? 'text-blue-900' : 'text-orange-900',
+                          textPrice: priceRank === 0 ? 'text-green-700' : priceRank === 1 ? 'text-blue-700' : 'text-orange-700',
+                          badge: priceRank === 0 ? 'text-green-700 bg-green-100' : priceRank === 1 ? 'text-blue-700 bg-blue-100' : 'text-orange-700 bg-orange-100',
+                        };
+                        
+                        return (
+                          <div 
+                            key={market.market_id} 
+                            className={`p-5 rounded-2xl border-2 transition-all ${colors.bg} ${colors.border}`}
+                          >
+                            <div className="flex items-start justify-between gap-4 mb-3">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${colors.iconBg} text-white`}>
+                                  {priceRank === 0 ? (
+                                    <Award className="w-6 h-6" />
+                                  ) : (
+                                    <span className="font-bold text-lg">{priceRank + 1}</span>
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className={`font-bold text-lg truncate ${colors.textTitle}`}>
+                                    {market.market_name}
+                                  </h4>
+                                  {isFirstInGroup && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {priceRank === 0 && (
+                                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${colors.badge}`}>
+                                          {hasTie ? `Melhor Preço (${groupSize} mercados)` : 'Melhor Preço'}
+                                        </span>
+                                      )}
+                                      {priceRank > 0 && hasTie && (
+                                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${colors.badge}`}>
+                                          Empate - {groupSize} mercados
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className={`text-2xl font-bold ${colors.textPrice}`}>
+                                  R$ {market.price.toFixed(2)}
+                                </p>
+                                <p className="text-[10px] text-gray-500 uppercase font-bold">{market.unidade_comercial}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-2 text-sm text-gray-600 pt-3 border-t border-gray-200">
+                              <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+                              <p className="line-clamp-2 leading-snug">{market.market_address}</p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className={`font-bold text-lg truncate ${
-                              idx === 0 ? 'text-green-900' : idx === 1 ? 'text-blue-900' : 'text-orange-900'
-                            }`}>
-                              {market.market_name}
-                            </h4>
-                            {idx === 0 && (
-                              <span className="inline-block text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase mt-1">
-                                Melhor Preço
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-2xl font-bold ${
-                            idx === 0 ? 'text-green-700' : idx === 1 ? 'text-blue-700' : 'text-orange-700'
-                          }`}>
-                            R$ {market.price.toFixed(2)}
-                          </p>
-                          <p className="text-[10px] text-gray-500 uppercase font-bold">{market.unidade_comercial}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2 text-sm text-gray-600 pt-3 border-t border-gray-200">
-                        <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
-                        <p className="line-clamp-2 leading-snug">{market.market_address}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {bestPlacesResult.total_markets_found > 3 && (
+                        );
+                      })
+                    );
+                  })()}
+                  {bestPlacesResult.total_markets_found > bestPlacesResult.best_markets.length && (
                     <p className="text-center text-xs text-gray-500 pt-2">
                       Encontrado em {bestPlacesResult.total_markets_found} mercados no total
                     </p>

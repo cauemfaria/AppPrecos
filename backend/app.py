@@ -884,12 +884,12 @@ def get_best_markets_for_product():
         "product": {"ean": "...", "ncm": "...", "product_name": "..."},
         "limit": 3
     }
-    Returns top markets sorted by price (lowest first)
+    Returns all markets with top 3 unique prices (handles ties)
     """
     data = request.get_json()
     
     product = data.get('product', {})
-    limit = min(data.get('limit', 3), 10)  # Max 10 markets
+    limit = min(data.get('limit', 3), 10)  # Max 10 unique price points
     
     if not product:
         return jsonify({'error': 'Produto é obrigatório'}), 400
@@ -960,21 +960,27 @@ def get_best_markets_for_product():
                             'unidade_comercial': item['unidade_comercial']
                         })
         
-        # Sort by price (lowest first) and limit
-        market_prices.sort(key=lambda x: x['price'])
-        best_markets = market_prices[:limit]
-        
-        if not best_markets:
+        if not market_prices:
             return jsonify({
                 'product': product,
                 'best_markets': [],
                 'message': 'Produto não encontrado em nenhum mercado'
             }), 200
         
+        # Sort by price (lowest first)
+        market_prices.sort(key=lambda x: x['price'])
+        
+        # Find top N unique price points (to handle ties)
+        unique_prices = sorted(set(m['price'] for m in market_prices))[:limit]
+        
+        # Return all markets that have any of the top N prices
+        best_markets = [m for m in market_prices if m['price'] in unique_prices]
+        
         return jsonify({
             'product': product,
             'best_markets': best_markets,
-            'total_markets_found': len(market_prices)
+            'total_markets_found': len(market_prices),
+            'unique_price_points': len(unique_prices)
         })
     except Exception as e:
         import traceback
