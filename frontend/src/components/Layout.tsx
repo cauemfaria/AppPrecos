@@ -27,11 +27,13 @@ const Layout: React.FC = () => {
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => navigate('/')}
           >
-            <img 
-              src="/branding/app-logo.png" 
-              alt="AppPrecos Logo" 
-              className="w-9 h-9 rounded-xl object-contain"
-            />
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#EFF6FF' }}>
+              <img 
+                src="/app-logo.png" 
+                alt="AppPrecos Logo" 
+                className="w-full h-full object-contain object-center"
+              />
+            </div>
             <h1
               className="text-xl font-bold"
               style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
