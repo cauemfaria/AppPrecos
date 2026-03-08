@@ -549,6 +549,31 @@ def _format_status_record(record):
     }
 
 
+@app.route('/api/nfce/check', methods=['GET'])
+def check_nfce_exists():
+    """Lightweight check: does this NFCe URL already exist in processed_urls?"""
+    url = request.args.get('url', '').strip()
+    if not url:
+        return jsonify({'exists': False}), 200
+
+    try:
+        result = supabase.table('processed_urls').select('id, status, market_name, products_count') \
+            .eq('nfce_url', url).limit(1).execute()
+
+        if result.data:
+            row = result.data[0]
+            return jsonify({
+                'exists': True,
+                'status': row.get('status', 'unknown'),
+                'market_name': row.get('market_name', ''),
+                'products_count': row.get('products_count', 0),
+            }), 200
+
+        return jsonify({'exists': False}), 200
+    except Exception as e:
+        return jsonify({'exists': False, 'error': str(e)}), 200
+
+
 @app.route('/api/nfce/status/<int:record_id>', methods=['GET'])
 def get_nfce_status(record_id):
     """Get processing status by record ID"""

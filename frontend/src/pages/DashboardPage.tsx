@@ -173,7 +173,8 @@ const QueueItem: React.FC<{ item: ProcessingItem }> = ({ item }) => {
 // ─── DashboardPage ────────────────────────────────────────────────────────────
 
 const DashboardPage: React.FC = () => {
-  const { processingQueue } = useStore();
+  const { processingQueue: rawQueue } = useStore();
+  const processingQueue = rawQueue.filter(item => item.status !== 'duplicate');
 
   return (
     <div

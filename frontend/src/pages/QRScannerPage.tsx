@@ -37,6 +37,7 @@ const QRScannerPage: React.FC = () => {
   const [scanCount, setScanCount] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
 
@@ -135,6 +136,7 @@ const QRScannerPage: React.FC = () => {
     isPausedRef.current = false;
     setIsPaused(false);
     setIsDuplicate(false);
+    setIsChecking(false);
     animationFrameRef.current = requestAnimationFrame(detectFrameRef.current);
   }, []);
 
@@ -155,24 +157,36 @@ const QRScannerPage: React.FC = () => {
     setIsScanning(false);
     setIsPaused(false);
     setIsDuplicate(false);
+    setIsChecking(false);
     setScanCount(0);
   }, []);
 
-  const onQrDetected = useCallback((rawValue: string) => {
-    // Pause detection immediately — this is the fix for the rapid-fire bug
+  const onQrDetected = useCallback(async (rawValue: string) => {
     pauseDetection();
-
     if (navigator.vibrate) navigator.vibrate(100);
 
-    // Check if already queued in this session
+    // Layer 1: instant local check (same-session duplicates)
     const alreadyQueued = useStore.getState().processingQueue.some(i => i.url === rawValue);
-
     if (alreadyQueued) {
       setIsDuplicate(true);
-      // Do NOT increment counter, do NOT resubmit
       return;
     }
 
+    // Layer 2: backend check against processed_urls (cross-session duplicates)
+    setIsChecking(true);
+    try {
+      const { exists } = await nfceService.checkNFCeExists(rawValue);
+      if (exists) {
+        setIsChecking(false);
+        setIsDuplicate(true);
+        return;
+      }
+    } catch {
+      // Network failure — proceed optimistically; backend /extract will 409 if truly duplicate
+    }
+    setIsChecking(false);
+
+    // Layer 3: new NFCe — flash, count, submit
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 400);
     setScanCount(prev => prev + 1);
@@ -363,8 +377,14 @@ const QRScannerPage: React.FC = () => {
                 className="absolute inset-0 flex flex-col items-center justify-center gap-5"
                 style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
               >
-                {/* Status pill */}
-                {isDuplicate ? (
+                {isChecking ? (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'rgba(100,116,139,0.9)' }}
+                  >
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Verificando...
+                  </div>
+                ) : isDuplicate ? (
                   <div
                     className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
                     style={{ backgroundColor: 'rgba(217,119,6,0.95)' }}
@@ -382,20 +402,21 @@ const QRScannerPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Next scan button */}
-                <button
-                  onClick={resumeDetection}
-                  className="flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-sm cursor-pointer transition-all duration-200 active:scale-[0.97]"
-                  style={{
-                    backgroundColor: 'var(--color-cta)',
-                    color: 'white',
-                    fontFamily: 'var(--font-body)',
-                    boxShadow: '0 4px 20px rgba(249,115,22,0.5)',
-                  }}
-                >
-                  <ScanLine className="w-5 h-5" />
-                  Escanear próximo
-                </button>
+                {!isChecking && (
+                  <button
+                    onClick={resumeDetection}
+                    className="flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-sm cursor-pointer transition-all duration-200 active:scale-[0.97]"
+                    style={{
+                      backgroundColor: 'var(--color-cta)',
+                      color: 'white',
+                      fontFamily: 'var(--font-body)',
+                      boxShadow: '0 4px 20px rgba(249,115,22,0.5)',
+                    }}
+                  >
+                    <ScanLine className="w-5 h-5" />
+                    Escanear próximo
+                  </button>
+                )}
               </div>
             )}
           </>
@@ -429,9 +450,11 @@ const QRScannerPage: React.FC = () => {
           style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}
         >
           {isPaused
-            ? isDuplicate
-              ? 'Este cupom já foi registrado'
-              : 'Toque em "Escanear próximo" para continuar'
+            ? isChecking
+              ? 'Verificando nota fiscal...'
+              : isDuplicate
+                ? 'Este cupom já foi registrado'
+                : 'Toque em "Escanear próximo" para continuar'
             : 'Aponte para o código QR para escanear'}
         </p>
       </div>

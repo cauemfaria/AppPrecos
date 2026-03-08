@@ -79,6 +79,14 @@ export const productService = {
 };
 
 export const nfceService = {
+  checkNFCeExists: async (url: string): Promise<{ exists: boolean; status?: string; market_name?: string }> => {
+    const response = await api.get<{ exists: boolean; status?: string; market_name?: string }>('/nfce/check', {
+      params: { url },
+      timeout: 5000,
+    });
+    return response.data;
+  },
+
   extractNFCe: async (request: NFCeRequest) => {
     const response = await api.post<NFCeResponse>('/nfce/extract', request);
     return response.data;

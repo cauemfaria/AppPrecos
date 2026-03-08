@@ -93,7 +93,7 @@ const QueueManager: React.FC = () => {
             status: status.status as any
           });
 
-          if (status.status === 'success' || status.status === 'error') {
+          if (['success', 'error', 'duplicate'].includes(status.status)) {
             setTimeout(() => {
               removeFromProcessingQueue(status.record_id);
             }, 5000);
