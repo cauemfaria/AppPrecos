@@ -65,40 +65,6 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
   const [history, setHistory] = useState<PriceHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
-  // Swipe-to-dismiss
-  const [dragY, setDragY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartY = useRef(0);
-  const dragCurrentY = useRef(0);
-
-  const handleDismiss = () => {
-    setDragY(window.innerHeight);
-    setTimeout(onClose, 260);
-  };
-
-  const onDragStart = (e: React.TouchEvent) => {
-    dragStartY.current = e.touches[0].clientY;
-    dragCurrentY.current = 0;
-    setIsDragging(true);
-  };
-
-  const onDragMove = (e: React.TouchEvent) => {
-    const delta = e.touches[0].clientY - dragStartY.current;
-    if (delta > 0) {
-      dragCurrentY.current = delta;
-      setDragY(delta);
-    }
-  };
-
-  const onDragEnd = () => {
-    setIsDragging(false);
-    if (dragCurrentY.current > 120) {
-      handleDismiss();
-    } else {
-      setDragY(0);
-    }
-  };
-
   useEffect(() => {
     let cancelled = false;
     setLoadingHistory(true);
@@ -130,26 +96,8 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
         style={{
           backgroundColor: 'var(--color-background)',
           height: '100dvh',
-          transform: `translateY(${dragY}px)`,
-          transition: isDragging ? 'none' : 'transform 260ms ease',
         }}
       >
-        {/* Drag handle pill */}
-        <div
-          className="flex justify-center items-center shrink-0 cursor-grab active:cursor-grabbing"
-          style={{
-            paddingTop: '12px',
-            paddingBottom: '12px',
-            backgroundColor: 'var(--color-surface)',
-            touchAction: 'none',
-          }}
-          onTouchStart={onDragStart}
-          onTouchMove={onDragMove}
-          onTouchEnd={onDragEnd}
-        >
-          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: '#CBD5E1' }} />
-        </div>
-
         {/* Sticky top bar */}
         <div
           className="flex items-center gap-3 px-4 py-3 shrink-0"
