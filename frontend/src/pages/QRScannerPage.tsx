@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { nfceService } from '../services/api';
 import { useStore } from '../store/useStore';
 import type { ProcessingItem } from '../types';
-import { X, Link, ScanLine, CheckCircle2 } from 'lucide-react';
+import { X, Link, ScanLine, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface BarcodeDetectorResult {
   rawValue: string;
@@ -36,7 +36,7 @@ const QRScannerPage: React.FC = () => {
   const [scanFlash, setScanFlash] = useState(false);
   const [scanCount, setScanCount] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [lastScannedUrl, setLastScannedUrl] = useState<string | null>(null);
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
 
@@ -134,7 +134,7 @@ const QRScannerPage: React.FC = () => {
     if (!detectFrameRef.current) return;
     isPausedRef.current = false;
     setIsPaused(false);
-    setLastScannedUrl(null);
+    setIsDuplicate(false);
     animationFrameRef.current = requestAnimationFrame(detectFrameRef.current);
   }, []);
 
@@ -154,8 +154,8 @@ const QRScannerPage: React.FC = () => {
     detectFrameRef.current = null;
     setIsScanning(false);
     setIsPaused(false);
+    setIsDuplicate(false);
     setScanCount(0);
-    setLastScannedUrl(null);
   }, []);
 
   const onQrDetected = useCallback((rawValue: string) => {
@@ -163,10 +163,20 @@ const QRScannerPage: React.FC = () => {
     pauseDetection();
 
     if (navigator.vibrate) navigator.vibrate(100);
+
+    // Check if already queued in this session
+    const alreadyQueued = useStore.getState().processingQueue.some(i => i.url === rawValue);
+
+    if (alreadyQueued) {
+      setIsDuplicate(true);
+      // Do NOT increment counter, do NOT resubmit
+      return;
+    }
+
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 400);
     setScanCount(prev => prev + 1);
-    setLastScannedUrl(rawValue);
+    setIsDuplicate(false);
     handleUrlSubmitted(rawValue);
   }, [pauseDetection, handleUrlSubmitted]);
 
@@ -288,16 +298,6 @@ const QRScannerPage: React.FC = () => {
     }
   };
 
-  // Shorten a URL for display (show just the domain + last segment)
-  const shortenUrl = (url: string) => {
-    try {
-      const u = new URL(url);
-      return u.hostname;
-    } catch {
-      return url.length > 40 ? url.slice(0, 40) + '…' : url;
-    }
-  };
-
   return (
     <div
       className="fixed inset-0 flex flex-col"
@@ -363,22 +363,23 @@ const QRScannerPage: React.FC = () => {
                 className="absolute inset-0 flex flex-col items-center justify-center gap-5"
                 style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
               >
-                {/* Success pill */}
-                <div
-                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
-                  style={{ backgroundColor: 'rgba(16,185,129,0.9)' }}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  QR lido com sucesso
-                </div>
-
-                {lastScannedUrl && (
-                  <p
-                    className="text-xs px-6 text-center"
-                    style={{ color: 'rgba(255,255,255,0.6)' }}
+                {/* Status pill */}
+                {isDuplicate ? (
+                  <div
+                    className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'rgba(217,119,6,0.95)' }}
                   >
-                    {shortenUrl(lastScannedUrl)}
-                  </p>
+                    <AlertCircle className="w-4 h-4" />
+                    Essa nota já foi registrada
+                  </div>
+                ) : (
+                  <div
+                    className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'rgba(16,185,129,0.9)' }}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    QR lido com sucesso
+                  </div>
                 )}
 
                 {/* Next scan button */}
@@ -428,7 +429,9 @@ const QRScannerPage: React.FC = () => {
           style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}
         >
           {isPaused
-            ? 'Toque em "Escanear próximo" para continuar'
+            ? isDuplicate
+              ? 'Este cupom já foi registrado'
+              : 'Toque em "Escanear próximo" para continuar'
             : 'Aponte para o código QR para escanear'}
         </p>
       </div>

@@ -2,7 +2,7 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import {
   CheckCircle2, XCircle, Clock,
-  AlertCircle, ExternalLink,
+  AlertCircle,
   Receipt, Coins, Store,
 } from 'lucide-react';
 import type { ProcessingItem } from '../types';
@@ -166,19 +166,6 @@ const QueueItem: React.FC<{ item: ProcessingItem }> = ({ item }) => {
         </p>
       </div>
 
-      {/* Action */}
-      {item.status === 'success' && (
-        <button
-          className="shrink-0 flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer transition-all duration-150 active:scale-95"
-          style={{
-            color: '#16A34A',
-            backgroundColor: '#DCFCE7',
-            fontFamily: 'var(--font-body)',
-          }}
-        >
-          Ver <ExternalLink className="w-3 h-3" />
-        </button>
-      )}
     </div>
   );
 };

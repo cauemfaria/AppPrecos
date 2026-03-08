@@ -24,16 +24,20 @@ const QueueManager: React.FC = () => {
       const now = Date.now();
       const current = useStore.getState().processingQueue;
 
-      // Remove items stuck for more than 15 minutes (prevents infinite spinners)
-      const staleIds = current
-        .filter(item => now - item.addedAt > STALE_THRESHOLD_MS &&
-          !['success', 'error', 'duplicate'].includes(item.status))
+      // Remove items that are already in a terminal state (persisted from a previous session)
+      // and items stuck in a non-terminal state for more than 15 minutes
+      const idsToRemove = current
+        .filter(item =>
+          ['success', 'error', 'duplicate'].includes(item.status) ||
+          (now - item.addedAt > STALE_THRESHOLD_MS &&
+            !['success', 'error', 'duplicate'].includes(item.status))
+        )
         .map(item => item.record_id);
 
-      if (staleIds.length > 0) {
-        const cleaned = current.filter(item => !staleIds.includes(item.record_id));
+      if (idsToRemove.length > 0) {
+        const cleaned = current.filter(item => !idsToRemove.includes(item.record_id));
         setProcessingQueue(cleaned);
-        console.log(`[QueueManager] Cleaned ${staleIds.length} stale items`);
+        console.log(`[QueueManager] Cleaned ${idsToRemove.length} completed/stale items on startup`);
       }
 
       // Merge with backend state
