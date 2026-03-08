@@ -88,7 +88,7 @@ CREATE TABLE unique_products (
     price FLOAT NOT NULL,
     nfce_url VARCHAR(1000),
     image_url TEXT,
-    last_updated TIMESTAMP DEFAULT NOW()
+    purchase_date TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- 5. Product Backlog (Failed matches for manual review)

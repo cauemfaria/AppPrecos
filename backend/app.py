@@ -294,6 +294,19 @@ def process_nfce_in_background(url, url_record_id):
 
         market_info = result.get('market_info', {})
         products = result.get('products', [])
+        purchase_date_str = result.get('purchase_date')
+
+        purchase_date = None
+        if purchase_date_str:
+            try:
+                purchase_date = datetime.strptime(purchase_date_str, "%d/%m/%Y %H:%M:%S%z")
+                print(f"[BACKGROUND #{url_record_id}] Emission date: {purchase_date.isoformat()}")
+            except Exception:
+                try:
+                    purchase_date = datetime.strptime(purchase_date_str, "%d/%m/%Y %H:%M:%S")
+                    print(f"[BACKGROUND #{url_record_id}] Emission date (no tz): {purchase_date.isoformat()}")
+                except Exception as date_err:
+                    print(f"[BACKGROUND #{url_record_id}] Could not parse emission date '{purchase_date_str}': {date_err}")
 
         if not products or not market_info.get('name') or not market_info.get('address'):
             release_extraction_lock(url_record_id, 'error',
@@ -322,7 +335,7 @@ def process_nfce_in_background(url, url_record_id):
             print(f"[BACKGROUND #{url_record_id}] Created new market: {market['market_id']}")
 
         print(f"[BACKGROUND #{url_record_id}] Saving {len(products)} products...")
-        save_result = save_products_to_supabase(market['market_id'], products, resolved_url)
+        save_result = save_products_to_supabase(market['market_id'], products, resolved_url, purchase_date=purchase_date)
 
         release_extraction_lock(url_record_id, 'success',
             market_id=market['market_id'],

@@ -80,7 +80,8 @@ def extract_full_nfce_data(url, headless=True):
     
     result = {
         'market_info': {},
-        'products': []
+        'products': [],
+        'purchase_date': None
     }
     
     try:
@@ -109,6 +110,16 @@ def extract_full_nfce_data(url, headless=True):
                 
                 # Extract market information
                 result['market_info'] = extract_market_info(html)
+                
+                # Extract emission date (the real purchase date from the receipt)
+                date_pattern = r'<label>Data de Emiss[aã]o</label>\s*<span>([^<]+)</span>'
+                date_match = re.search(date_pattern, html)
+                if date_match:
+                    result['purchase_date'] = date_match.group(1).strip()
+                    print(f"[NFCe] Found emission date: {result['purchase_date']}")
+                else:
+                    result['purchase_date'] = None
+                    print("[NFCe] WARNING: Emission date not found in HTML")
                 
                 # Extract all product data using regex patterns
                 ncm_pattern = r'Código NCM</label>\s*<span>(\d{8})</span>'
@@ -163,7 +174,7 @@ def extract_full_nfce_data(url, headless=True):
         
     except Exception as e:
         print(f"Error extracting NFCe data: {e}")
-        return {'market_info': {}, 'products': []}
+        return {'market_info': {}, 'products': [], 'purchase_date': None}
 
 
 # For testing

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { nfceService } from '../services/api';
 import { useStore } from '../store/useStore';
 import type { ProcessingItem } from '../types';
-import { X, Link } from 'lucide-react';
+import { X, Link, ScanLine, CheckCircle2 } from 'lucide-react';
 
 interface BarcodeDetectorResult {
   rawValue: string;
@@ -28,7 +28,6 @@ declare global {
 }
 
 const MAX_CONCURRENT_SUBMISSIONS = 3;
-const DEBOUNCE_MS = 3000;
 
 const QRScannerPage: React.FC = () => {
   const navigate = useNavigate();
@@ -36,6 +35,8 @@ const QRScannerPage: React.FC = () => {
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scanFlash, setScanFlash] = useState(false);
   const [scanCount, setScanCount] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [lastScannedUrl, setLastScannedUrl] = useState<string | null>(null);
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
 
@@ -44,9 +45,13 @@ const QRScannerPage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const recentScansRef = useRef<Record<string, number>>({});
   const pendingUrlsRef = useRef<string[]>([]);
   const activeSubmissionsRef = useRef(0);
+
+  // Ref-based pause flag so the detectFrame closure reads the latest value without stale closure issues
+  const isPausedRef = useRef(false);
+  // Stored so we can resume without restarting the camera
+  const detectFrameRef = useRef<(() => void) | null>(null);
 
   const submitUrl = useCallback(async (url: string) => {
     const existing = useStore.getState().processingQueue.find(i => i.url === url);
@@ -89,14 +94,11 @@ const QRScannerPage: React.FC = () => {
   const handleUrlSubmitted = useCallback((url: string) => {
     if (!url.trim()) return;
 
-    const now = Date.now();
-    if (recentScansRef.current[url] && now - recentScansRef.current[url] < DEBOUNCE_MS) return;
-
+    // Guard: skip if already in the queue
     const currentQueue = useStore.getState().processingQueue;
     if (currentQueue.some(item => item.url === url)) return;
 
-    recentScansRef.current[url] = now;
-
+    const now = Date.now();
     const pendingItem: ProcessingItem = {
       record_id: -now - Math.random(),
       url,
@@ -117,6 +119,25 @@ const QRScannerPage: React.FC = () => {
     }
   }, [addToProcessingQueue, submitUrl, drainPendingQueue]);
 
+  // Pause detection (camera stays on, frame loop stops)
+  const pauseDetection = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    isPausedRef.current = true;
+    setIsPaused(true);
+  }, []);
+
+  // Resume detection without restarting the camera
+  const resumeDetection = useCallback(() => {
+    if (!detectFrameRef.current) return;
+    isPausedRef.current = false;
+    setIsPaused(false);
+    setLastScannedUrl(null);
+    animationFrameRef.current = requestAnimationFrame(detectFrameRef.current);
+  }, []);
+
   const stopScanning = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -129,21 +150,25 @@ const QRScannerPage: React.FC = () => {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    isPausedRef.current = false;
+    detectFrameRef.current = null;
     setIsScanning(false);
+    setIsPaused(false);
     setScanCount(0);
+    setLastScannedUrl(null);
   }, []);
 
   const onQrDetected = useCallback((rawValue: string) => {
-    const now = Date.now();
-    if (recentScansRef.current[rawValue] && now - recentScansRef.current[rawValue] < DEBOUNCE_MS) return;
+    // Pause detection immediately — this is the fix for the rapid-fire bug
+    pauseDetection();
 
     if (navigator.vibrate) navigator.vibrate(100);
-
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 400);
     setScanCount(prev => prev + 1);
+    setLastScannedUrl(rawValue);
     handleUrlSubmitted(rawValue);
-  }, [handleUrlSubmitted]);
+  }, [pauseDetection, handleUrlSubmitted]);
 
   const startNativeScanner = useCallback(async () => {
     if (!window.BarcodeDetector) return false;
@@ -164,14 +189,19 @@ const QRScannerPage: React.FC = () => {
       }
 
       const detectFrame = async () => {
-        if (!videoRef.current || !streamRef.current) return;
+        // Don't schedule next frame if paused or stream ended
+        if (!videoRef.current || !streamRef.current || isPausedRef.current) return;
         try {
           const barcodes = await detector.detect(videoRef.current);
           if (barcodes.length > 0) onQrDetected(barcodes[0].rawValue);
         } catch { /* ignore */ }
-        animationFrameRef.current = requestAnimationFrame(detectFrame);
+        // Only reschedule if still active and not paused
+        if (!isPausedRef.current) {
+          animationFrameRef.current = requestAnimationFrame(detectFrame);
+        }
       };
 
+      detectFrameRef.current = detectFrame;
       animationFrameRef.current = requestAnimationFrame(detectFrame);
       return true;
     } catch {
@@ -198,7 +228,7 @@ const QRScannerPage: React.FC = () => {
       if (!ctx) throw new Error('No canvas context');
 
       const detectFrame = () => {
-        if (!videoRef.current || !streamRef.current || !ctx) return;
+        if (!videoRef.current || !streamRef.current || !ctx || isPausedRef.current) return;
         const video = videoRef.current;
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
           canvas.width = video.videoWidth;
@@ -210,9 +240,12 @@ const QRScannerPage: React.FC = () => {
           });
           if (code?.data) onQrDetected(code.data);
         }
-        animationFrameRef.current = requestAnimationFrame(detectFrame);
+        if (!isPausedRef.current) {
+          animationFrameRef.current = requestAnimationFrame(detectFrame);
+        }
       };
 
+      detectFrameRef.current = detectFrame;
       animationFrameRef.current = requestAnimationFrame(detectFrame);
       return true;
     } catch {
@@ -224,6 +257,7 @@ const QRScannerPage: React.FC = () => {
     setScannerError(null);
     setIsScanning(true);
     setScanCount(0);
+    isPausedRef.current = false;
     const native = await startNativeScanner();
     if (!native) {
       const fallback = await startFallbackScanner();
@@ -254,6 +288,16 @@ const QRScannerPage: React.FC = () => {
     }
   };
 
+  // Shorten a URL for display (show just the domain + last segment)
+  const shortenUrl = (url: string) => {
+    try {
+      const u = new URL(url);
+      return u.hostname;
+    } catch {
+      return url.length > 40 ? url.slice(0, 40) + '…' : url;
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 flex flex-col"
@@ -280,7 +324,17 @@ const QRScannerPage: React.FC = () => {
           Escanear NFCe
         </h1>
 
-        <div className="w-9 h-9" />
+        {/* Scan count — top right */}
+        {scanCount > 0 ? (
+          <div
+            className="flex items-center justify-center h-9 px-3 rounded-full text-xs font-bold text-white"
+            style={{ backgroundColor: '#10B981', minWidth: '2.25rem' }}
+          >
+            {scanCount}
+          </div>
+        ) : (
+          <div className="w-9 h-9" />
+        )}
       </div>
 
       {/* Camera area */}
@@ -303,13 +357,44 @@ const QRScannerPage: React.FC = () => {
               />
             )}
 
-            {/* Scan count badge */}
-            {scanCount > 0 && (
+            {/* Paused overlay — shown after a QR is detected */}
+            {isPaused && (
               <div
-                className="absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-bold text-white pointer-events-none"
-                style={{ backgroundColor: 'rgba(34,197,94,0.85)' }}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-5"
+                style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
               >
-                {scanCount} escaneado{scanCount !== 1 ? 's' : ''}
+                {/* Success pill */}
+                <div
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white"
+                  style={{ backgroundColor: 'rgba(16,185,129,0.9)' }}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  QR lido com sucesso
+                </div>
+
+                {lastScannedUrl && (
+                  <p
+                    className="text-xs px-6 text-center"
+                    style={{ color: 'rgba(255,255,255,0.6)' }}
+                  >
+                    {shortenUrl(lastScannedUrl)}
+                  </p>
+                )}
+
+                {/* Next scan button */}
+                <button
+                  onClick={resumeDetection}
+                  className="flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-sm cursor-pointer transition-all duration-200 active:scale-[0.97]"
+                  style={{
+                    backgroundColor: 'var(--color-cta)',
+                    color: 'white',
+                    fontFamily: 'var(--font-body)',
+                    boxShadow: '0 4px 20px rgba(249,115,22,0.5)',
+                  }}
+                >
+                  <ScanLine className="w-5 h-5" />
+                  Escanear próximo
+                </button>
               </div>
             )}
           </>
@@ -342,7 +427,9 @@ const QRScannerPage: React.FC = () => {
           className="text-sm"
           style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}
         >
-          Aponte para o código QR para escanear
+          {isPaused
+            ? 'Toque em "Escanear próximo" para continuar'
+            : 'Aponte para o código QR para escanear'}
         </p>
       </div>
 
@@ -420,7 +507,6 @@ const QRScannerPage: React.FC = () => {
           Inserir URL manualmente
         </button>
       </div>
-
     </div>
   );
 };

@@ -31,6 +31,23 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+def _parse_iso_date(s: str) -> datetime:
+    """Parse an ISO-8601 timestamp string, stripping timezone info for comparison."""
+    s = s.strip()
+    if s.endswith('Z'):
+        s = s[:-1]
+    # Remove timezone offset so we can compare naive datetimes
+    if '+' in s[10:]:
+        s = s[:s.index('+', 10)]
+    elif s[10:].count('-') > 0:
+        # Find tz offset like -03:00 after the date portion
+        tail = s[10:]
+        dash_pos = tail.rfind('-')
+        if dash_pos > 0:
+            s = s[:10 + dash_pos]
+    return datetime.fromisoformat(s)
+
+
 # Configuration
 BATCH_SIZE = 10
 SLEEP_BETWEEN_BATCHES = 5
@@ -224,6 +241,15 @@ def enrich_single_purchase(item):
             return 'backlog'
             
         # STEP 4: Deterministic Upsert to unique_products (Market + GTIN)
+        # Use the real purchase_date from the receipt instead of server processing time
+        item_purchase_date = item.get('purchase_date')
+        if isinstance(item_purchase_date, str):
+            item_purchase_date_iso = item_purchase_date
+        elif item_purchase_date:
+            item_purchase_date_iso = item_purchase_date.isoformat()
+        else:
+            item_purchase_date_iso = datetime.utcnow().isoformat()
+
         unique_data = {
             'market_id': market_id,
             'ncm': ncm,
@@ -232,27 +258,41 @@ def enrich_single_purchase(item):
             'unidade_comercial': item.get('unidade_comercial', 'UN'),
             'price': item.get('unit_price', 0),
             'nfce_url': nfce_url,
-            'last_updated': datetime.utcnow().isoformat()
+            'purchase_date': item_purchase_date_iso,
         }
         
         if cosmos_result and cosmos_result.get('image_url'):
             unique_data['image_url'] = cosmos_result['image_url']
         
-        existing = supabase.table('unique_products').select('id').match({
+        existing = supabase.table('unique_products').select('id, purchase_date').match({
             'market_id': market_id,
             'ean': ean
         }).execute()
         
         if existing.data:
-            try:
-                supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
-            except Exception as e:
-                if 'image_url' in unique_data:
-                    del unique_data['image_url']
+            existing_purchase_date = existing.data[0].get('purchase_date')
+            should_update = True
+
+            if existing_purchase_date and item_purchase_date_iso:
+                try:
+                    existing_dt = _parse_iso_date(existing_purchase_date)
+                    new_dt = _parse_iso_date(item_purchase_date_iso)
+                    should_update = new_dt >= existing_dt
+                except Exception as cmp_err:
+                    logger.warning(f"Could not compare dates, updating anyway: {cmp_err}")
+
+            if should_update:
+                try:
                     supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
-                else:
-                    raise e
-            logger.info(f"Updated existing product {existing.data[0]['id']} in market {market_id}")
+                except Exception as e:
+                    if 'image_url' in unique_data:
+                        del unique_data['image_url']
+                        supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
+                    else:
+                        raise e
+                logger.info(f"Updated product {existing.data[0]['id']} in market {market_id} (purchase_date: {item_purchase_date_iso})")
+            else:
+                logger.info(f"Skipped product {existing.data[0]['id']} — existing record has a newer purchase_date ({existing_purchase_date})")
         else:
             try:
                 supabase.table('unique_products').insert(unique_data).execute()

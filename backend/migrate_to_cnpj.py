@@ -171,7 +171,7 @@ def apply_migration(mapping, merges, dry_run=True):
     # Deduplicate unique_products after merges
     print(f"\n=== Step 6: {'Simulating' if dry_run else 'Deduplicating'} unique_products ===")
     for cnpj in merges.keys():
-        products = supabase.table('unique_products').select('id, ean, last_updated').eq('market_id', cnpj).execute()
+        products = supabase.table('unique_products').select('id, ean, purchase_date').eq('market_id', cnpj).execute()
         ean_groups = defaultdict(list)
         for p in products.data:
             ean_groups[p['ean']].append(p)
@@ -179,7 +179,7 @@ def apply_migration(mapping, merges, dry_run=True):
         for ean, entries in ean_groups.items():
             if len(entries) <= 1:
                 continue
-            entries.sort(key=lambda x: x.get('last_updated', ''), reverse=True)
+            entries.sort(key=lambda x: x.get('purchase_date', ''), reverse=True)
             duplicates = entries[1:]
             print(f"  {prefix}CNPJ {cnpj}, EAN {ean}: keeping newest, removing {len(duplicates)} duplicates")
             if not dry_run:
