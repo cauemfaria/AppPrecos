@@ -140,7 +140,7 @@ const SettingsPage: React.FC = () => {
           icon={<Heart />}
           iconBg="#FEF2F2"
           iconColor="#EF4444"
-          label="Sobre o AppPrecos"
+          label="Sobre o EconomiX"
           isLast
         />
       </Section>

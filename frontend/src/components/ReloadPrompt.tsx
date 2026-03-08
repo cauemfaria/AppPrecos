@@ -64,7 +64,7 @@ const ReloadPrompt: React.FC = () => {
               Atualização Disponível
             </h3>
             <p className="text-xs mt-0.5 leading-relaxed" style={{ color: '#94A3B8' }}>
-              Uma nova versão do AppPrecos está pronta.
+              Uma nova versão do EconomiX está pronta.
             </p>
           </div>
           <button

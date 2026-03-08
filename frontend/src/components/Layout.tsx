@@ -38,7 +38,7 @@ const Layout: React.FC = () => {
               className="text-xl font-bold"
               style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
             >
-              AppPrecos
+              EconomiX
             </h1>
           </div>
         </div>

@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'AppPrecos',
-        short_name: 'AppPrecos',
+        name: 'EconomiX',
+        short_name: 'EconomiX',
         description: 'Economize comparando preços de mercados',
         theme_color: '#2563eb',
         background_color: '#ffffff',
