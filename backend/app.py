@@ -758,6 +758,53 @@ def get_processing_nfces():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/scan/save', methods=['POST'])
+def save_barcode_scan():
+    """Save a barcode scan from the worker app. Fast insert, no enrichment."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Corpo da requisição vazio'}), 400
+
+    market_id = (data.get('market_id') or '').strip()
+    ean = (data.get('ean') or '').strip()
+    varejo_price = data.get('varejo_price')
+    atacado_price = data.get('atacado_price')
+
+    if not market_id:
+        return jsonify({'error': 'market_id é obrigatório'}), 400
+    if not ean:
+        return jsonify({'error': 'ean é obrigatório'}), 400
+    if varejo_price is None or float(varejo_price) <= 0:
+        return jsonify({'error': 'varejo_price deve ser maior que zero'}), 400
+
+    try:
+        market_check = supabase.table('markets').select('market_id').eq('market_id', market_id).limit(1).execute()
+        if not market_check.data:
+            return jsonify({'error': 'Mercado não encontrado'}), 404
+
+        row = {
+            'market_id': market_id,
+            'ean': ean,
+            'varejo_price': float(varejo_price),
+            'enriched': False,
+            'enrichment_status': 'pending',
+            'source': 'worker_scan',
+        }
+        if atacado_price is not None and float(atacado_price) > 0:
+            row['atacado_price'] = float(atacado_price)
+
+        result = supabase.table('scanned_prices').insert(row).execute()
+
+        if not result.data:
+            return jsonify({'error': 'Falha ao salvar escaneamento'}), 500
+
+        return jsonify({'success': True, 'id': result.data[0]['id']}), 201
+
+    except Exception as e:
+        print(f"[ERROR] /api/scan/save: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/products/search', methods=['GET'])
 def search_products():
     """
