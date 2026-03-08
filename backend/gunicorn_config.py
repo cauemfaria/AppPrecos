@@ -43,3 +43,15 @@ limit_request_field_size = 8190
 # Performance
 preload_app = True
 
+
+def post_fork(server, worker):
+    """
+    Reset task queue after Gunicorn fork.
+    With preload_app=True, module-level code runs in the master process.
+    Threads don't survive fork(), so the consumer thread must be re-created
+    and orphaned tasks re-enqueued in each worker.
+    """
+    import task_queue
+    task_queue.reset_after_fork()
+    task_queue.recover_orphaned_tasks()
+

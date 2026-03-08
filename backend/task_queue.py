@@ -52,6 +52,12 @@ def _ensure_worker_started():
         print("[QUEUE] Consumer thread started")
 
 
+def reset_after_fork():
+    """Reset thread state after Gunicorn fork. Threads don't survive os.fork()."""
+    global _worker_started
+    _worker_started = False
+
+
 def enqueue_nfce(url: str, record_id: int):
     """Add an NFCe URL to the processing queue. Starts the consumer if needed."""
     _ensure_worker_started()

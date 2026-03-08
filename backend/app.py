@@ -260,9 +260,9 @@ def release_extraction_lock(record_id, final_status, **kwargs):
 
 print(f"[OK] API URL: {SUPABASE_URL}")
 
-# Recover any orphaned tasks from previous worker crashes
+# NOTE: Orphan recovery runs per-worker via gunicorn_config.py post_fork hook.
+# For local dev (python app.py), recovery is triggered in __main__ below.
 import task_queue
-task_queue.recover_orphaned_tasks()
 
 
 # ==================== UTILITY FUNCTIONS ====================
@@ -294,6 +294,19 @@ def process_nfce_in_background(url, url_record_id):
     Called by the task_queue consumer thread (one at a time)."""
     import task_queue
     start_time = time.time()
+
+    # Atomic claim: only proceed if still 'queued' (prevents duplicate work across workers)
+    try:
+        claim = supabase.table('processed_urls') \
+            .update({'status': 'processing'}) \
+            .eq('id', url_record_id) \
+            .eq('status', 'queued') \
+            .execute()
+        if not claim.data:
+            print(f"[BACKGROUND #{url_record_id}] Already claimed by another worker, skipping")
+            return
+    except Exception as claim_err:
+        print(f"[BACKGROUND #{url_record_id}] Claim check failed: {claim_err}")
 
     # --- Pre-extraction phase (resolve URL, duplicate check) ---
     # Wrapped in try/except so any failure marks the record as error instead of leaving it stuck.
@@ -349,9 +362,8 @@ def process_nfce_in_background(url, url_record_id):
             pass
         return
 
-    # Update status to processing (from queued)
+    # Refresh timestamp (status already 'processing' from atomic claim above)
     supabase.table('processed_urls').update({
-        'status': 'processing',
         'processed_at': datetime.utcnow().isoformat()
     }).eq('id', url_record_id).execute()
 
@@ -1000,6 +1012,8 @@ if __name__ == '__main__':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
     
+    task_queue.recover_orphaned_tasks()
+
     print("\n" + "=" * 50)
     print(" AppPrecos Backend API")
     print("=" * 50)
