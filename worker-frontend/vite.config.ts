@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'EconomiX Worker',
-        short_name: 'Worker',
+        name: 'economiX - Funcionário',
+        short_name: 'economiX - Func.',
         description: 'Escaneie códigos de barras e registre preços',
         theme_color: '#2563eb',
         background_color: '#ffffff',

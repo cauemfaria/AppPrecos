@@ -38,7 +38,7 @@ const Layout: React.FC = () => {
               className="text-xl font-bold"
               style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
             >
-              EconomiX <span className="text-sm font-medium" style={{ color: 'var(--color-cta)' }}>Worker</span>
+              economiX <span className="text-sm font-medium" style={{ color: 'var(--color-cta)' }}>- Funcionário</span>
             </h1>
           </div>
         </div>

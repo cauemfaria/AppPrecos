@@ -1,4 +1,4 @@
-# AppPrecos - Comparador de Preços Brasileiro
+# economiX - Comparador de Preços Brasileiro
 
 Aplicativo de comparação de preços que extrai dados de produtos de cupons fiscais (NFCe) e utiliza enriquecimento de dados para padronizar produtos entre diferentes mercados.
 
@@ -8,7 +8,7 @@ Este projeto foi convertido de um app nativo para uma **Web App Moderna (PWA)**,
 
 ## 🏗️ Visão Geral da Arquitetura
 
-O AppPrecos utiliza uma arquitetura desacoplada para garantir uma experiência rápida ao usuário enquanto mantém alta qualidade de dados:
+O economiX utiliza uma arquitetura desacoplada para garantir uma experiência rápida ao usuário enquanto mantém alta qualidade de dados:
 
 1.  **Extração Rápida (Backend API):** Extrai instantaneamente os dados brutos da NFCe utilizando Playwright e salva no histórico.
 2.  **Enriquecimento de Produtos (Background Worker):** Um processo separado que padroniza nomes e busca imagens através da API Bluesoft Cosmos.

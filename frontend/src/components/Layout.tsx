@@ -30,7 +30,7 @@ const Layout: React.FC = () => {
             <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#EFF6FF' }}>
               <img 
                 src="/app-logo.png" 
-                alt="AppPrecos Logo" 
+                alt="economiX Logo" 
                 className="w-full h-full object-contain object-center"
               />
             </div>
@@ -38,7 +38,7 @@ const Layout: React.FC = () => {
               className="text-xl font-bold"
               style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
             >
-              EconomiX
+              economiX
             </h1>
           </div>
         </div>

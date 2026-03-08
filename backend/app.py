@@ -1,5 +1,5 @@
 """
-AppPrecos Backend API
+economiX Backend API
 3-Table Architecture: markets, purchases, unique_products
 Using Supabase REST API
 """
@@ -513,7 +513,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
 def index():
     """API information endpoint"""
     return jsonify({
-        'name': 'AppPrecos API',
+        'name': 'economiX API',
         'status': 'running',
         'endpoints': {
             'markets': '/api/markets',
@@ -798,7 +798,10 @@ def save_barcode_scan():
         if not result.data:
             return jsonify({'error': 'Falha ao salvar escaneamento'}), 500
 
-        return jsonify({'success': True, 'id': result.data[0]['id']}), 201
+        scan_id = result.data[0]['id']
+        trigger_enrichment(f"scan-{scan_id}")
+
+        return jsonify({'success': True, 'id': scan_id}), 201
 
     except Exception as e:
         print(f"[ERROR] /api/scan/save: {e}")
@@ -1097,7 +1100,7 @@ if __name__ == '__main__':
     task_queue.recover_orphaned_tasks()
 
     print("\n" + "=" * 50)
-    print(" AppPrecos Backend API")
+    print(" economiX Backend API")
     print("=" * 50)
     print("\n Server: http://localhost:5000")
     print(" Press CTRL+C to stop\n")

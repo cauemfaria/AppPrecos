@@ -88,7 +88,7 @@ const SettingsPage: React.FC = () => {
           icon={<Heart />}
           iconBg="#FEF2F2"
           iconColor="#EF4444"
-          label="Sobre o EconomiX Worker"
+          label="Sobre o economiX - Funcionário"
           isLast
         />
       </Section>
