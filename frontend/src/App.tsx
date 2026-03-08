@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
-import ScannerPage from './pages/ScannerPage'
+import DashboardPage from './pages/DashboardPage'
+import QRScannerPage from './pages/QRScannerPage'
 import MarketsPage from './pages/MarketsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
 import SettingsPage from './pages/SettingsPage'
@@ -14,7 +15,8 @@ function App() {
       <ReloadPrompt />
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<ScannerPage />} />
+          <Route index element={<DashboardPage />} />
+          <Route path="scanner" element={<QRScannerPage />} />
           <Route path="markets" element={<MarketsPage />} />
           <Route path="shopping-list" element={<ShoppingListPage />} />
           <Route path="settings" element={<SettingsPage />} />

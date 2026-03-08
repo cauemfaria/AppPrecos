@@ -10,12 +10,8 @@ const ReloadPrompt: React.FC = () => {
     onRegistered(r: ServiceWorkerRegistration | undefined) {
       // eslint-disable-next-line no-console
       console.log('SW Registered: ' + r)
-      
-      // Check for updates every 60 minutes
       if (r) {
-        setInterval(() => {
-          r.update()
-        }, 60 * 60 * 1000)
+        setInterval(() => { r.update() }, 60 * 60 * 1000)
       }
     },
     onRegisterError(error: any) {
@@ -24,21 +20,16 @@ const ReloadPrompt: React.FC = () => {
     },
   })
 
-  const close = () => {
-    setNeedRefresh(false)
-  }
+  const close = () => setNeedRefresh(false)
 
-  // Also check for updates when the tab becomes visible again
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Trigger update check via service worker registration
         navigator.serviceWorker.getRegistration().then(reg => {
           if (reg) reg.update()
         })
       }
     }
-    
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
@@ -46,39 +37,66 @@ const ReloadPrompt: React.FC = () => {
   if (!needRefresh) return null
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 md:bottom-8 md:right-8 md:left-auto z-[100] animate-in fade-in slide-in-from-bottom-4 duration-300">
-      <div className="bg-white rounded-2xl shadow-2xl border border-blue-100 p-4 md:p-5 flex flex-col gap-3 max-w-sm ml-auto">
+    <div
+      className="fixed left-4 right-4 md:right-6 md:left-auto z-[200] animate-in fade-in slide-in-from-bottom-4 duration-300"
+      style={{ bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}
+    >
+      <div
+        className="max-w-sm ml-auto rounded-2xl p-4 flex flex-col gap-3"
+        style={{
+          backgroundColor: 'var(--color-text)',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
+          fontFamily: 'var(--font-body)',
+        }}
+      >
         <div className="flex items-start gap-3">
-          <div className="bg-blue-50 p-2 rounded-xl">
-            <RefreshCw className="w-5 h-5 text-blue-600" />
+          <div
+            className="flex items-center justify-center w-9 h-9 rounded-xl shrink-0"
+            style={{ backgroundColor: 'rgba(249,115,22,0.15)' }}
+          >
+            <RefreshCw className="w-4 h-4" style={{ color: 'var(--color-cta)' }} />
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-bold text-gray-900">
+            <h3
+              className="text-sm font-bold text-white"
+              style={{ fontFamily: 'var(--font-heading)' }}
+            >
               Atualização Disponível
             </h3>
-            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-              Uma nova versão do AppPrecos está pronta. Deseja atualizar agora?
+            <p className="text-xs mt-0.5 leading-relaxed" style={{ color: '#94A3B8' }}>
+              Uma nova versão do AppPrecos está pronta.
             </p>
           </div>
-          <button 
+          <button
             onClick={close}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+            className="flex items-center justify-center w-6 h-6 rounded-full cursor-pointer transition-all hover:opacity-70 shrink-0"
+            style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
             aria-label="Fechar"
           >
-            <X size={18} />
+            <X size={14} className="text-white" />
           </button>
         </div>
 
-        <div className="flex gap-2 mt-1">
+        <div className="flex gap-2">
           <button
             onClick={() => updateServiceWorker(true)}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm active:scale-95"
+            className="flex-1 text-xs font-bold py-2.5 px-4 rounded-xl cursor-pointer transition-all active:scale-[0.98]"
+            style={{
+              backgroundColor: 'var(--color-cta)',
+              color: 'white',
+              fontFamily: 'var(--font-body)',
+            }}
           >
-            Atualizar Agora
+            Atualizar
           </button>
           <button
             onClick={close}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold py-2.5 px-4 rounded-xl transition-all"
+            className="text-xs font-medium py-2.5 px-4 rounded-xl cursor-pointer transition-all"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              color: '#CBD5E1',
+              fontFamily: 'var(--font-body)',
+            }}
           >
             Depois
           </button>

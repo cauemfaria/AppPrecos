@@ -1,6 +1,6 @@
 """
 Supabase Migration Script - Full Architecture (RESTORED)
-Creates: markets, purchases, unique_products, processed_urls, product_backlog, product_lookup_log, llm_product_decisions, gtin_cache
+Creates: markets, purchases, unique_products, processed_urls, product_backlog, product_lookup_log, system_locks
 """
 
 import os
@@ -122,6 +122,15 @@ CREATE TABLE product_lookup_log (
     api_from_cache BOOLEAN DEFAULT false,
     api_time_ms INTEGER,
     created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 7. System Locks (Distributed locking for background workers)
+CREATE TABLE system_locks (
+    lock_name VARCHAR(50) PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'idle',
+    locked_by VARCHAR(100),
+    locked_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Indexes for performance

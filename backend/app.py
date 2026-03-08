@@ -314,7 +314,7 @@ def process_nfce_in_background(url, url_record_id):
         else:
             market_data = {
                 'market_id': cnpj,
-                'name': market_info['name'],
+                'name': market_info['name'].title(),
                 'address': market_info['address']
             }
             market_insert = supabase.table('markets').insert(market_data).execute()
