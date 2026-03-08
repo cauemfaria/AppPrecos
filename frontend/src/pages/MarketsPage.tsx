@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -65,6 +65,40 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
   const [history, setHistory] = useState<PriceHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
+  // Swipe-to-dismiss
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+  const dragCurrentY = useRef(0);
+
+  const handleDismiss = () => {
+    setDragY(window.innerHeight);
+    setTimeout(onClose, 260);
+  };
+
+  const onDragStart = (e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0].clientY;
+    dragCurrentY.current = 0;
+    setIsDragging(true);
+  };
+
+  const onDragMove = (e: React.TouchEvent) => {
+    const delta = e.touches[0].clientY - dragStartY.current;
+    if (delta > 0) {
+      dragCurrentY.current = delta;
+      setDragY(delta);
+    }
+  };
+
+  const onDragEnd = () => {
+    setIsDragging(false);
+    if (dragCurrentY.current > 120) {
+      handleDismiss();
+    } else {
+      setDragY(0);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     setLoadingHistory(true);
@@ -90,14 +124,32 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
     : 0;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end animate-in slide-in-from-right duration-300">
+    <div className="fixed inset-0 z-[200] flex items-end animate-in slide-in-from-bottom duration-300" style={{ touchAction: 'pan-y' }}>
       <div
         className="relative w-full flex flex-col overflow-hidden"
         style={{
           backgroundColor: 'var(--color-background)',
           height: '100dvh',
+          transform: `translateY(${dragY}px)`,
+          transition: isDragging ? 'none' : 'transform 260ms ease',
         }}
       >
+        {/* Drag handle pill */}
+        <div
+          className="flex justify-center items-center shrink-0 cursor-grab active:cursor-grabbing"
+          style={{
+            paddingTop: '12px',
+            paddingBottom: '12px',
+            backgroundColor: 'var(--color-surface)',
+            touchAction: 'none',
+          }}
+          onTouchStart={onDragStart}
+          onTouchMove={onDragMove}
+          onTouchEnd={onDragEnd}
+        >
+          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: '#CBD5E1' }} />
+        </div>
+
         {/* Sticky top bar */}
         <div
           className="flex items-center gap-3 px-4 py-3 shrink-0"
@@ -399,6 +451,48 @@ const MarketsPage: React.FC = () => {
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
+  // Swipe-to-dismiss state for the products sheet
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const [isSheetDragging, setIsSheetDragging] = useState(false);
+  const sheetDragStartY = useRef(0);
+  const sheetDragCurrentY = useRef(0);
+
+  const dismissSheet = useCallback(() => {
+    setSheetDragY(window.innerHeight);
+    setTimeout(() => {
+      setSelectedMarket(null);
+      setSheetDragY(0);
+    }, 260);
+  }, []);
+
+  const onSheetDragStart = (e: React.TouchEvent) => {
+    sheetDragStartY.current = e.touches[0].clientY;
+    sheetDragCurrentY.current = 0;
+    setIsSheetDragging(true);
+  };
+
+  const onSheetDragMove = (e: React.TouchEvent) => {
+    const delta = e.touches[0].clientY - sheetDragStartY.current;
+    if (delta > 0) {
+      sheetDragCurrentY.current = delta;
+      setSheetDragY(delta);
+    }
+  };
+
+  const onSheetDragEnd = () => {
+    setIsSheetDragging(false);
+    if (sheetDragCurrentY.current > 120) {
+      dismissSheet();
+    } else {
+      setSheetDragY(0);
+    }
+  };
+
+  // Reset drag position when sheet opens
+  useEffect(() => {
+    if (selectedMarket) setSheetDragY(0);
+  }, [selectedMarket]);
+
   useEffect(() => {
     fetchMarkets();
   }, []);
@@ -560,7 +654,7 @@ const MarketsPage: React.FC = () => {
 
       {/* Market Products Full-Screen Sheet */}
       {selectedMarket && (
-        <div className="fixed inset-0 z-[100] flex items-end">
+        <div className="fixed inset-0 z-[100] flex items-end" style={{ touchAction: 'pan-y' }}>
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -575,13 +669,21 @@ const MarketsPage: React.FC = () => {
               borderRadius: '20px 20px 0 0',
               height: '100dvh',
               boxShadow: 'var(--shadow-xl)',
+              transform: `translateY(${sheetDragY}px)`,
+              transition: isSheetDragging ? 'none' : 'transform 260ms ease',
             }}
           >
-            {/* Drag handle pill */}
-            <div className="flex justify-center pt-3 pb-1 shrink-0">
+            {/* Drag handle pill — full-width touch target */}
+            <div
+              className="flex justify-center items-center shrink-0 cursor-grab active:cursor-grabbing"
+              style={{ paddingTop: '12px', paddingBottom: '12px', touchAction: 'none' }}
+              onTouchStart={onSheetDragStart}
+              onTouchMove={onSheetDragMove}
+              onTouchEnd={onSheetDragEnd}
+            >
               <div
-                className="w-10 h-1 rounded-full"
-                style={{ backgroundColor: 'var(--color-border)' }}
+                className="w-10 h-1.5 rounded-full"
+                style={{ backgroundColor: '#CBD5E1' }}
               />
             </div>
 
