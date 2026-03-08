@@ -80,35 +80,39 @@ def _check_nfce_duplicate(raw_url: str, exclude_id: int | None = None):
     Step 3: resolve URL then nfce_url = resolved_url  (old records where nfce_url was overwritten)
 
     Returns the first matching processed_urls row dict, or None if no duplicate found.
-    The exclude_id parameter skips a specific record (used during background processing to
-    avoid a record matching itself after it has already been inserted).
+    Each step is isolated so a failure in one doesn't prevent the others from running.
     """
-    terminal_statuses = ['success', 'processing', 'extracting', 'queued']
+    match_statuses = ['success', 'processing', 'extracting', 'queued']
 
     def _query(col, val):
         q = supabase.table('processed_urls') \
             .select('id, status, market_name, products_count') \
             .eq(col, val) \
-            .in_('status', terminal_statuses)
+            .in_('status', match_statuses)
         if exclude_id is not None:
             q = q.neq('id', exclude_id)
         result = q.limit(1).execute()
         return result.data[0] if result.data else None
 
-    # Step 1: fast path — original_url column stores the verbatim QR URL
-    row = _query('original_url', raw_url)
-    if row:
-        print(f"[CHECK] Duplicate found via original_url: {raw_url}")
-        return row
+    # Step 1: original_url column (may not exist on older schemas — isolated try)
+    try:
+        row = _query('original_url', raw_url)
+        if row:
+            print(f"[CHECK] Duplicate found via original_url: {raw_url}")
+            return row
+    except Exception as e:
+        print(f"[CHECK] Step 1 (original_url) failed: {e}")
 
-    # Step 2: nfce_url might still equal raw_url (URL was never different after resolution)
-    row = _query('nfce_url', raw_url)
-    if row:
-        print(f"[CHECK] Duplicate found via nfce_url (exact): {raw_url}")
-        return row
+    # Step 2: nfce_url exact match
+    try:
+        row = _query('nfce_url', raw_url)
+        if row:
+            print(f"[CHECK] Duplicate found via nfce_url (exact): {raw_url}")
+            return row
+    except Exception as e:
+        print(f"[CHECK] Step 2 (nfce_url exact) failed: {e}")
 
-    # Step 3: resolve the URL and compare against stored nfce_url (handles old records
-    # where original_url was not stored and nfce_url was overwritten with the resolved form)
+    # Step 3: resolve then compare (handles old records with overwritten nfce_url)
     try:
         resolved = resolve_nfce_url(raw_url)
         if resolved != raw_url:
@@ -117,7 +121,7 @@ def _check_nfce_duplicate(raw_url: str, exclude_id: int | None = None):
                 print(f"[CHECK] Duplicate found via resolved nfce_url: {resolved}")
                 return row
     except Exception as e:
-        print(f"[CHECK] URL resolution failed during duplicate check: {e}")
+        print(f"[CHECK] Step 3 (resolve) failed: {e}")
 
     return None
 
@@ -291,29 +295,58 @@ def process_nfce_in_background(url, url_record_id):
     import task_queue
     start_time = time.time()
 
-    # Resolve URL to browser format (moved here from request handler to keep handler fast)
-    print(f"\n[BACKGROUND #{url_record_id}] Resolving URL...")
-    resolved_url = resolve_nfce_url(url)
-    update_fields = {}
-    if resolved_url != url:
-        # nfce_url gets the resolved form; original_url preserves the raw QR URL permanently
-        update_fields['nfce_url'] = resolved_url
-    # Backfill original_url for records inserted before this column existed
-    row_check = supabase.table('processed_urls').select('original_url').eq('id', url_record_id).limit(1).execute()
-    if row_check.data and not row_check.data[0].get('original_url'):
-        update_fields['original_url'] = url
-    if update_fields:
-        supabase.table('processed_urls').update(update_fields).eq('id', url_record_id).execute()
+    # --- Pre-extraction phase (resolve URL, duplicate check) ---
+    # Wrapped in try/except so any failure marks the record as error instead of leaving it stuck.
+    try:
+        print(f"\n[BACKGROUND #{url_record_id}] Resolving URL...")
+        resolved_url = resolve_nfce_url(url)
 
-    # Check for duplicate after resolving (two different QR URLs can resolve to the same page)
-    # Use _check_nfce_duplicate with exclude_id so the current record doesn't match itself
-    dup = _check_nfce_duplicate(resolved_url, exclude_id=url_record_id)
-    if dup:
-        supabase.table('processed_urls').update({
-            'status': 'error',
-            'error_message': 'Duplicado (URL já em processamento ou processada)'
-        }).eq('id', url_record_id).execute()
-        print(f"[BACKGROUND #{url_record_id}] Duplicate detected after resolve, skipping")
+        if resolved_url != url:
+            try:
+                supabase.table('processed_urls').update({
+                    'nfce_url': resolved_url
+                }).eq('id', url_record_id).execute()
+            except Exception as update_err:
+                # UNIQUE constraint violation = another record already has this resolved URL → duplicate
+                err_str = str(update_err).lower()
+                if 'unique' in err_str or 'duplicate' in err_str or '23505' in err_str:
+                    supabase.table('processed_urls').update({
+                        'status': 'error',
+                        'error_message': 'Duplicado (URL resolvida já existe no banco)'
+                    }).eq('id', url_record_id).execute()
+                    print(f"[BACKGROUND #{url_record_id}] UNIQUE constraint on resolved URL — duplicate")
+                    return
+                raise
+
+        # Backfill original_url for records inserted before the column existed
+        try:
+            row_check = supabase.table('processed_urls').select('original_url').eq('id', url_record_id).limit(1).execute()
+            if row_check.data and not row_check.data[0].get('original_url'):
+                supabase.table('processed_urls').update({'original_url': url}).eq('id', url_record_id).execute()
+        except Exception as e:
+            print(f"[BACKGROUND #{url_record_id}] original_url backfill skipped: {e}")
+
+        # Post-resolve duplicate check (two different QR URLs can resolve to the same page)
+        dup = _check_nfce_duplicate(resolved_url, exclude_id=url_record_id)
+        if dup:
+            supabase.table('processed_urls').update({
+                'status': 'error',
+                'error_message': 'Duplicado (URL já em processamento ou processada)'
+            }).eq('id', url_record_id).execute()
+            print(f"[BACKGROUND #{url_record_id}] Duplicate detected after resolve, skipping")
+            return
+
+    except Exception as pre_err:
+        print(f"[FAIL] [BACKGROUND #{url_record_id}] Pre-extraction error: {pre_err}")
+        import traceback
+        traceback.print_exc()
+        try:
+            supabase.table('processed_urls').update({
+                'status': 'error',
+                'error_message': f'Erro na preparação: {str(pre_err)[:200]}'
+            }).eq('id', url_record_id).execute()
+        except Exception:
+            pass
         return
 
     # Update status to processing (from queued)
@@ -569,7 +602,12 @@ def extract_nfce():
             'status': 'queued',
             'processed_at': datetime.utcnow().isoformat()
         }
-        url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
+        try:
+            url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
+        except Exception:
+            # Fallback: original_url column might not exist yet
+            temp_url_data.pop('original_url', None)
+            url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
         url_record_id = url_insert.data[0]['id']
 
         task_queue.enqueue_nfce(raw_url, url_record_id)
