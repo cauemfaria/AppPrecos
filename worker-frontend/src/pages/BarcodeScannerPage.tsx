@@ -3,26 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { scanService } from '../services/api';
 import { X, CheckCircle2, AlertTriangle } from 'lucide-react';
-
-interface BarcodeDetectorResult {
-  rawValue: string;
-  format: string;
-}
-
-interface BarcodeDetectorOptions {
-  formats: string[];
-}
-
-declare global {
-  interface Window {
-    BarcodeDetector?: {
-      new(options?: BarcodeDetectorOptions): {
-        detect(source: ImageBitmapSource): Promise<BarcodeDetectorResult[]>;
-      };
-      getSupportedFormats(): Promise<string[]>;
-    };
-  }
-}
+import { BarcodeDetector as BarcodeDetectorPolyfill } from 'barcode-detector/pure';
 
 const BarcodeScannerPage: React.FC = () => {
   const navigate = useNavigate();
@@ -92,14 +73,23 @@ const BarcodeScannerPage: React.FC = () => {
     setTimeout(() => varejoInputRef.current?.focus(), 200);
   }, [pauseDetection]);
 
-  const startNativeScanner = useCallback(async () => {
-    if (!window.BarcodeDetector) return false;
-    try {
-      const formats = await window.BarcodeDetector.getSupportedFormats();
-      const targetFormats = ['ean_13', 'ean_8', 'upc_a'].filter(f => formats.includes(f));
-      if (targetFormats.length === 0) return false;
+  const startScanner = useCallback(async () => {
+    const targetFormats = ['ean_13', 'ean_8', 'upc_a'];
 
-      const detector = new window.BarcodeDetector({ formats: targetFormats });
+    // Use native BarcodeDetector if available (Chrome/Android), otherwise polyfill (Safari/iOS)
+    let DetectorClass: any = (window as any).BarcodeDetector;
+    if (!DetectorClass) {
+      DetectorClass = BarcodeDetectorPolyfill;
+    }
+
+    try {
+      if (DetectorClass.getSupportedFormats) {
+        const supported = await DetectorClass.getSupportedFormats();
+        const available = targetFormats.filter((f: string) => supported.includes(f));
+        if (available.length === 0) throw new Error('No EAN formats supported');
+      }
+
+      const detector = new DetectorClass({ formats: targetFormats });
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
@@ -119,7 +109,7 @@ const BarcodeScannerPage: React.FC = () => {
             onBarcodeDetected(barcodes[0].rawValue);
             return;
           }
-        } catch { /* ignore */ }
+        } catch { /* ignore frame errors */ }
         if (!isPausedRef.current) {
           animationFrameRef.current = requestAnimationFrame(detectFrame);
         }
@@ -137,9 +127,9 @@ const BarcodeScannerPage: React.FC = () => {
     setScannerError(null);
     setIsScanning(true);
     isPausedRef.current = false;
-    const native = await startNativeScanner();
-    if (!native) {
-      setScannerError('Navegador não suporta leitura de código de barras. Use Chrome no Android.');
+    const ok = await startScanner();
+    if (!ok) {
+      setScannerError('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
       setIsScanning(false);
     }
   };
