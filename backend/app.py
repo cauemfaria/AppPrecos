@@ -576,6 +576,41 @@ def get_market_products(market_id):
         return jsonify({'error': f'Falha ao buscar produtos: {e}'}), 500
 
 
+@app.route('/api/products/price-history', methods=['GET'])
+def get_product_price_history():
+    """Get price history for a product by EAN + market_id (falls back to NCM if EAN missing)"""
+    try:
+        ean = request.args.get('ean', '').strip()
+        ncm = request.args.get('ncm', '').strip()
+        market_id = request.args.get('market_id', '').strip()
+
+        query = supabase.table('purchases').select('unit_price,purchase_date')
+
+        if ean:
+            query = query.eq('ean', ean)
+        elif ncm:
+            query = query.eq('ncm', ncm)
+        else:
+            return jsonify({'error': 'ean or ncm required'}), 400
+
+        if market_id:
+            query = query.eq('market_id', market_id)
+
+        result = query.order('purchase_date', desc=False).limit(60).execute()
+
+        # Deduplicate to one entry per calendar day (keep last price of that day)
+        seen = {}
+        for row in result.data:
+            day = row['purchase_date'][:10]  # YYYY-MM-DD
+            seen[day] = round(row['unit_price'], 2)
+
+        history = [{'date': d, 'price': p} for d, p in sorted(seen.items())]
+
+        return jsonify({'history': history, 'total': len(history)})
+    except Exception as e:
+        return jsonify({'error': f'Falha ao buscar histórico: {e}'}), 500
+
+
 @app.route('/api/nfce/extract', methods=['POST'])
 def extract_nfce():
     """

@@ -9,7 +9,8 @@ import type {
   NFCeResponse, 
   NFCeStatusResponse,
   CompareRequestProduct,
-  BestMarketsResponse
+  BestMarketsResponse,
+  PriceHistoryResponse
 } from '../types';
 
 // Use environment variable for API base URL, fallback to existing one
@@ -73,6 +74,13 @@ export const productService = {
     const response = await api.post<BestMarketsResponse>('/products/best-markets', {
       product,
       limit,
+    });
+    return response.data;
+  },
+
+  getPriceHistory: async (ean: string, ncm: string, marketId: string) => {
+    const response = await api.get<PriceHistoryResponse>('/products/price-history', {
+      params: { ean, ncm, market_id: marketId },
     });
     return response.data;
   },

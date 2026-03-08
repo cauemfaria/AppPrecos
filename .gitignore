@@ -189,8 +189,5 @@ yarn-error.log*
 !docs/
 !*.md
 
-# ==================== Cursor / Local AI Assets ====================
-.cursor/
-.cursorrules
-design-system/
+
 

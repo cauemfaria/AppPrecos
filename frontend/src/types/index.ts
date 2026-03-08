@@ -14,6 +14,7 @@ export interface Product {
   price: number;
   unidade_comercial: string;
   image_url?: string;
+  purchase_date?: string;
 }
 
 export interface MarketProductsResponse {
@@ -115,6 +116,16 @@ export interface BestMarketItem {
 export interface BestMarketsRequest {
   product: CompareRequestProduct;
   limit?: number;
+}
+
+export interface PriceHistoryItem {
+  date: string;
+  price: number;
+}
+
+export interface PriceHistoryResponse {
+  history: PriceHistoryItem[];
+  total: number;
 }
 
 export interface BestMarketsResponse {

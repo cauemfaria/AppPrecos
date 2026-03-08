@@ -1,0 +1,24 @@
+# Google Stitch MCP Guidance
+
+This project is integrated with Google Stitch MCP for UI testing and prototyping.
+
+## Testing Procedure
+Whenever you are asked to test the application or verify UI changes:
+1. Ensure the Stitch MCP server is active (configured in `.cursor/mcp.json`).
+2. Use the `stitch` tools to list existing projects or create a new one for current verification.
+3. Reference `TESTING_STITCH.md` for setup details.
+
+## Auth Key
+The project uses a Google Stitch key (provided in `.cursor/mcp.json`). If connection fails, verify the `X-Goog-Api-Key` header.
+
+# UI/UX Pro Max Integration
+
+This project uses **UI UX Pro Max** for all design and UI/UX improvements.
+
+## UI/UX Update Procedure
+Whenever you are asked to update, improve, or create UI/UX:
+1. **Activate the Skill**: The skill is located in `.cursor/skills/ui-ux-pro-max/SKILL.md`. Read it before starting any design work.
+2. **Generate Design System**: Use the internal reasoning engine to generate a tailored design system for the task.
+3. **Apply Guidelines**: Follow the specific guidelines for the project stack (React + Tailwind).
+4. **Consistency**: Ensure all new UI elements follow the master design system generated.
+5. **Reference**: See `UI_UX_GUIDELINES.md` for the full library documentation and advanced usage.
