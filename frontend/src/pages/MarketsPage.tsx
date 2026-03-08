@@ -122,7 +122,7 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto" style={{ overscrollBehavior: 'contain' }}>
 
           {/* Hero image */}
           <div
@@ -403,6 +403,13 @@ const MarketsPage: React.FC = () => {
     fetchMarkets();
   }, []);
 
+  // Lock body scroll whenever any sheet is open so the background page doesn't scroll
+  useEffect(() => {
+    const isSheetOpen = selectedMarket !== null || selectedProduct !== null;
+    document.body.style.overflow = isSheetOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [selectedMarket, selectedProduct]);
+
   const fetchMarkets = async () => {
     try {
       const data = await marketService.getMarkets();
@@ -644,7 +651,7 @@ const MarketsPage: React.FC = () => {
             </div>
 
             {/* Product List */}
-            <div className="flex-1 overflow-auto p-4">
+            <div className="flex-1 overflow-auto p-4" style={{ overscrollBehavior: 'contain' }}>
               {loadingProducts ? (
                 <div className="flex justify-center py-20">
                   <div
