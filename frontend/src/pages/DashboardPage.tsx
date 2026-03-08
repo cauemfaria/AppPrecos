@@ -38,7 +38,7 @@ const domainFromUrl = (url: string) => {
 type StatusKey = 'success' | 'error' | 'duplicate' | 'pending';
 
 const statusConfig: Record<StatusKey, {
-  label: string;
+  label: (item: ProcessingItem) => string;
   sublabel: (item: ProcessingItem) => string;
   iconBg: string;
   iconColor: string;
@@ -47,7 +47,7 @@ const statusConfig: Record<StatusKey, {
 }> = {
   success: {
     label: (item: ProcessingItem) => item.market_name ?? 'Concluído',
-    sublabel: (item) => item.products_count ? `${item.products_count} produto${item.products_count !== 1 ? 's' : ''} extraído${item.products_count !== 1 ? 's' : ''}` : 'Processado com sucesso',
+    sublabel: (item: ProcessingItem) => item.products_count ? `${item.products_count} produto${item.products_count !== 1 ? 's' : ''} extraído${item.products_count !== 1 ? 's' : ''}` : 'Processado com sucesso',
     iconBg: '#DCFCE7',
     iconColor: '#16A34A',
     rowBg: '#F0FDF4',
@@ -55,7 +55,7 @@ const statusConfig: Record<StatusKey, {
   },
   error: {
     label: (item: ProcessingItem) => item.market_name ?? domainFromUrl(item.url),
-    sublabel: (item) => item.error_message ?? 'Erro ao processar',
+    sublabel: (item: ProcessingItem) => item.error_message ?? 'Erro ao processar',
     iconBg: '#FEE2E2',
     iconColor: '#DC2626',
     rowBg: '#FEF2F2',
@@ -77,7 +77,7 @@ const statusConfig: Record<StatusKey, {
     rowBg: '#FFFFFF',
     textColor: '#475569',
   },
-} as any;
+};
 
 // Statuses that are "in progress" (spinner)
 const processingStatuses = new Set(['sending', 'queued', 'extracting', 'processing']);
@@ -102,11 +102,11 @@ const QueueItem: React.FC<{ item: ProcessingItem }> = ({ item }) => {
 
   const primaryText = isActive
     ? (item.market_name ?? domainFromUrl(item.url))
-    : (cfg as any).label(item);
+    : cfg.label(item);
 
   const secondaryText = isActive
     ? processingLabel[item.status] ?? 'Processando…'
-    : (cfg as any).sublabel(item);
+    : cfg.sublabel(item);
 
   return (
     <div
