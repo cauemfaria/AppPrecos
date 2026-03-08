@@ -4,7 +4,6 @@ import { useStore } from '../store/useStore';
 import type { ProcessingItem } from '../types';
 import { Loader2, CheckCircle2, XCircle, Clock, Search, ExternalLink, AlertCircle, Camera, X } from 'lucide-react';
 
-// Type declarations for the native BarcodeDetector API
 interface BarcodeDetectorResult {
   rawValue: string;
   format: string;
@@ -27,175 +26,200 @@ declare global {
   }
 }
 
+const MAX_CONCURRENT_SUBMISSIONS = 3;
+const DEBOUNCE_MS = 3000;
+
 const ScannerPage: React.FC = () => {
   const [manualUrl, setManualUrl] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerMode, setScannerMode] = useState<'native' | 'fallback' | null>(null);
-  
-  const { 
-    processingQueue, 
-    addToProcessingQueue, 
-    updateProcessingItem, 
-    removeFromProcessingQueue 
+  const [scanFlash, setScanFlash] = useState(false);
+  const [scanCount, setScanCount] = useState(0);
+
+  const {
+    processingQueue,
+    addToProcessingQueue,
+    updateProcessingItem,
+    removeFromProcessingQueue
   } = useStore();
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const recentScansRef = useRef<Record<string, number>>({});
 
-  const handleUrlSubmitted = useCallback(async (url: string) => {
-    if (!url.trim()) return;
-    
-    const now = Date.now();
-    const DEBOUNCE_MS = 3000;
-    
-    if (recentScansRef.current[url] && now - recentScansRef.current[url] < DEBOUNCE_MS) {
-      return;
-    }
-    
-    if (processingQueue.some(item => item.url === url)) {
-      return;
-    }
+  // Submission throttle: local queue of URLs waiting to be sent
+  const pendingUrlsRef = useRef<string[]>([]);
+  const activeSubmissionsRef = useRef(0);
 
-    recentScansRef.current[url] = now;
-    const tempId = -Date.now() - Math.random();
-    
-    const newItem: ProcessingItem = {
-      record_id: tempId,
-      url,
-      status: 'sending',
-      addedAt: now,
-      processed_at: new Date().toISOString()
-    };
+  const submitUrl = useCallback(async (url: string) => {
+    // Find the existing pending/sending item for this URL
+    const existing = useStore.getState().processingQueue.find(i => i.url === url);
+    const tempId = existing?.record_id ?? (-Date.now() - Math.random());
 
-    addToProcessingQueue(newItem);
+    if (existing) {
+      updateProcessingItem(tempId, { status: 'sending' });
+    }
 
     try {
       const response = await nfceService.extractNFCe({ url, save: true, async: true });
-      updateProcessingItem(tempId, { 
-        record_id: response.record_id!, 
-        status: 'processing' 
+      updateProcessingItem(tempId, {
+        record_id: response.record_id!,
+        status: 'queued'
       });
       if (url === manualUrl) setManualUrl('');
     } catch (error: any) {
       const status = error.response?.status === 409 ? 'duplicate' : 'error';
       const errorMessage = error.response?.data?.error || error.message;
-      updateProcessingItem(tempId, { 
-        status: status as any, 
-        error_message: errorMessage 
+      updateProcessingItem(tempId, {
+        status: status as any,
+        error_message: errorMessage
       });
       setTimeout(() => {
         removeFromProcessingQueue(tempId);
       }, 5000);
     }
-  }, [manualUrl, processingQueue, addToProcessingQueue, updateProcessingItem, removeFromProcessingQueue]);
+  }, [manualUrl, updateProcessingItem, removeFromProcessingQueue]);
+
+  const drainPendingQueue = useCallback(() => {
+    while (pendingUrlsRef.current.length > 0 && activeSubmissionsRef.current < MAX_CONCURRENT_SUBMISSIONS) {
+      const url = pendingUrlsRef.current.shift()!;
+      activeSubmissionsRef.current++;
+      submitUrl(url).finally(() => {
+        activeSubmissionsRef.current--;
+        drainPendingQueue();
+      });
+    }
+  }, [submitUrl]);
+
+  const handleUrlSubmitted = useCallback((url: string) => {
+    if (!url.trim()) return;
+
+    const now = Date.now();
+
+    if (recentScansRef.current[url] && now - recentScansRef.current[url] < DEBOUNCE_MS) {
+      return;
+    }
+
+    // Check against store directly for most up-to-date state
+    const currentQueue = useStore.getState().processingQueue;
+    if (currentQueue.some(item => item.url === url)) {
+      return;
+    }
+
+    recentScansRef.current[url] = now;
+
+    // Add a "pending" placeholder so it appears in the queue immediately
+    const pendingItem: ProcessingItem = {
+      record_id: -now - Math.random(),
+      url,
+      status: 'pending',
+      addedAt: now,
+      processed_at: new Date().toISOString()
+    };
+    addToProcessingQueue(pendingItem);
+
+    if (activeSubmissionsRef.current < MAX_CONCURRENT_SUBMISSIONS) {
+      activeSubmissionsRef.current++;
+      submitUrl(url).finally(() => {
+        activeSubmissionsRef.current--;
+        drainPendingQueue();
+      });
+    } else {
+      pendingUrlsRef.current.push(url);
+    }
+  }, [addToProcessingQueue, updateProcessingItem, submitUrl, drainPendingQueue]);
 
   const stopScanning = useCallback(() => {
-    // Stop animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-    
-    // Stop camera stream
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    
-    // Clear video
+
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-    
+
     setIsScanning(false);
+    setScanCount(0);
   }, []);
 
-  const startNativeScanner = useCallback(async () => {
-    if (!window.BarcodeDetector) {
-      return false;
+  // Continuous scanning: submit URL without stopping the camera
+  const onQrDetected = useCallback((rawValue: string) => {
+    const now = Date.now();
+    if (recentScansRef.current[rawValue] && now - recentScansRef.current[rawValue] < DEBOUNCE_MS) {
+      return;
     }
 
+    if (navigator.vibrate) navigator.vibrate(100);
+
+    // Green flash feedback
+    setScanFlash(true);
+    setTimeout(() => setScanFlash(false), 400);
+    setScanCount(prev => prev + 1);
+
+    handleUrlSubmitted(rawValue);
+  }, [handleUrlSubmitted]);
+
+  const startNativeScanner = useCallback(async () => {
+    if (!window.BarcodeDetector) return false;
+
     try {
-      // Check if QR code format is supported
       const formats = await window.BarcodeDetector.getSupportedFormats();
-      if (!formats.includes('qr_code')) {
-        console.log("QR code not supported by native detector");
-        return false;
-      }
+      if (!formats.includes('qr_code')) return false;
 
       const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      
-      // Get camera stream with high resolution for better QR detection
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false
       });
 
       streamRef.current = stream;
-      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
 
       setScannerMode('native');
-      
-      // Detection loop
+
       const detectFrame = async () => {
         if (!videoRef.current || !streamRef.current) return;
-        
+
         try {
           const barcodes = await detector.detect(videoRef.current);
-          
           if (barcodes.length > 0) {
-            const qrCode = barcodes[0];
-            console.log("Native QR detected:", qrCode.rawValue);
-            
-            // Vibrate on success
-            if (navigator.vibrate) navigator.vibrate(100);
-            
-            stopScanning();
-            handleUrlSubmitted(qrCode.rawValue);
-            return;
+            onQrDetected(barcodes[0].rawValue);
           }
-        } catch (err) {
-          // Ignore detection errors, just continue
+        } catch {
+          // Ignore detection errors
         }
-        
-        // Continue scanning
+
         animationFrameRef.current = requestAnimationFrame(detectFrame);
       };
-      
+
       animationFrameRef.current = requestAnimationFrame(detectFrame);
       return true;
-      
     } catch (err) {
       console.error("Native scanner failed:", err);
       return false;
     }
-  }, [stopScanning, handleUrlSubmitted]);
+  }, [onQrDetected]);
 
   const startFallbackScanner = useCallback(async () => {
     try {
-      // Get camera stream
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false
       });
 
       streamRef.current = stream;
-      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -203,90 +227,70 @@ const ScannerPage: React.FC = () => {
 
       setScannerMode('fallback');
 
-      // Import jsQR dynamically for fallback
       const { default: jsQR } = await import('jsqr');
-      
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      
       if (!ctx) throw new Error("Could not get canvas context");
 
-      // Detection loop using jsQR
       const detectFrame = () => {
         if (!videoRef.current || !streamRef.current || !ctx) return;
-        
         const video = videoRef.current;
-        
+
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          
+
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const code = jsQR(imageData.data, imageData.width, imageData.height, {
             inversionAttempts: 'dontInvert',
           });
-          
+
           if (code && code.data) {
-            console.log("jsQR detected:", code.data);
-            
-            // Vibrate on success
-            if (navigator.vibrate) navigator.vibrate(100);
-            
-            stopScanning();
-            handleUrlSubmitted(code.data);
-            return;
+            onQrDetected(code.data);
           }
         }
-        
-        // Continue scanning
+
         animationFrameRef.current = requestAnimationFrame(detectFrame);
       };
-      
+
       animationFrameRef.current = requestAnimationFrame(detectFrame);
       return true;
-      
     } catch (err) {
       console.error("Fallback scanner failed:", err);
       return false;
     }
-  }, [stopScanning, handleUrlSubmitted]);
+  }, [onQrDetected]);
 
   const startScanning = async () => {
     setScannerError(null);
     setIsScanning(true);
-    
-    // First, try native BarcodeDetector (iPhone/modern browsers)
+    setScanCount(0);
+
     const nativeSuccess = await startNativeScanner();
-    
     if (!nativeSuccess) {
-      // Fall back to jsQR
       const fallbackSuccess = await startFallbackScanner();
-      
       if (!fallbackSuccess) {
-        setScannerError("Não foi possível acessar a câmera. Por favor, verifique as permissões.");
+        setScannerError("Nao foi possivel acessar a camera. Por favor, verifique as permissoes.");
         setIsScanning(false);
       }
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      stopScanning();
-    };
+    return () => { stopScanning(); };
   }, [stopScanning]);
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold">Scanner de NFCe</h2>
-        
+
         <div className="flex gap-2">
           <div className="relative flex-1 md:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Cole a URL da NFCe manualmente..."
               className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
               value={manualUrl}
@@ -294,7 +298,7 @@ const ScannerPage: React.FC = () => {
               onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmitted(manualUrl)}
             />
           </div>
-          <button 
+          <button
             onClick={() => handleUrlSubmitted(manualUrl)}
             disabled={!manualUrl.trim()}
             className="bg-blue-600 text-white px-6 py-2 rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
@@ -316,12 +320,12 @@ const ScannerPage: React.FC = () => {
                 <h3 className="text-xl font-bold text-gray-900 mb-2">Pronto para Escanear</h3>
                 <p className="text-gray-500 max-w-[280px]">Escaneie o QR code no seu cupom fiscal para extrair todos os produtos automaticamente.</p>
               </div>
-              <button 
+              <button
                 onClick={startScanning}
                 className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
               >
                 <Camera className="w-5 h-5" />
-                Abrir Câmera
+                Abrir Camera
               </button>
               {scannerError && (
                 <p className="text-red-500 text-sm bg-red-50 px-4 py-2 rounded-lg">{scannerError}</p>
@@ -329,8 +333,8 @@ const ScannerPage: React.FC = () => {
             </div>
           ) : (
             <div className="w-full flex flex-col items-center gap-4 relative">
-              <div className="relative w-full max-w-[400px] aspect-square rounded-2xl overflow-hidden bg-black">
-                <video 
+              <div className={`relative w-full max-w-[400px] aspect-square rounded-2xl overflow-hidden bg-black transition-all duration-300 ${scanFlash ? 'ring-4 ring-green-400' : ''}`}>
+                <video
                   ref={videoRef}
                   className="absolute inset-0 w-full h-full object-cover"
                   playsInline
@@ -344,28 +348,38 @@ const ScannerPage: React.FC = () => {
                     <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-lg" />
                     <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-lg" />
                     <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br-lg" />
-                    {/* Scanning line animation */}
-                    <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent animate-pulse" 
+                    <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent animate-pulse"
                          style={{ top: '50%', animation: 'scan 2s ease-in-out infinite' }} />
                   </div>
                 </div>
+                {/* Green flash overlay */}
+                {scanFlash && (
+                  <div className="absolute inset-0 bg-green-400/20 pointer-events-none transition-opacity duration-300" />
+                )}
                 {/* Close button */}
-                <button 
+                <button
                   onClick={stopScanning}
                   className="absolute top-3 right-3 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
-                {/* Mode indicator */}
-                {scannerMode && (
-                  <div className="absolute bottom-3 left-3 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                    {scannerMode === 'native' ? '📱 Nativo' : '🔍 Padrão'}
-                  </div>
-                )}
+                {/* Mode + scan count indicator */}
+                <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                  {scannerMode && (
+                    <div className="bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                      {scannerMode === 'native' ? 'Nativo' : 'Padrao'}
+                    </div>
+                  )}
+                  {scanCount > 0 && (
+                    <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+                      {scanCount} escaneado{scanCount !== 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                Aponte a câmera para o QR code
+                Escaneie varios QR codes seguidos
               </div>
             </div>
           )}
@@ -384,7 +398,7 @@ const ScannerPage: React.FC = () => {
               </span>
             )}
           </h3>
-          
+
           <div className="flex-1 overflow-auto pr-2 space-y-3">
             {processingQueue.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 p-8">
@@ -392,7 +406,7 @@ const ScannerPage: React.FC = () => {
                   <Clock className="w-8 h-8 opacity-20" />
                 </div>
                 <p className="font-medium text-gray-500">Nenhum processo ativo</p>
-                <p className="text-sm max-w-[200px] mt-1">Cupons escaneados aparecerão aqui durante o processamento.</p>
+                <p className="text-sm max-w-[200px] mt-1">Cupons escaneados aparecerao aqui durante o processamento.</p>
               </div>
             ) : (
               processingQueue.map((item) => (
@@ -412,30 +426,35 @@ const ScannerPage: React.FC = () => {
                           'text-gray-800'
                         }`}>
                           {item.market_name || (
+                            item.status === 'pending' ? 'Aguardando envio...' :
                             item.status === 'sending' ? 'Enviando ao servidor...' :
-                            item.status === 'duplicate' ? 'Já existe no sistema' :
+                            item.status === 'queued' ? 'Na fila do servidor...' :
+                            item.status === 'duplicate' ? 'Ja existe no sistema' :
                             'Processando mercado...'
                           )}
                         </p>
                       </div>
-                      
+
                       {item.status === 'error' ? (
                         <p className="text-xs text-red-500 line-clamp-2">{item.error_message}</p>
                       ) : item.status === 'duplicate' ? (
-                        <p className="text-xs text-orange-500">Este cupom já foi adicionado.</p>
+                        <p className="text-xs text-orange-500">Este cupom ja foi adicionado.</p>
                       ) : (
                         <div className="flex items-center gap-3 text-xs text-gray-500">
                           {item.products_count ? (
                             <span className="font-medium text-blue-600">{item.products_count} produtos</span>
                           ) : (
                             <span className="flex items-center gap-1 italic">
-                              {item.status === 'extracting' ? 'Extraindo itens...' : 'Conectando...'}
+                              {item.status === 'extracting' ? 'Extraindo itens...' :
+                               item.status === 'queued' ? 'Aguardando vez...' :
+                               item.status === 'pending' ? 'Na fila local...' :
+                               'Conectando...'}
                             </span>
                           )}
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="shrink-0 pt-1">
                       {item.status === 'success' ? (
                         <CheckCircle2 className="w-6 h-6 text-green-500" />
@@ -443,6 +462,8 @@ const ScannerPage: React.FC = () => {
                         <XCircle className="w-6 h-6 text-red-500" />
                       ) : item.status === 'duplicate' ? (
                         <AlertCircle className="w-6 h-6 text-orange-500" />
+                      ) : item.status === 'pending' ? (
+                        <Clock className="w-6 h-6 text-gray-400" />
                       ) : (
                         <div className="relative">
                           <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
@@ -453,7 +474,7 @@ const ScannerPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   {item.status === 'success' && (
                     <div className="mt-3 pt-3 border-t border-green-100 flex justify-end">
                       <button className="text-[10px] font-bold text-green-700 uppercase tracking-wider flex items-center gap-1 hover:underline">
@@ -465,18 +486,17 @@ const ScannerPage: React.FC = () => {
               ))
             )}
           </div>
-          
+
           {processingQueue.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">
-                Itens são removidos automaticamente após 5s
+                Itens sao removidos automaticamente apos 5s
               </p>
             </div>
           )}
         </div>
       </div>
-      
-      {/* CSS for scan animation */}
+
       <style>{`
         @keyframes scan {
           0%, 100% { top: 20%; opacity: 0.3; }

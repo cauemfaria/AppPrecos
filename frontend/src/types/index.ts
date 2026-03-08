@@ -86,7 +86,7 @@ export interface NFCeResponse {
 
 export interface NFCeStatusResponse {
   record_id: number;
-  status: 'processing' | 'extracting' | 'success' | 'error' | 'unknown';
+  status: 'queued' | 'processing' | 'extracting' | 'success' | 'error' | 'unknown';
   nfce_url?: string;
   market_id?: string;
   market_name?: string;
@@ -98,7 +98,7 @@ export interface NFCeStatusResponse {
 export interface ProcessingItem extends Omit<Partial<NFCeStatusResponse>, 'status'> {
   record_id: number;
   url: string;
-  status: 'queued' | 'sending' | 'processing' | 'extracting' | 'success' | 'error' | 'duplicate';
+  status: 'queued' | 'sending' | 'processing' | 'extracting' | 'success' | 'error' | 'duplicate' | 'pending';
   addedAt: number;
 }
 

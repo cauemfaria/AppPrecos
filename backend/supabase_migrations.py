@@ -36,16 +36,17 @@ DROP TABLE IF EXISTS products CASCADE;
 -- ============================================================================
 
 -- 1. Markets
+-- market_id stores the 14-digit CNPJ extracted from the NFCe URL access key
 CREATE TABLE markets (
     id BIGSERIAL PRIMARY KEY,
     market_id VARCHAR(20) UNIQUE NOT NULL,
     name VARCHAR(200) NOT NULL,
     address VARCHAR(500) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT unique_market_name_address UNIQUE (name, address)
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 2. Processed URLs (NFCe Tracking & Locking)
+-- market_id here is the CNPJ, or 'SYSTEM' for enrichment lock records
 CREATE TABLE processed_urls (
     id BIGSERIAL PRIMARY KEY,
     nfce_url VARCHAR(1000) UNIQUE NOT NULL,

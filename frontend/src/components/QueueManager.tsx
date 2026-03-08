@@ -1,37 +1,52 @@
-import React, { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { nfceService } from '../services/api';
 import type { ProcessingItem } from '../types';
 
+const STALE_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
+const POLL_INTERVAL_MS = 3000;
+
 const QueueManager: React.FC = () => {
-  const { 
-    processingQueue, 
-    updateProcessingItem, 
+  const {
+    processingQueue,
+    updateProcessingItem,
     removeFromProcessingQueue,
-    setProcessingQueue 
+    setProcessingQueue
   } = useStore();
-  
-  // Initial fetch of processing items from backend
+
+  // Stable ref so the polling interval never needs to be re-created
+  const queueRef = useRef(processingQueue);
+  queueRef.current = processingQueue;
+
+  // Stale item cleanup + initial backend sync (runs once on mount)
   useEffect(() => {
-    const fetchInitialProcessing = async () => {
+    const init = async () => {
+      const now = Date.now();
+      const current = useStore.getState().processingQueue;
+
+      // Remove items stuck for more than 15 minutes (prevents infinite spinners)
+      const staleIds = current
+        .filter(item => now - item.addedAt > STALE_THRESHOLD_MS &&
+          !['success', 'error', 'duplicate'].includes(item.status))
+        .map(item => item.record_id);
+
+      if (staleIds.length > 0) {
+        const cleaned = current.filter(item => !staleIds.includes(item.record_id));
+        setProcessingQueue(cleaned);
+        console.log(`[QueueManager] Cleaned ${staleIds.length} stale items`);
+      }
+
+      // Merge with backend state
       try {
         const backendItems = await nfceService.getProcessingNfces();
-        
-        // Merge backend items into current queue
-        // Backend items are more authoritative for status
-        const now = Date.now();
-        const mergedItems: ProcessingItem[] = [...processingQueue];
-        
+        const merged: ProcessingItem[] = [...useStore.getState().processingQueue];
+
         backendItems.forEach(bItem => {
-          const index = mergedItems.findIndex(i => i.record_id === bItem.record_id);
+          const index = merged.findIndex(i => i.record_id === bItem.record_id);
           if (index !== -1) {
-            mergedItems[index] = {
-              ...mergedItems[index],
-              ...bItem,
-              status: bItem.status as any
-            };
+            merged[index] = { ...merged[index], ...bItem, status: bItem.status as any };
           } else {
-            mergedItems.push({
+            merged.push({
               ...bItem,
               url: bItem.nfce_url || '',
               status: bItem.status as any,
@@ -39,59 +54,57 @@ const QueueManager: React.FC = () => {
             });
           }
         });
-        
-        setProcessingQueue(mergedItems);
+
+        setProcessingQueue(merged);
       } catch (error) {
-        console.error("Failed to fetch initial processing items", error);
+        console.error('[QueueManager] Failed to fetch initial processing items', error);
       }
     };
 
-    fetchInitialProcessing();
-  }, []);
+    init();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Polling logic
+  // Single polling interval that uses a stable ref (never re-created)
   useEffect(() => {
-    const pendingItems = processingQueue.filter(item => 
-      item.status === 'processing' || item.status === 'extracting' || item.status === 'sending'
-    );
+    const poll = async () => {
+      const currentQueue = queueRef.current;
+      const pendingIds = currentQueue
+        .filter(item =>
+          ['queued', 'processing', 'extracting'].includes(item.status) &&
+          item.record_id > 0
+        )
+        .map(item => item.record_id);
 
-    if (pendingItems.length === 0) return;
+      if (pendingIds.length === 0) return;
 
-    const pollInterval = setInterval(async () => {
-      // Refresh pending items from current store state to get latest record_ids
-      const currentPending = useStore.getState().processingQueue.filter(item => 
-        item.status === 'processing' || item.status === 'extracting'
-      );
+      try {
+        const statuses = await nfceService.batchGetStatus(pendingIds);
 
-      for (const item of currentPending) {
-        if (item.record_id < 0) continue; // Still in 'sending' state (temp ID)
-        
-        try {
-          const status = await nfceService.getNfceStatus(item.record_id);
-          
-          if (status.status !== item.status) {
-            updateProcessingItem(item.record_id, { 
-              ...status, 
-              status: status.status as any 
-            });
+        for (const status of statuses) {
+          const existing = currentQueue.find(i => i.record_id === status.record_id);
+          if (!existing || existing.status === status.status) continue;
 
-            // If success or error, schedule removal after 5 seconds
-            if (status.status === 'success' || status.status === 'error') {
-              setTimeout(() => {
-                removeFromProcessingQueue(item.record_id);
-              }, 5000);
-            }
+          updateProcessingItem(status.record_id, {
+            ...status,
+            status: status.status as any
+          });
+
+          if (status.status === 'success' || status.status === 'error') {
+            setTimeout(() => {
+              removeFromProcessingQueue(status.record_id);
+            }, 5000);
           }
-        } catch (error) {
-          console.error(`Failed to poll status for ${item.record_id}`, error);
         }
+      } catch (error) {
+        console.error('[QueueManager] Batch poll error', error);
       }
-    }, 3000);
+    };
 
-    return () => clearInterval(pollInterval);
-  }, [processingQueue.length, updateProcessingItem, removeFromProcessingQueue]);
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [updateProcessingItem, removeFromProcessingQueue]); // stable zustand functions
 
-  return null; // This component doesn't render anything
+  return null;
 };
 
 export default QueueManager;

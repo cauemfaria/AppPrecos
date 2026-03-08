@@ -3,15 +3,14 @@ Gunicorn production configuration for AppPrecos Backend
 Optimized for multiple concurrent users
 """
 import os
-import multiprocessing
 
 # Server socket
 bind = f"0.0.0.0:{os.getenv('PORT', '10000')}"
 backlog = 2048
 
-# Worker processes
-# Formula: (2 x $num_cores) + 1
-workers = multiprocessing.cpu_count() * 2 + 1
+# Worker processes - fixed at 2 to stay within Render's 512MB memory limit.
+# Playwright (Chromium) uses ~200MB, so more workers would cause OOM.
+workers = 2
 worker_class = 'sync'
 worker_connections = 1000
 max_requests = 1000

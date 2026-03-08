@@ -7,14 +7,12 @@ Using Supabase REST API
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse, parse_qs, unquote
 import os
-import string
-import random
 import sys
 import threading
 import time
 import requests
-import difflib
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -207,14 +205,22 @@ def release_extraction_lock(record_id, final_status, **kwargs):
 
 print(f"[OK] API URL: {SUPABASE_URL}")
 
+# Recover any orphaned tasks from previous worker crashes
+import task_queue
+task_queue.recover_orphaned_tasks()
+
 
 # ==================== UTILITY FUNCTIONS ====================
 
-def generate_market_id():
-    """Generate a random unique market ID (format: MKT + 8 random chars)"""
-    chars = string.ascii_uppercase + string.digits
-    random_part = ''.join(random.choices(chars, k=8))
-    return f"MKT{random_part}"
+def extract_cnpj_from_url(url: str) -> str:
+    """Extract the 14-digit CNPJ from an NFCe URL's access key (positions 7-20, 1-based)."""
+    parsed = urlparse(url)
+    p_value = parse_qs(parsed.query).get('p', [''])[0]
+    p_decoded = unquote(p_value)
+    access_key = p_decoded.split('|')[0]
+    if len(access_key) != 44 or not access_key.isdigit():
+        raise ValueError(f"Invalid NFCe access key: {access_key}")
+    return access_key[6:20]
 
 
 def trigger_enrichment(worker_id="auto"):
@@ -229,95 +235,114 @@ def trigger_enrichment(worker_id="auto"):
     return True
 
 def process_nfce_in_background(url, url_record_id):
-    """Background task to process NFCe extraction and save to database"""
+    """Background task to process NFCe extraction and save to database.
+    Called by the task_queue consumer thread (one at a time)."""
+    import task_queue
     start_time = time.time()
-    
-    print(f"\n[BACKGROUND #{url_record_id}] Queued for processing...")
+
+    # Resolve URL to browser format (moved here from request handler to keep handler fast)
+    print(f"\n[BACKGROUND #{url_record_id}] Resolving URL...")
+    resolved_url = resolve_nfce_url(url)
+    if resolved_url != url:
+        supabase.table('processed_urls').update({
+            'nfce_url': resolved_url
+        }).eq('id', url_record_id).execute()
+
+    # Check for duplicate after resolving (two different QR URLs can resolve to the same page)
+    existing = supabase.table('processed_urls').select('id') \
+        .eq('nfce_url', resolved_url) \
+        .neq('id', url_record_id) \
+        .in_('status', ['success', 'processing', 'extracting', 'queued']) \
+        .execute()
+    if existing.data:
+        supabase.table('processed_urls').update({
+            'status': 'error',
+            'error_message': 'Duplicado (URL já em processamento ou processada)'
+        }).eq('id', url_record_id).execute()
+        print(f"[BACKGROUND #{url_record_id}] Duplicate detected after resolve, skipping")
+        return
+
+    # Update status to processing (from queued)
+    supabase.table('processed_urls').update({
+        'status': 'processing',
+        'processed_at': datetime.utcnow().isoformat()
+    }).eq('id', url_record_id).execute()
+
     print(f"[BACKGROUND #{url_record_id}] Waiting for extraction slot (database lock)...")
-    
-    # Acquire database-based lock (works across Gunicorn workers)
-    if not acquire_extraction_lock(url_record_id, max_wait_seconds=600):
-        # Timeout - mark as error
+
+    if not acquire_extraction_lock(url_record_id, max_wait_seconds=1800):
         supabase.table('processed_urls').update({
             'status': 'error',
             'error_message': 'Timeout waiting for extraction slot'
         }).eq('id', url_record_id).execute()
         print(f"[FAIL] [BACKGROUND #{url_record_id}] Timeout waiting for lock")
         return
-    
+
     wait_time = time.time() - start_time
     print(f"[BACKGROUND #{url_record_id}] Got extraction slot after {wait_time:.1f}s")
-    
+
     try:
         print(f"[BACKGROUND #{url_record_id}] Starting Playwright extraction...")
-        
+
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         from nfce_extractor import extract_full_nfce_data
-        
+
         extraction_start = time.time()
-        result = extract_full_nfce_data(url, headless=True)
+        result = extract_full_nfce_data(resolved_url, headless=True)
         extraction_time = time.time() - extraction_start
         print(f"[BACKGROUND #{url_record_id}] Playwright extraction completed in {extraction_time:.1f}s")
-        
+
         market_info = result.get('market_info', {})
         products = result.get('products', [])
-        
+
         if not products or not market_info.get('name') or not market_info.get('address'):
             release_extraction_lock(url_record_id, 'error',
                 error_message='No products or market info extracted'
             )
             print(f"[FAIL] [BACKGROUND #{url_record_id}] No products or market info extracted")
             return
-        
+
         print(f"[BACKGROUND #{url_record_id}] Extracted {len(products)} products from {market_info.get('name')}")
-        
-        # Check/create market
-        print(f"[BACKGROUND #{url_record_id}] Checking/creating market...")
-        market_result = supabase.table('markets').select('*').match({
-            'name': market_info['name'],
-            'address': market_info['address']
-        }).execute()
-        
+
+        cnpj = extract_cnpj_from_url(resolved_url)
+        print(f"[BACKGROUND #{url_record_id}] Checking/creating market (CNPJ: {cnpj})...")
+        market_result = supabase.table('markets').select('*').eq('market_id', cnpj).execute()
+
         if market_result.data:
             market = market_result.data[0]
             print(f"[BACKGROUND #{url_record_id}] Found existing market: {market['market_id']}")
         else:
-            new_market_id = generate_market_id()
-            while True:
-                check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
-                if not check.data:
-                    break
-                new_market_id = generate_market_id()
-            
             market_data = {
-                'market_id': new_market_id,
+                'market_id': cnpj,
                 'name': market_info['name'],
                 'address': market_info['address']
             }
             market_insert = supabase.table('markets').insert(market_data).execute()
             market = market_insert.data[0]
             print(f"[BACKGROUND #{url_record_id}] Created new market: {market['market_id']}")
-        
-        # Save products
+
         print(f"[BACKGROUND #{url_record_id}] Saving {len(products)} products...")
-        save_result = save_products_to_supabase(market['market_id'], products, url)
-        
-        # Update URL record with success (this also releases the lock)
+        save_result = save_products_to_supabase(market['market_id'], products, resolved_url)
+
         release_extraction_lock(url_record_id, 'success',
             market_id=market['market_id'],
             market_name=market['name'],
             products_count=len(products)
         )
-        
+
         total_time = time.time() - start_time
         print(f"[OK] [BACKGROUND #{url_record_id}] Complete in {total_time:.1f}s: {save_result['saved_to_purchases']} products saved")
-        
-        # TRIGGER ENRICHMENT WORKER
-        print(f"[BACKGROUND #{url_record_id}] Triggering product enrichment (will retry if locked)...")
-        trigger_enrichment(f"auto-{url_record_id}")
-        
+
+        # Only trigger enrichment when the queue is empty (last item in a batch).
+        # This bunches up all products for one enrichment run, maximizing local
+        # cache hits and minimizing Cosmos API calls.
+        if task_queue.is_empty():
+            print(f"[BACKGROUND #{url_record_id}] Queue empty, triggering enrichment...")
+            trigger_enrichment(f"auto-{url_record_id}")
+        else:
+            print(f"[BACKGROUND #{url_record_id}] {task_queue.queue_size()} items still queued, deferring enrichment")
+
     except Exception as e:
-        # Release lock with error status
         release_extraction_lock(url_record_id, 'error',
             error_message=str(e)[:200]
         )
@@ -329,82 +354,45 @@ def process_nfce_in_background(url, url_record_id):
 
 def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None):
     """
-    Save products to Supabase PostgreSQL database (PURCHASES table only)
-    Enrichment and unique_products upsert is now handled by a separate worker.
+    Save products to Supabase PostgreSQL database (PURCHASES table only).
+    Uses a single batch insert for atomicity and speed.
     """
     if purchase_date is None:
         purchase_date = datetime.utcnow()
-    
-    inserted_purchase_ids = []
-    
-    try:
-        saved_to_purchases = 0
-        
-        print(f"\n{'='*60}")
-        print(f"SAVING PRODUCTS TO PURCHASES")
-        print(f"{'='*60}")
-        print(f"Market ID: {market_id}")
-        print(f"Products count: {len(products)}")
-        print(f"{'='*60}\n")
-        
-        # 1. Insert to PURCHASES table
-        print(f"Inserting {len(products)} products to PURCHASES table...")
-        
-        for idx, product in enumerate(products, 1):
-            try:
-                purchase_data = {
-                    'market_id': market_id,
-                    'ncm': product['ncm'],
-                    'ean': product.get('ean', 'SEM GTIN'),
-                    'product_name': product.get('product', ''),
-                    'quantity': product.get('quantity', 0),
-                    'unidade_comercial': product.get('unidade_comercial', 'UN'),
-                    'total_price': product.get('total_price', 0),
-                    'unit_price': product.get('unit_price', 0),
-                    'nfce_url': nfce_url,
-                    'purchase_date': purchase_date.isoformat(),
-                    'enriched': False,
-                    'enrichment_status': 'pending'
-                }
-                
-                response = supabase.table('purchases').insert(purchase_data).execute()
-                
-                if not response.data or len(response.data) == 0:
-                    raise Exception(f"Failed to insert product {idx}")
-                
-                inserted_purchase_ids.append(response.data[0]['id'])
-                saved_to_purchases += 1
-                print(f"  [+] [{idx}/{len(products)}] {product.get('product', 'Unknown')[:50]}")
-                
-            except Exception as e:
-                print(f"[ERROR] Inserting product {idx}: {str(e)}")
-                raise Exception(f"Failed at product {idx}: {str(e)}")
-        
-        print(f"[OK] Inserted {saved_to_purchases} products to PURCHASES\n")
-        
-        return {
-            'saved_to_purchases': saved_to_purchases,
-            'updated_unique': 0,
-            'created_unique': 0,
-            'skipped_products': 0,
-            'llm_calls': 0
-        }
-    
-    except Exception as e:
-        print(f"\n{'='*60}")
-        print(f"[ERROR] TRANSACTION FAILED - ROLLING BACK")
-        print(f"{'='*60}")
-        
-        if inserted_purchase_ids:
-            try:
-                for purchase_id in inserted_purchase_ids:
-                    supabase.table('purchases').delete().eq('id', purchase_id).execute()
-                print(f"[OK] Rolled back purchases")
-            except Exception as rb_error:
-                print(f"[FAIL] Rollback purchases failed: {rb_error}")
-        
-        print(f"{'='*60}\n")
-        raise
+
+    print(f"[SAVE] Batch inserting {len(products)} products for market {market_id}")
+
+    all_purchase_data = []
+    for product in products:
+        all_purchase_data.append({
+            'market_id': market_id,
+            'ncm': product['ncm'],
+            'ean': product.get('ean', 'SEM GTIN'),
+            'product_name': product.get('product', ''),
+            'quantity': product.get('quantity', 0),
+            'unidade_comercial': product.get('unidade_comercial', 'UN'),
+            'total_price': product.get('total_price', 0),
+            'unit_price': product.get('unit_price', 0),
+            'nfce_url': nfce_url,
+            'purchase_date': purchase_date.isoformat(),
+            'enriched': False,
+            'enrichment_status': 'pending'
+        })
+
+    response = supabase.table('purchases').insert(all_purchase_data).execute()
+
+    if not response.data or len(response.data) != len(products):
+        raise Exception(f"Batch insert returned {len(response.data) if response.data else 0}/{len(products)} rows")
+
+    print(f"[OK] Batch inserted {len(response.data)} products to PURCHASES")
+
+    return {
+        'saved_to_purchases': len(response.data),
+        'updated_unique': 0,
+        'created_unique': 0,
+        'skipped_products': 0,
+        'llm_calls': 0
+    }
 
 
 # ==================== API ENDPOINTS ====================
@@ -482,172 +470,70 @@ def extract_nfce():
     Extract data from NFCe URL and save to database
     Request body: { "url": "...", "save": true/false, "async": true/false }
     """
+    import task_queue
+
     data = request.get_json()
-    
+
     if not data.get('url'):
         return jsonify({'error': 'URL da NFCe é obrigatória'}), 400
-    
-    # Force use_async to True for better stability, or respect data if provided
-    use_async = data.get('async', True)
-    
-    # Resolve URL to browser format (follows redirect from QR code URL)
-    resolved_url = resolve_nfce_url(data['url'])
-    data['url'] = resolved_url
-    
-    # ========== ASYNC MODE ==========
-    if data.get('save') and use_async:
-        try:
-            # Check if URL already processed
-            existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', resolved_url).execute()
-            if existing_url.data:
-                url_data = existing_url.data[0]
-                return jsonify({
-                    'error': 'Esta NFCe já foi processada',
-                    'message': 'A URL já existe no banco de dados',
-                    'status': url_data.get('status', 'unknown'),
-                    'processed_at': url_data['processed_at'],
-                    'market_id': url_data['market_id'],
-                    'products_count': url_data['products_count']
-                }), 409
-            
-            # Record URL with status='processing'
-            temp_url_data = {
-                'nfce_url': resolved_url,
-                'market_id': 'PROCESSING',
-                'market_name': '',
-                'products_count': 0,
-                'status': 'processing',
-                'processed_at': datetime.utcnow().isoformat()
-            }
-            url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
-            url_record_id = url_insert.data[0]['id']
-            
-            # Start background processing
-            thread = threading.Thread(
-                target=process_nfce_in_background,
-                args=(data['url'], url_record_id),
-                daemon=True
-            )
-            thread.start()
-            
+
+    raw_url = data['url'].strip()
+
+    try:
+        # Quick duplicate check using the raw URL (exact match only).
+        # A deeper check after URL resolution happens in process_nfce_in_background.
+        existing_url = supabase.table('processed_urls').select('id, status, processed_at, market_id, products_count') \
+            .eq('nfce_url', raw_url).execute()
+        if existing_url.data:
+            url_data = existing_url.data[0]
             return jsonify({
-                'message': 'Processamento da NFCe iniciado',
-                'status': 'processing',
-                'record_id': url_record_id
-            }), 202
-            
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return jsonify({'error': f'Falha ao iniciar processamento: {str(e)}'}), 500
-    
-    # ========== SYNC MODE (Legacy/Fallback) ==========
-        url_record_id = None
-        try:
-            if data.get('save'):
-                # Check if URL already processed
-                existing_url = supabase.table('processed_urls').select('*').eq('nfce_url', resolved_url).execute()
-                if existing_url.data:
-                    url_data = existing_url.data[0]
-                    return jsonify({
-                        'error': 'Esta NFCe já foi processada',
-                        'message': 'A URL já existe no banco de dados',
-                        'status': url_data.get('status', 'unknown'),
-                        'processed_at': url_data['processed_at'],
-                        'market_id': url_data['market_id'],
-                        'products_count': url_data['products_count']
-                    }), 409
-                
-                temp_url_data = {
-                    'nfce_url': resolved_url,
-                    'market_id': 'PROCESSING',
-                'market_name': '',
-                    'products_count': 0,
-                    'status': 'processing',
-                    'processed_at': datetime.utcnow().isoformat()
-                }
-                url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
-                url_record_id = url_insert.data[0]['id']
-            
-            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-            from nfce_extractor import extract_full_nfce_data
-            
-            result = extract_full_nfce_data(data['url'], headless=True)
-            
-            market_info = result.get('market_info', {})
-            products = result.get('products', [])
-            
-            if not products:
-                if url_record_id:
-                    supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-                return jsonify({'error': 'Nenhum produto extraído da NFCe'}), 400
-            
-            if data.get('save'):
-                if not market_info.get('name') or not market_info.get('address'):
-                    if url_record_id:
-                        supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-                    return jsonify({'error': 'Não foi possível extrair informações do mercado'}), 400
-                
-                market_result = supabase.table('markets').select('*').match({
-                    'name': market_info['name'],
-                    'address': market_info['address']
-                }).execute()
-                
-                if market_result.data:
-                    market = market_result.data[0]
-                    market_action = 'matched'
-                else:
-                    new_market_id = generate_market_id()
-                    while True:
-                        check = supabase.table('markets').select('id').eq('market_id', new_market_id).execute()
-                        if not check.data:
-                            break
-                        new_market_id = generate_market_id()
-                    
-                    market_data = {'market_id': new_market_id, 'name': market_info['name'], 'address': market_info['address']}
-                    market_insert = supabase.table('markets').insert(market_data).execute()
-                    market = market_insert.data[0]
-                    market_action = 'created'
-                
-                save_result = save_products_to_supabase(market['market_id'], products, data['url'])
-                
-                if url_record_id:
-                    supabase.table('processed_urls').update({
-                        'market_id': market['market_id'],
-                        'market_name': market['name'],
-                        'products_count': len(products),
-                        'status': 'success'
-                    }).eq('id', url_record_id).execute()
-                
-                return jsonify({
-                    'message': 'Dados da NFCe extraídos e salvos com sucesso',
-                    'record_id': url_record_id,
-                    'market': {
-                        'id': market['id'],
-                        'market_id': market['market_id'],
-                        'name': market['name'],
-                        'address': market['address'],
-                        'action': market_action
-                    },
-                    'products': products,
-                    'statistics': {
-                        'products_saved_to_main': save_result['saved_to_purchases'],
-                        'market_action': market_action
-                    }
-                }), 201
-            else:
-                return jsonify({
-                    'message': 'Dados da NFCe extraídos com sucesso (não salvos)',
-                    'market_info': market_info,
-                    'products': products
-                }), 200
-            
-        except Exception as e:
-            if url_record_id:
-                supabase.table('processed_urls').update({'status': 'error'}).eq('id', url_record_id).execute()
-            import traceback
-            traceback.print_exc()
-            return jsonify({'error': str(e)}), 500
+                'error': 'Esta NFCe já foi processada',
+                'message': 'A URL já existe no banco de dados',
+                'status': url_data.get('status', 'unknown'),
+                'processed_at': url_data['processed_at'],
+                'market_id': url_data['market_id'],
+                'products_count': url_data['products_count']
+            }), 409
+
+        # Insert with status='queued' and return immediately.
+        # URL resolution and extraction happen in the background worker.
+        temp_url_data = {
+            'nfce_url': raw_url,
+            'market_id': 'QUEUED',
+            'market_name': '',
+            'products_count': 0,
+            'status': 'queued',
+            'processed_at': datetime.utcnow().isoformat()
+        }
+        url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
+        url_record_id = url_insert.data[0]['id']
+
+        task_queue.enqueue_nfce(raw_url, url_record_id)
+
+        return jsonify({
+            'message': 'NFCe adicionada à fila de processamento',
+            'status': 'queued',
+            'record_id': url_record_id
+        }), 202
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Falha ao iniciar processamento: {str(e)}'}), 500
+
+
+def _format_status_record(record):
+    """Format a processed_urls DB row into the API response shape."""
+    return {
+        'record_id': record['id'],
+        'nfce_url': record.get('nfce_url', ''),
+        'status': record['status'],
+        'market_id': record.get('market_id'),
+        'market_name': record.get('market_name', ''),
+        'products_count': record.get('products_count', 0),
+        'error_message': record.get('error_message'),
+        'processed_at': record['processed_at']
+    }
 
 
 @app.route('/api/nfce/status/<int:record_id>', methods=['GET'])
@@ -655,20 +541,27 @@ def get_nfce_status(record_id):
     """Get processing status by record ID"""
     try:
         result = supabase.table('processed_urls').select('*').eq('id', record_id).execute()
-        
+
         if not result.data:
             return jsonify({'error': 'Registro não encontrado'}), 404
-        
-        record = result.data[0]
-        return jsonify({
-            'record_id': record['id'],
-            'status': record['status'],
-            'market_id': record.get('market_id'),
-            'market_name': record.get('market_name', ''),
-            'products_count': record.get('products_count', 0),
-            'error_message': record.get('error_message'),
-            'processed_at': record['processed_at']
-        })
+
+        return jsonify(_format_status_record(result.data[0]))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/nfce/status/batch', methods=['POST'])
+def get_nfce_status_batch():
+    """Get processing status for multiple record IDs in a single query."""
+    data = request.get_json()
+    ids = data.get('ids', []) if data else []
+
+    if not ids:
+        return jsonify([])
+
+    try:
+        result = supabase.table('processed_urls').select('*').in_('id', ids).execute()
+        return jsonify([_format_status_record(r) for r in result.data])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -677,31 +570,15 @@ def get_nfce_status(record_id):
 def get_processing_nfces():
     """Get all currently processing NFCe URLs"""
     try:
-        # Fetch items with status 'processing' or 'extracting'
-        # We only want items from the last 10 minutes to avoid showing stale stuck ones
         ten_minutes_ago = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
-        
+
         result = supabase.table('processed_urls')\
             .select('*')\
-            .in_('status', ['processing', 'extracting'])\
+            .in_('status', ['queued', 'processing', 'extracting'])\
             .gt('processed_at', ten_minutes_ago)\
             .execute()
-            
-        # Transform result to match get_nfce_status format
-        processing_items = []
-        for record in result.data:
-            processing_items.append({
-                'record_id': record['id'],
-                'url': record['nfce_url'],
-                'status': record['status'],
-                'market_id': record.get('market_id'),
-                'market_name': record.get('market_name', ''),
-                'products_count': record.get('products_count', 0),
-                'error_message': record.get('error_message'),
-                'processed_at': record['processed_at']
-            })
-            
-        return jsonify(processing_items)
+
+        return jsonify([_format_status_record(r) for r in result.data])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

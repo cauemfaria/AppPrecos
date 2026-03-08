@@ -89,6 +89,11 @@ export const nfceService = {
     return response.data;
   },
 
+  batchGetStatus: async (ids: number[]) => {
+    const response = await api.post<NFCeStatusResponse[]>('/nfce/status/batch', { ids });
+    return response.data;
+  },
+
   getProcessingNfces: async () => {
     const response = await api.get<NFCeStatusResponse[]>('/nfce/processing');
     return response.data;

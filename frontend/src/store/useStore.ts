@@ -90,7 +90,7 @@ export const useStore = create<AppState>()(
       setProcessingQueue: (items) => set({ processingQueue: items }),
     }),
     {
-      name: 'app-precos-storage',
+      name: 'app-precos-storage-v2',
       partialize: (state) => ({ 
         shoppingList: state.shoppingList, 
         selectedMarketIds: state.selectedMarketIds,
