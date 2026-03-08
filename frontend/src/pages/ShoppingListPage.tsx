@@ -11,41 +11,83 @@ import {
 
 const MAX_MARKETS_FOR_COMPARISON = 5;
 
-const modalBase: React.CSSProperties = {
-  backgroundColor: 'var(--color-surface)',
-  boxShadow: 'var(--shadow-xl)',
-};
+/* ─── ModalWrapper ─────────────────────────────────────────── */
 
 const ModalWrapper: React.FC<{
   onClose: () => void;
   children: React.ReactNode;
   zIndex?: number;
-  maxWidth?: string;
-  height?: string;
-}> = ({ onClose, children, zIndex = 100, maxWidth = '520px', height = '90vh' }) => (
-  <div
-    className="fixed inset-0 flex items-end md:items-center justify-center"
-    style={{ zIndex }}
-  >
+}> = ({ onClose, children, zIndex = 100 }) => {
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+  const dragCurrentY = useRef(0);
+
+  const handleDismiss = () => {
+    setDragY(window.innerHeight);
+    setTimeout(onClose, 260);
+  };
+
+  const onDragStart = (e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0].clientY;
+    dragCurrentY.current = 0;
+    setIsDragging(true);
+  };
+
+  const onDragMove = (e: React.TouchEvent) => {
+    const delta = e.touches[0].clientY - dragStartY.current;
+    if (delta > 0) {
+      dragCurrentY.current = delta;
+      setDragY(delta);
+    }
+  };
+
+  const onDragEnd = () => {
+    setIsDragging(false);
+    if (dragCurrentY.current > 120) {
+      handleDismiss();
+    } else {
+      setDragY(0);
+    }
+  };
+
+  return (
     <div
-      className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
-      onClick={onClose}
-    />
-    <div
-      className="relative w-full flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
-      style={{
-        ...modalBase,
-        maxWidth,
-        maxHeight: height,
-        borderRadius: '20px 20px 0 0',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-      }}
+      className="fixed inset-0 flex items-end justify-center"
+      style={{ zIndex, touchAction: 'pan-y' }}
     >
-      {children}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+        onClick={onClose}
+      />
+      <div
+        className="relative w-full flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
+        style={{
+          backgroundColor: 'var(--color-surface)',
+          boxShadow: 'var(--shadow-xl)',
+          borderRadius: '20px 20px 0 0',
+          height: '100dvh',
+          transform: `translateY(${dragY}px)`,
+          transition: isDragging ? 'none' : 'transform 260ms ease',
+        }}
+      >
+        {/* Drag handle pill */}
+        <div
+          className="flex justify-center items-center shrink-0 cursor-grab active:cursor-grabbing"
+          style={{ paddingTop: '12px', paddingBottom: '12px', touchAction: 'none' }}
+          onTouchStart={onDragStart}
+          onTouchMove={onDragMove}
+          onTouchEnd={onDragEnd}
+        >
+          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: '#CBD5E1' }} />
+        </div>
+        {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+/* ─── ModalHeader ──────────────────────────────────────────── */
 
 const ModalHeader: React.FC<{
   title: string;
@@ -54,7 +96,7 @@ const ModalHeader: React.FC<{
   children?: React.ReactNode;
 }> = ({ title, subtitle, onClose, children }) => (
   <div
-    className="px-5 py-4 sticky top-0 z-10 space-y-3"
+    className="px-5 py-4 sticky top-0 z-10 space-y-3 shrink-0"
     style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}
   >
     <div className="flex items-start justify-between gap-3">
@@ -73,7 +115,7 @@ const ModalHeader: React.FC<{
       </div>
       <button
         onClick={onClose}
-        className="flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-all duration-200 hover:opacity-80 shrink-0"
+        className="flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-opacity duration-150 active:opacity-70 shrink-0"
         style={{ backgroundColor: '#F1F5F9' }}
       >
         <X className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
@@ -82,6 +124,8 @@ const ModalHeader: React.FC<{
     {children}
   </div>
 );
+
+/* ─── Main page ────────────────────────────────────────────── */
 
 const ShoppingListPage: React.FC = () => {
   const {
@@ -99,6 +143,7 @@ const ShoppingListPage: React.FC = () => {
   const [isMarketModalOpen, setIsMarketModalOpen] = useState(false);
   const [isLoadingMarkets, setIsLoadingMarkets] = useState(false);
   const [marketsError, setMarketsError] = useState<string | null>(null);
+  const [marketLimitError, setMarketLimitError] = useState<string | null>(null);
 
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [comparisonResult, setComparisonResult] = useState<CompareResponse | null>(null);
@@ -111,8 +156,24 @@ const ShoppingListPage: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetchMarkets(); }, []);
+
+  // Lock body scroll when any sheet is open
+  useEffect(() => {
+    const anyOpen = isSearchModalOpen || isMarketModalOpen || isComparisonOpen || isBestPlacesOpen;
+    document.body.style.overflow = anyOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [isSearchModalOpen, isMarketModalOpen, isComparisonOpen, isBestPlacesOpen]);
+
+  // Auto-focus search input without triggering iOS zoom (font-size must be >=16px)
+  useEffect(() => {
+    if (isSearchModalOpen) {
+      const t = setTimeout(() => searchInputRef.current?.focus(), 150);
+      return () => clearTimeout(t);
+    }
+  }, [isSearchModalOpen]);
 
   const fetchMarkets = async () => {
     setIsLoadingMarkets(true);
@@ -157,8 +218,8 @@ const ShoppingListPage: React.FC = () => {
 
   const handleToggleMarket = (marketId: string) => {
     if (!selectedMarketIds.includes(marketId) && selectedMarketIds.length >= MAX_MARKETS_FOR_COMPARISON) {
-      setError(`Máximo de ${MAX_MARKETS_FOR_COMPARISON} mercados`);
-      setTimeout(() => setError(null), 3000);
+      setMarketLimitError(`Máximo de ${MAX_MARKETS_FOR_COMPARISON} mercados permitidos`);
+      setTimeout(() => setMarketLimitError(null), 3000);
       return;
     }
     toggleMarketSelection(marketId);
@@ -228,7 +289,7 @@ const ShoppingListPage: React.FC = () => {
           {shoppingList.length > 0 && (
             <button
               onClick={clearShoppingList}
-              className="flex items-center justify-center w-9 h-9 rounded-xl cursor-pointer transition-all duration-200 hover:opacity-80"
+              className="flex items-center justify-center w-9 h-9 rounded-xl cursor-pointer transition-opacity duration-150 active:opacity-70"
               style={{ backgroundColor: '#FEF2F2' }}
               title="Limpar lista"
             >
@@ -237,7 +298,7 @@ const ShoppingListPage: React.FC = () => {
           )}
           <button
             onClick={() => setIsSearchModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm cursor-pointer transition-all duration-200 active:scale-[0.98]"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm cursor-pointer transition-opacity duration-150 active:opacity-80"
             style={{
               backgroundColor: 'var(--color-cta)',
               color: 'white',
@@ -302,7 +363,7 @@ const ShoppingListPage: React.FC = () => {
             >
               <button
                 onClick={() => handleProductClick(product)}
-                className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
+                className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer transition-opacity duration-150 active:opacity-70"
               >
                 {product.image_url ? (
                   <div
@@ -321,7 +382,7 @@ const ShoppingListPage: React.FC = () => {
                 )}
                 <div className="flex-1 min-w-0">
                   <p
-                    className="text-sm font-semibold truncate"
+                    className="text-sm font-semibold line-clamp-2 leading-tight"
                     style={{ color: 'var(--color-text)', fontFamily: 'var(--font-body)' }}
                   >
                     {product.product_name}
@@ -348,7 +409,7 @@ const ShoppingListPage: React.FC = () => {
               </button>
               <button
                 onClick={() => removeFromShoppingList(product)}
-                className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg cursor-pointer transition-all duration-200 hover:opacity-80"
+                className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg cursor-pointer transition-opacity duration-150 active:opacity-70"
                 style={{ backgroundColor: '#FEF2F2' }}
               >
                 <Trash2 className="w-4 h-4" style={{ color: '#EF4444' }} />
@@ -373,7 +434,7 @@ const ShoppingListPage: React.FC = () => {
         >
           <button
             onClick={() => setIsMarketModalOpen(true)}
-            className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer text-left"
+            className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer text-left transition-opacity duration-150 active:opacity-70"
           >
             <div
               className="flex items-center justify-center w-9 h-9 rounded-xl shrink-0"
@@ -399,7 +460,7 @@ const ShoppingListPage: React.FC = () => {
           <button
             onClick={handleCompare}
             disabled={shoppingList.length === 0 || selectedMarketIds.length === 0 || isComparing}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm cursor-pointer transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm cursor-pointer transition-opacity duration-150 active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               backgroundColor: 'var(--color-primary)',
               color: 'white',
@@ -418,8 +479,8 @@ const ShoppingListPage: React.FC = () => {
 
       {/* === MODAL 1: Add Product Search === */}
       {isSearchModalOpen && (
-        <ModalWrapper onClose={() => setIsSearchModalOpen(false)} zIndex={100}>
-          <ModalHeader title="Adicionar Produto" onClose={() => setIsSearchModalOpen(false)}>
+        <ModalWrapper onClose={() => { setIsSearchModalOpen(false); setSearchTerm(''); setSearchResults([]); }} zIndex={100}>
+          <ModalHeader title="Adicionar Produto" onClose={() => { setIsSearchModalOpen(false); setSearchTerm(''); setSearchResults([]); }}>
             {searchError && (
               <div
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
@@ -432,13 +493,14 @@ const ShoppingListPage: React.FC = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
               <input
-                autoFocus
+                ref={searchInputRef}
                 type="text"
                 placeholder="Buscar produtos por nome..."
                 value={searchTerm}
                 onChange={e => handleSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm"
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl"
                 style={{
+                  fontSize: '16px',
                   border: '1px solid var(--color-border)',
                   backgroundColor: '#F8FAFC',
                   color: 'var(--color-text)',
@@ -451,7 +513,7 @@ const ShoppingListPage: React.FC = () => {
             </div>
           </ModalHeader>
 
-          <div className="flex-1 overflow-auto p-4 space-y-2">
+          <div className="flex-1 overflow-auto p-4 space-y-2" style={{ overscrollBehavior: 'contain' }}>
             {isSearching ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
@@ -466,18 +528,10 @@ const ShoppingListPage: React.FC = () => {
                     setSearchTerm('');
                     setSearchResults([]);
                   }}
-                  className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200"
+                  className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl cursor-pointer transition-opacity duration-150 active:opacity-70"
                   style={{
                     border: '1px solid var(--color-border)',
                     backgroundColor: 'var(--color-surface)',
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = '#EFF6FF';
-                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)';
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-surface)';
-                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)';
                   }}
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -491,10 +545,10 @@ const ShoppingListPage: React.FC = () => {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+                      <p className="text-sm font-semibold line-clamp-2 leading-tight" style={{ color: 'var(--color-text)' }}>
                         {product.product_name}
                       </p>
-                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                         {product.markets_count} mercados
                       </p>
                     </div>
@@ -517,7 +571,7 @@ const ShoppingListPage: React.FC = () => {
 
       {/* === MODAL 2: Market Selection === */}
       {isMarketModalOpen && (
-        <ModalWrapper onClose={() => setIsMarketModalOpen(false)} zIndex={100} maxWidth="440px" height="70vh">
+        <ModalWrapper onClose={() => setIsMarketModalOpen(false)} zIndex={100}>
           <ModalHeader
             title="Selecionar Mercados"
             subtitle={`Escolha até ${MAX_MARKETS_FOR_COMPARISON} mercados para comparar`}
@@ -537,7 +591,7 @@ const ShoppingListPage: React.FC = () => {
               <p className="text-xs mb-4" style={{ color: 'var(--color-text-muted)' }}>{marketsError}</p>
               <button
                 onClick={fetchMarkets}
-                className="px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer active:opacity-80"
                 style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
               >
                 Tentar Novamente
@@ -545,14 +599,29 @@ const ShoppingListPage: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-auto p-4 space-y-2">
+              <div className="flex-1 overflow-auto p-4 space-y-2" style={{ overscrollBehavior: 'contain' }}>
+                {/* Market limit error — shown inside the modal */}
+                {marketLimitError && (
+                  <div
+                    className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium mb-1"
+                    style={{
+                      backgroundColor: '#FEF2F2',
+                      border: '1px solid #FECACA',
+                      color: '#DC2626',
+                    }}
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {marketLimitError}
+                  </div>
+                )}
+
                 {markets.map(market => {
                   const isSelected = selectedMarketIds.includes(market.market_id);
                   return (
                     <button
                       key={market.market_id}
                       onClick={() => handleToggleMarket(market.market_id)}
-                      className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200"
+                      className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl cursor-pointer transition-opacity duration-150 active:opacity-70"
                       style={{
                         backgroundColor: isSelected ? '#EFF6FF' : 'var(--color-surface)',
                         border: `1px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
@@ -570,7 +639,7 @@ const ShoppingListPage: React.FC = () => {
                         </p>
                       </div>
                       <div
-                        className="flex items-center justify-center w-6 h-6 rounded-lg shrink-0 transition-all duration-200"
+                        className="flex items-center justify-center w-6 h-6 rounded-lg shrink-0 transition-colors duration-150"
                         style={{
                           backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface)',
                           border: `2px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
@@ -581,6 +650,7 @@ const ShoppingListPage: React.FC = () => {
                     </button>
                   );
                 })}
+
                 {markets.length === 0 && (
                   <div className="text-center py-12">
                     <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Nenhum mercado disponível</p>
@@ -588,12 +658,12 @@ const ShoppingListPage: React.FC = () => {
                 )}
               </div>
               <div
-                className="p-4"
+                className="p-4 shrink-0"
                 style={{ borderTop: '1px solid var(--color-border)', backgroundColor: '#F8FAFC' }}
               >
                 <button
                   onClick={() => setIsMarketModalOpen(false)}
-                  className="w-full py-3 rounded-xl font-bold text-sm cursor-pointer transition-all duration-200 active:scale-[0.98]"
+                  className="w-full py-3 rounded-xl font-bold text-sm cursor-pointer transition-opacity duration-150 active:opacity-80"
                   style={{ backgroundColor: 'var(--color-text)', color: 'white', fontFamily: 'var(--font-body)' }}
                 >
                   Pronto ({selectedMarketIds.length})
@@ -606,13 +676,13 @@ const ShoppingListPage: React.FC = () => {
 
       {/* === MODAL 3: Comparison Results === */}
       {isComparisonOpen && comparisonResult && (
-        <ModalWrapper onClose={() => setIsComparisonOpen(false)} zIndex={110} maxWidth="720px" height="95vh">
+        <ModalWrapper onClose={() => setIsComparisonOpen(false)} zIndex={110}>
           <ModalHeader
             title="Comparação de Preços"
             subtitle={`${comparisonResult.comparison.length} produtos · ${Object.keys(comparisonResult.markets).length} mercados`}
             onClose={() => setIsComparisonOpen(false)}
           />
-          <div className="flex-1 overflow-auto p-4 space-y-3">
+          <div className="flex-1 overflow-auto p-4 space-y-3" style={{ overscrollBehavior: 'contain' }}>
             {comparisonResult.comparison.map((row, idx) => (
               <div
                 key={idx}
@@ -634,10 +704,9 @@ const ShoppingListPage: React.FC = () => {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold truncate" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading)' }}>
+                    <p className="text-sm font-bold line-clamp-2 leading-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading)' }}>
                       {row.product_name}
                     </p>
-                    <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>NCM {row.ncm}</p>
                   </div>
                 </div>
                 {/* Prices */}
@@ -704,7 +773,7 @@ const ShoppingListPage: React.FC = () => {
 
       {/* === MODAL 4: Best Places === */}
       {isBestPlacesOpen && selectedProduct && (
-        <ModalWrapper onClose={() => setIsBestPlacesOpen(false)} zIndex={120} maxWidth="500px" height="85vh">
+        <ModalWrapper onClose={() => setIsBestPlacesOpen(false)} zIndex={120}>
           <ModalHeader
             title="Melhores Lugares"
             subtitle="Top 3 mercados com menor preço"
@@ -720,13 +789,13 @@ const ShoppingListPage: React.FC = () => {
                   <Package className="w-5 h-5" style={{ color: '#CBD5E1' }} />
                 </div>
               )}
-              <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+              <p className="text-sm font-semibold line-clamp-2 leading-tight" style={{ color: 'var(--color-text)' }}>
                 {selectedProduct.product_name}
               </p>
             </div>
           </ModalHeader>
 
-          <div className="flex-1 overflow-auto p-4 space-y-3">
+          <div className="flex-1 overflow-auto p-4 space-y-3" style={{ overscrollBehavior: 'contain' }}>
             {isFetchingBestPlaces ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
