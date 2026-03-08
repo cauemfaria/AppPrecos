@@ -269,7 +269,7 @@ const ShoppingListPage: React.FC = () => {
 
   return (
     <div
-      className="p-4 pb-40"
+      className="p-4 pb-44"
       style={{ fontFamily: 'var(--font-body)', color: 'var(--color-text)' }}
     >
       {/* Header */}
@@ -419,10 +419,10 @@ const ShoppingListPage: React.FC = () => {
         )}
       </div>
 
-      {/* Floating Market Selector Bar */}
+      {/* Market Selector Bar — docked above bottom nav */}
       <div
-        className="fixed left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-lg z-40"
-        style={{ bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
+        className="fixed left-0 right-0 z-40 px-4 pb-2"
+        style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
       >
         <div
           className="flex items-center gap-3 p-3 rounded-2xl"
@@ -524,9 +524,7 @@ const ShoppingListPage: React.FC = () => {
                   key={idx}
                   onClick={() => {
                     addToShoppingList(product);
-                    setIsSearchModalOpen(false);
-                    setSearchTerm('');
-                    setSearchResults([]);
+                    setSearchResults(prev => prev.filter((_, i) => i !== idx));
                   }}
                   className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl cursor-pointer transition-opacity duration-150 active:opacity-70"
                   style={{
@@ -675,101 +673,164 @@ const ShoppingListPage: React.FC = () => {
       )}
 
       {/* === MODAL 3: Comparison Results === */}
-      {isComparisonOpen && comparisonResult && (
-        <ModalWrapper onClose={() => setIsComparisonOpen(false)} zIndex={110}>
-          <ModalHeader
-            title="Comparação de Preços"
-            subtitle={`${comparisonResult.comparison.length} produtos · ${Object.keys(comparisonResult.markets).length} mercados`}
-            onClose={() => setIsComparisonOpen(false)}
-          />
-          <div className="flex-1 overflow-auto p-4 space-y-3" style={{ overscrollBehavior: 'contain' }}>
-            {comparisonResult.comparison.map((row, idx) => (
-              <div
-                key={idx}
-                className="overflow-hidden rounded-xl"
-                style={{ border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)' }}
-              >
-                {/* Product header */}
+      {isComparisonOpen && comparisonResult && (() => {
+        // Calculate best market for the full cart
+        const marketEntries = Object.entries(comparisonResult.markets);
+        const cartSummary = marketEntries.map(([mId, mName]) => {
+          const prices = comparisonResult.comparison.map(row => row.prices[mId]).filter((p): p is number => p !== null);
+          return { mId, mName, total: prices.reduce((s, p) => s + p, 0), count: prices.length };
+        }).filter(m => m.count > 0).sort((a, b) => {
+          if (b.count !== a.count) return b.count - a.count;
+          return a.total - b.total;
+        });
+        const bestCart = cartSummary[0];
+        const totalProducts = comparisonResult.comparison.length;
+
+        return (
+          <ModalWrapper onClose={() => setIsComparisonOpen(false)} zIndex={110}>
+            <ModalHeader
+              title="Comparação de Preços"
+              subtitle={`${totalProducts} ${totalProducts === 1 ? 'produto' : 'produtos'} · ${marketEntries.length} mercados`}
+              onClose={() => setIsComparisonOpen(false)}
+            />
+            <div className="flex-1 overflow-auto p-4 space-y-3" style={{ overscrollBehavior: 'contain' }}>
+
+              {/* Best-cart summary card */}
+              {bestCart && (
                 <div
-                  className="flex items-center gap-3 p-3"
-                  style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid var(--color-border)' }}
+                  className="flex items-center gap-3 p-4 rounded-2xl"
+                  style={{
+                    background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
+                    boxShadow: '0 4px 12px rgba(249,115,22,0.25)',
+                  }}
                 >
-                  {row.image_url ? (
-                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0" style={{ border: '1px solid var(--color-border)' }}>
-                      <img src={row.image_url} alt={row.product_name} className="w-full h-full object-contain" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center" style={{ backgroundColor: '#F1F5F9' }}>
-                      <Package className="w-5 h-5" style={{ color: '#CBD5E1' }} />
-                    </div>
-                  )}
+                  <div
+                    className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+                  >
+                    <TrendingDown className="w-5 h-5 text-white" />
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold line-clamp-2 leading-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading)' }}>
-                      {row.product_name}
+                    <p className="text-xs font-semibold uppercase tracking-wide text-white/80">
+                      Melhor opção para a lista
+                    </p>
+                    <p className="text-sm font-bold text-white truncate" style={{ fontFamily: 'var(--font-heading)' }}>
+                      {bestCart.mName}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-lg font-bold text-white" style={{ fontFamily: 'var(--font-heading)' }}>
+                      R$ {bestCart.total.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-white/80">
+                      {bestCart.count}/{totalProducts} itens
                     </p>
                   </div>
                 </div>
-                {/* Prices */}
-                <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                  {Object.entries(comparisonResult.markets).map(([mId, mName]) => {
+              )}
+
+              {/* Product comparison cards */}
+              {comparisonResult.comparison.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="overflow-hidden rounded-2xl"
+                  style={{
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-surface)',
+                    boxShadow: 'var(--shadow-sm)',
+                  }}
+                >
+                  {/* Product header — blue left-accent strip */}
+                  <div
+                    className="flex items-center gap-3 p-3 pl-4"
+                    style={{
+                      backgroundColor: '#EFF6FF',
+                      borderBottom: '1px solid #BFDBFE',
+                      borderLeft: '4px solid var(--color-primary)',
+                    }}
+                  >
+                    {row.image_url ? (
+                      <div
+                        className="w-10 h-10 rounded-lg overflow-hidden shrink-0"
+                        style={{ backgroundColor: 'white', border: '1px solid #DBEAFE' }}
+                      >
+                        <img src={row.image_url} alt={row.product_name} className="w-full h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div
+                        className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center"
+                        style={{ backgroundColor: '#DBEAFE' }}
+                      >
+                        <Package className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+                      </div>
+                    )}
+                    <p
+                      className="text-sm font-bold line-clamp-2 leading-tight flex-1 min-w-0"
+                      style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-heading)' }}
+                    >
+                      {row.product_name}
+                    </p>
+                  </div>
+
+                  {/* Market price rows */}
+                  {Object.entries(comparisonResult.markets).map(([mId, mName], mIdx) => {
                     const price = row.prices[mId];
                     const isMin = price !== null && price === row.min_price && !row.all_equal;
                     const isMax = price !== null && price === row.max_price && !row.all_equal;
                     return (
-                      <div key={mId} className="flex items-center justify-between px-4 py-3">
-                        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{mName}</p>
+                      <div
+                        key={mId}
+                        className="flex items-center justify-between px-4 py-2.5"
+                        style={{
+                          borderTop: mIdx > 0 ? '1px solid var(--color-border)' : undefined,
+                          backgroundColor: isMin ? '#F0FDF4' : 'transparent',
+                        }}
+                      >
+                        <p
+                          className="text-sm truncate flex-1 mr-3"
+                          style={{ color: isMin ? '#166534' : 'var(--color-text-muted)', fontWeight: isMin ? 600 : 400 }}
+                        >
+                          {mName}
+                        </p>
                         {price == null ? (
-                          <span className="text-xs italic" style={{ color: '#94A3B8' }}>N/D</span>
+                          <span className="text-sm font-medium" style={{ color: '#CBD5E1' }}>—</span>
                         ) : (
-                          <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isMin && (
+                              <span
+                                className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
+                                style={{ backgroundColor: '#DCFCE7', color: '#166534' }}
+                              >
+                                Melhor
+                              </span>
+                            )}
                             <span
-                              className="text-sm font-bold px-2.5 py-1 rounded-lg"
+                              className="text-sm font-bold"
                               style={{
-                                backgroundColor: isMin ? '#16A34A' : isMax ? '#FEF2F2' : '#F8FAFC',
-                                color: isMin ? 'white' : isMax ? '#DC2626' : 'var(--color-text)',
-                                border: isMax ? '1px solid #FECACA' : 'none',
+                                color: isMin ? '#16A34A' : isMax ? '#EF4444' : 'var(--color-text)',
                               }}
                             >
                               R$ {price.toFixed(2)}
                             </span>
-                            {isMin && (
-                              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>
-                                Melhor Preço
-                              </span>
-                            )}
                           </div>
                         )}
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {/* Info cards */}
-            <div className="space-y-2 mt-2">
-              <div
-                className="flex items-start gap-3 p-3 rounded-xl"
-                style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}
+              {/* Footer note */}
+              <p
+                className="text-xs text-center pb-2"
+                style={{ color: '#94A3B8' }}
               >
-                <TrendingDown className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
-                <p className="text-xs" style={{ color: '#1E40AF' }}>
-                  O destaque em verde indica o menor preço absoluto por produto.
-                </p>
-              </div>
-              <div
-                className="flex items-start gap-3 p-3 rounded-xl"
-                style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)' }}
-              >
-                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#94A3B8' }} />
-                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  "N/D" indica produto não encontrado ou sem cupom recente neste mercado.
-                </p>
-              </div>
+                "—" indica produto não encontrado neste mercado
+              </p>
             </div>
-          </div>
-        </ModalWrapper>
-      )}
+          </ModalWrapper>
+        );
+      })()}
 
       {/* === MODAL 4: Best Places === */}
       {isBestPlacesOpen && selectedProduct && (
