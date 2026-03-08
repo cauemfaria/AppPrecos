@@ -8,6 +8,7 @@ import ReloadPrompt from './components/ReloadPrompt'
 function App() {
   return (
     <BrowserRouter>
+      <ReloadPrompt />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
@@ -15,7 +16,6 @@ function App() {
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
-      <ReloadPrompt />
     </BrowserRouter>
   )
 }
