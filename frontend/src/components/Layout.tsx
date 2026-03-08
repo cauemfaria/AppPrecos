@@ -27,12 +27,11 @@ const Layout: React.FC = () => {
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => navigate('/')}
           >
-            <div
-              className="flex items-center justify-center w-9 h-9 rounded-xl"
-              style={{ backgroundColor: 'var(--color-primary)' }}
-            >
-              <ShoppingBasket className="w-5 h-5 text-white" />
-            </div>
+            <img 
+              src="/branding/app-logo.png" 
+              alt="AppPrecos Logo" 
+              className="w-9 h-9 rounded-xl object-contain"
+            />
             <h1
               className="text-xl font-bold"
               style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
