@@ -47,9 +47,12 @@ CREATE TABLE markets (
 
 -- 2. Processed URLs (NFCe Tracking & Locking)
 -- market_id here is the CNPJ, or 'SYSTEM' for enrichment lock records
+-- original_url stores the raw QR code URL before redirect resolution;
+-- nfce_url stores the resolved browser URL (may differ from original_url)
 CREATE TABLE processed_urls (
     id BIGSERIAL PRIMARY KEY,
     nfce_url VARCHAR(1000) UNIQUE NOT NULL,
+    original_url VARCHAR(1000),
     market_id VARCHAR(20) NOT NULL,
     market_name VARCHAR(200),
     products_count INTEGER DEFAULT 0,
@@ -140,6 +143,7 @@ CREATE INDEX idx_unique_products_market_ean ON unique_products(market_id, ean);
 CREATE INDEX idx_unique_products_ean ON unique_products(ean);
 CREATE INDEX idx_unique_products_name ON unique_products(product_name);
 CREATE INDEX idx_processed_status ON processed_urls(status);
+CREATE INDEX idx_processed_original_url ON processed_urls(original_url);
 """
 """
     

@@ -71,6 +71,57 @@ def resolve_nfce_url(url: str) -> str:
         return url
 
 
+def _check_nfce_duplicate(raw_url: str, exclude_id: int | None = None):
+    """
+    3-step duplicate check for a raw QR code URL.
+
+    Step 1: original_url = raw_url  (new records, fast)
+    Step 2: nfce_url = raw_url      (records never resolved, fast)
+    Step 3: resolve URL then nfce_url = resolved_url  (old records where nfce_url was overwritten)
+
+    Returns the first matching processed_urls row dict, or None if no duplicate found.
+    The exclude_id parameter skips a specific record (used during background processing to
+    avoid a record matching itself after it has already been inserted).
+    """
+    terminal_statuses = ['success', 'processing', 'extracting', 'queued']
+
+    def _query(col, val):
+        q = supabase.table('processed_urls') \
+            .select('id, status, market_name, products_count') \
+            .eq(col, val) \
+            .in_('status', terminal_statuses)
+        if exclude_id is not None:
+            q = q.neq('id', exclude_id)
+        result = q.limit(1).execute()
+        return result.data[0] if result.data else None
+
+    # Step 1: fast path — original_url column stores the verbatim QR URL
+    row = _query('original_url', raw_url)
+    if row:
+        print(f"[CHECK] Duplicate found via original_url: {raw_url}")
+        return row
+
+    # Step 2: nfce_url might still equal raw_url (URL was never different after resolution)
+    row = _query('nfce_url', raw_url)
+    if row:
+        print(f"[CHECK] Duplicate found via nfce_url (exact): {raw_url}")
+        return row
+
+    # Step 3: resolve the URL and compare against stored nfce_url (handles old records
+    # where original_url was not stored and nfce_url was overwritten with the resolved form)
+    try:
+        resolved = resolve_nfce_url(raw_url)
+        if resolved != raw_url:
+            row = _query('nfce_url', resolved)
+            if row:
+                print(f"[CHECK] Duplicate found via resolved nfce_url: {resolved}")
+                return row
+    except Exception as e:
+        print(f"[CHECK] URL resolution failed during duplicate check: {e}")
+
+    return None
+
+
 # ============================================================================
 # Enrichment Service - Product data enhancement (GTIN, Images, Names)
 # ============================================================================
@@ -243,18 +294,21 @@ def process_nfce_in_background(url, url_record_id):
     # Resolve URL to browser format (moved here from request handler to keep handler fast)
     print(f"\n[BACKGROUND #{url_record_id}] Resolving URL...")
     resolved_url = resolve_nfce_url(url)
+    update_fields = {}
     if resolved_url != url:
-        supabase.table('processed_urls').update({
-            'nfce_url': resolved_url
-        }).eq('id', url_record_id).execute()
+        # nfce_url gets the resolved form; original_url preserves the raw QR URL permanently
+        update_fields['nfce_url'] = resolved_url
+    # Backfill original_url for records inserted before this column existed
+    row_check = supabase.table('processed_urls').select('original_url').eq('id', url_record_id).limit(1).execute()
+    if row_check.data and not row_check.data[0].get('original_url'):
+        update_fields['original_url'] = url
+    if update_fields:
+        supabase.table('processed_urls').update(update_fields).eq('id', url_record_id).execute()
 
     # Check for duplicate after resolving (two different QR URLs can resolve to the same page)
-    existing = supabase.table('processed_urls').select('id') \
-        .eq('nfce_url', resolved_url) \
-        .neq('id', url_record_id) \
-        .in_('status', ['success', 'processing', 'extracting', 'queued']) \
-        .execute()
-    if existing.data:
+    # Use _check_nfce_duplicate with exclude_id so the current record doesn't match itself
+    dup = _check_nfce_duplicate(resolved_url, exclude_id=url_record_id)
+    if dup:
         supabase.table('processed_urls').update({
             'status': 'error',
             'error_message': 'Duplicado (URL já em processamento ou processada)'
@@ -493,25 +547,22 @@ def extract_nfce():
     raw_url = data['url'].strip()
 
     try:
-        # Quick duplicate check using the raw URL (exact match only).
-        # A deeper check after URL resolution happens in process_nfce_in_background.
-        existing_url = supabase.table('processed_urls').select('id, status, processed_at, market_id, products_count') \
-            .eq('nfce_url', raw_url).execute()
-        if existing_url.data:
-            url_data = existing_url.data[0]
+        # 3-step duplicate check: original_url → nfce_url → resolve then nfce_url
+        dup = _check_nfce_duplicate(raw_url)
+        if dup:
             return jsonify({
                 'error': 'Esta NFCe já foi processada',
                 'message': 'A URL já existe no banco de dados',
-                'status': url_data.get('status', 'unknown'),
-                'processed_at': url_data['processed_at'],
-                'market_id': url_data['market_id'],
-                'products_count': url_data['products_count']
+                'status': dup.get('status', 'unknown'),
+                'market_name': dup.get('market_name', ''),
+                'products_count': dup.get('products_count', 0),
             }), 409
 
         # Insert with status='queued' and return immediately.
         # URL resolution and extraction happen in the background worker.
         temp_url_data = {
             'nfce_url': raw_url,
+            'original_url': raw_url,
             'market_id': 'QUEUED',
             'market_name': '',
             'products_count': 0,
@@ -551,26 +602,27 @@ def _format_status_record(record):
 
 @app.route('/api/nfce/check', methods=['GET'])
 def check_nfce_exists():
-    """Lightweight check: does this NFCe URL already exist in processed_urls?"""
+    """
+    Check whether a raw QR code URL was already processed.
+    Uses 3-step check: original_url → nfce_url → resolve then nfce_url.
+    Always returns 200; never throws, to avoid blocking the scanner UI.
+    """
     url = request.args.get('url', '').strip()
     if not url:
         return jsonify({'exists': False}), 200
 
     try:
-        result = supabase.table('processed_urls').select('id, status, market_name, products_count') \
-            .eq('nfce_url', url).limit(1).execute()
-
-        if result.data:
-            row = result.data[0]
+        row = _check_nfce_duplicate(url)
+        if row:
             return jsonify({
                 'exists': True,
                 'status': row.get('status', 'unknown'),
                 'market_name': row.get('market_name', ''),
                 'products_count': row.get('products_count', 0),
             }), 200
-
         return jsonify({'exists': False}), 200
     except Exception as e:
+        print(f"[CHECK] Unexpected error in check_nfce_exists: {e}")
         return jsonify({'exists': False, 'error': str(e)}), 200
 
 
