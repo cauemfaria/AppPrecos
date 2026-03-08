@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
 import BarcodeScannerPage from './pages/BarcodeScannerPage'
 import SettingsPage from './pages/SettingsPage'
+import ReloadPrompt from './components/ReloadPrompt'
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
+      <ReloadPrompt />
     </BrowserRouter>
   )
 }
