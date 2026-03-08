@@ -101,7 +101,7 @@ const QueueItem: React.FC<{ item: ProcessingItem }> = ({ item }) => {
   const cfg = statusConfig[cfgKey] ?? statusConfig.pending;
 
   const primaryText = isActive
-    ? (item.market_name ?? domainFromUrl(item.url))
+    ? (item.market_name ?? 'Na fila do servidor')
     : cfg.label(item);
 
   const secondaryText = isActive

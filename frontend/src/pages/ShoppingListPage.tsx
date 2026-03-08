@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  ResponsiveContainer, LineChart, Line,
-  XAxis, YAxis, Tooltip, CartesianGrid,
-} from 'recharts';
 import { useStore } from '../store/useStore';
 import { productService, marketService } from '../services/api';
-import type { ProductSearchItem, Market, CompareResponse, BestMarketsResponse, ComparisonProductRow, PriceHistoryItem } from '../types';
+import type { ProductSearchItem, Market, CompareResponse, BestMarketsResponse } from '../types';
 import {
   Search, Plus, Trash2, Store,
   ArrowRightLeft, Check, X,
-  TrendingDown, TrendingUp, AlertCircle, ShoppingBasket,
-  Package, MapPin, Award, Loader2, ArrowLeft, Barcode,
+  TrendingDown, AlertCircle, ShoppingBasket,
+  Package, MapPin, Award, Loader2,
 } from 'lucide-react';
 
 const MAX_MARKETS_FOR_COMPARISON = 5;
@@ -129,235 +125,6 @@ const ModalHeader: React.FC<{
   </div>
 );
 
-/* ─── Helpers ──────────────────────────────────────────────── */
-
-function fmtDateShort(iso: string): string {
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y.slice(2)}`;
-}
-
-const PriceTooltipComparison = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div
-      className="px-3 py-2 rounded-xl text-xs font-semibold shadow-lg"
-      style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-    >
-      <p style={{ color: 'var(--color-text-muted)' }}>{fmtDateShort(label)}</p>
-      <p style={{ color: 'var(--color-cta)' }}>R$ {Number(payload[0].value).toFixed(2)}</p>
-    </div>
-  );
-};
-
-/* ─── Comparison product detail sheet ─────────────────────── */
-
-interface ComparisonDetailProps {
-  row: ComparisonProductRow;
-  markets: Record<string, string>;
-  onClose: () => void;
-}
-
-const ComparisonProductDetailSheet: React.FC<ComparisonDetailProps> = ({ row, markets, onClose }) => {
-  const [history, setHistory] = useState<PriceHistoryItem[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoadingHistory(true);
-    productService
-      .getPriceHistory(row.ean, row.ncm, '')
-      .then(res => { if (!cancelled) setHistory(res.history); })
-      .catch(() => { if (!cancelled) setHistory([]); })
-      .finally(() => { if (!cancelled) setLoadingHistory(false); });
-    return () => { cancelled = true; };
-  }, [row.ean, row.ncm]);
-
-  const minPrice = history.length ? Math.min(...history.map(h => h.price)) : 0;
-  const maxPrice = history.length ? Math.max(...history.map(h => h.price)) : 0;
-  const priceDiff = history.length > 1 ? history[history.length - 1].price - history[0].price : 0;
-  const priceChanged = history.length > 1 && priceDiff !== 0;
-
-  const marketPrices = Object.entries(markets)
-    .map(([mId, mName]) => ({ mId, mName, price: row.prices[mId] }))
-    .filter(m => m.price !== null)
-    .sort((a, b) => (a.price as number) - (b.price as number));
-
-  return (
-    <div
-      className="fixed inset-0 z-[150] flex items-end animate-in slide-in-from-bottom duration-300"
-      style={{ touchAction: 'pan-y' }}
-    >
-      <div
-        className="relative w-full flex flex-col overflow-hidden"
-        style={{ backgroundColor: 'var(--color-background)', height: '100dvh' }}
-      >
-        {/* Top bar */}
-        <div
-          className="flex items-center gap-3 px-4 py-3 shrink-0"
-          style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}
-        >
-          <button
-            onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-opacity duration-150 active:opacity-70"
-            style={{ backgroundColor: '#F1F5F9' }}
-          >
-            <ArrowLeft className="w-4 h-4" style={{ color: 'var(--color-text)' }} />
-          </button>
-          <p className="flex-1 text-sm font-semibold truncate" style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-text)' }}>
-            {row.product_name}
-          </p>
-        </div>
-
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-auto" style={{ overscrollBehavior: 'contain' }}>
-
-          {/* Hero image */}
-          <div className="w-full flex items-center justify-center py-8" style={{ backgroundColor: '#EFF6FF' }}>
-            {row.image_url ? (
-              <img src={row.image_url} alt={row.product_name} className="w-40 h-40 object-contain rounded-2xl" />
-            ) : (
-              <div className="w-40 h-40 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#DBEAFE' }}>
-                <Package className="w-16 h-16" style={{ color: '#93C5FD' }} />
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 space-y-4">
-
-            {/* Name + price range */}
-            <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
-              <h2 className="text-lg font-bold leading-snug mb-3" style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-text)' }}>
-                {row.product_name}
-              </h2>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>Faixa de preço</p>
-                  <p className="text-2xl font-bold" style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-cta)' }}>
-                    R$ {(row.min_price ?? 0).toFixed(2)}
-                    {row.max_price !== row.min_price && (
-                      <span className="text-base font-semibold" style={{ color: '#94A3B8' }}> – R$ {(row.max_price ?? 0).toFixed(2)}</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Price history chart */}
-            <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
-                  <h3 className="text-sm font-bold" style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-text)' }}>
-                    Histórico de Preços
-                  </h3>
-                </div>
-                {priceChanged && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-lg"
-                    style={{ backgroundColor: priceDiff > 0 ? '#FEF2F2' : '#F0FDF4', color: priceDiff > 0 ? '#EF4444' : '#22C55E' }}>
-                    {priceDiff > 0 ? '+' : ''}R$ {priceDiff.toFixed(2)}
-                  </span>
-                )}
-              </div>
-
-              {loadingHistory ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary)' }} />
-                </div>
-              ) : history.length < 2 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <TrendingUp className="w-8 h-8 mb-2" style={{ color: '#CBD5E1' }} />
-                  <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Dados insuficientes</p>
-                  <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>Histórico disponível após múltiplas compras</p>
-                </div>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <LineChart data={history} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                      <XAxis dataKey="date" tickFormatter={fmtDateShort} tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                      <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v.toFixed(0)}`} domain={['auto', 'auto']} />
-                      <Tooltip content={<PriceTooltipComparison />} />
-                      <Line type="monotone" dataKey="price" stroke="#F97316" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: '#F97316', strokeWidth: 0 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                  <div className="flex justify-between mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                    <div className="text-center">
-                      <p className="text-xs" style={{ color: '#94A3B8' }}>Mínimo</p>
-                      <p className="text-sm font-bold" style={{ color: '#22C55E' }}>R$ {minPrice.toFixed(2)}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs" style={{ color: '#94A3B8' }}>Registros</p>
-                      <p className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{history.length}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs" style={{ color: '#94A3B8' }}>Máximo</p>
-                      <p className="text-sm font-bold" style={{ color: '#EF4444' }}>R$ {maxPrice.toFixed(2)}</p>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Prices per market */}
-            {marketPrices.length > 0 && (
-              <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
-                <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <h3 className="text-sm font-bold" style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-text)' }}>
-                    Preços por Mercado
-                  </h3>
-                </div>
-                {marketPrices.map((m, i) => {
-                  const isBest = i === 0 && marketPrices.length > 1;
-                  return (
-                    <div
-                      key={m.mId}
-                      className="flex items-center justify-between px-4 py-2.5"
-                      style={{
-                        borderTop: i > 0 ? '1px solid var(--color-border)' : undefined,
-                        backgroundColor: isBest ? '#F0FDF4' : 'transparent',
-                      }}
-                    >
-                      <p className="text-sm flex-1 mr-3 truncate"
-                        style={{ color: isBest ? '#166534' : 'var(--color-text-muted)', fontWeight: isBest ? 600 : 400 }}>
-                        {m.mName}
-                      </p>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {isBest && (
-                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
-                            style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>Melhor</span>
-                        )}
-                        <span className="text-sm font-bold" style={{ color: isBest ? '#16A34A' : 'var(--color-text)' }}>
-                          R$ {(m.price as number).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* EAN detail */}
-            {row.ean && (
-              <div className="rounded-2xl p-4 space-y-2" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-text-muted)' }}>
-                    <Barcode className="w-3 h-3" /> EAN
-                  </span>
-                  <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                    {row.ean}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="h-6" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 /* ─── Main page ────────────────────────────────────────────── */
 
 const ShoppingListPage: React.FC = () => {
@@ -388,7 +155,6 @@ const ShoppingListPage: React.FC = () => {
   const [isFetchingBestPlaces, setIsFetchingBestPlaces] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
 
-  const [selectedComparisonRow, setSelectedComparisonRow] = useState<ComparisonProductRow | null>(null);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -975,10 +741,9 @@ const ShoppingListPage: React.FC = () => {
                     boxShadow: 'var(--shadow-sm)',
                   }}
                 >
-                  {/* Product header — blue left-accent strip (tappable) */}
+                  {/* Product header — blue left-accent strip */}
                   <div
-                    className="flex items-center gap-3 p-3 pl-4 cursor-pointer active:opacity-70 transition-opacity duration-150"
-                    onClick={() => setSelectedComparisonRow(row)}
+                    className="flex items-center gap-3 p-3 pl-4"
                     style={{
                       backgroundColor: '#EFF6FF',
                       borderBottom: '1px solid #BFDBFE',
@@ -1186,14 +951,6 @@ const ShoppingListPage: React.FC = () => {
         </ModalWrapper>
       )}
 
-      {/* === Comparison Product Detail Sheet === */}
-      {selectedComparisonRow && comparisonResult && (
-        <ComparisonProductDetailSheet
-          row={selectedComparisonRow}
-          markets={comparisonResult.markets}
-          onClose={() => setSelectedComparisonRow(null)}
-        />
-      )}
     </div>
   );
 };
