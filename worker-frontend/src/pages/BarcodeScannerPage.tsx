@@ -279,16 +279,6 @@ const BarcodeScannerPage: React.FC = () => {
               />
             )}
 
-            {/* Scan guide overlay */}
-            {!isPaused && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div
-                  className="w-72 h-36 rounded-2xl"
-                  style={{ border: '2px solid rgba(255,255,255,0.5)' }}
-                />
-              </div>
-            )}
-
             {/* Price Entry Bottom Sheet */}
             {isPaused && detectedEan && (
               <div className="absolute inset-0 flex flex-col justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
