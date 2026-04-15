@@ -46,7 +46,7 @@ CREATE TABLE markets (
 );
 
 -- 2. Processed URLs (NFCe Tracking & Locking)
--- market_id here is the CNPJ, or 'SYSTEM' for enrichment lock records
+-- market_id is the CNPJ (14 digits), or 'QUEUED'/'UNRESOLVED' as transient placeholders during processing
 -- original_url stores the raw QR code URL before redirect resolution;
 -- nfce_url stores the resolved browser URL (may differ from original_url)
 CREATE TABLE processed_urls (
@@ -56,7 +56,7 @@ CREATE TABLE processed_urls (
     market_id VARCHAR(20) NOT NULL,
     market_name VARCHAR(200),
     products_count INTEGER DEFAULT 0,
-    status VARCHAR(20) DEFAULT 'processing',
+    status VARCHAR(20) DEFAULT 'queued',
     error_message TEXT,
     processed_at TIMESTAMP DEFAULT NOW()
 );

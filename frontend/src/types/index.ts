@@ -78,7 +78,7 @@ export interface NFCeResponse {
   status: string;
   record_id?: number;
   market?: Market & { action: string };
-  products?: any[];
+  products?: Product[];
   statistics?: {
     products_saved_to_main: number;
     market_action: string;

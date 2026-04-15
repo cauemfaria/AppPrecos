@@ -27,7 +27,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-SKIP_MARKET_IDS = {'SYSTEM', 'PROCESSING'}
+SKIP_MARKET_IDS = {'SYSTEM', 'PROCESSING', 'QUEUED'}
 
 
 def extract_cnpj_from_url(url: str) -> str:
@@ -104,7 +104,7 @@ def apply_migration(mapping, merges, dry_run=True):
     for cnpj, old_ids in merges.items():
         print(f"    CNPJ {cnpj} merges: {old_ids}")
 
-    tables_with_fk = ['purchases', 'unique_products', 'product_backlog']
+    tables_with_fk = ['purchases', 'unique_products', 'product_backlog', 'scanned_prices']
     tables_without_fk = ['processed_urls', 'product_lookup_log']
 
     for old_id, cnpj in mapping.items():

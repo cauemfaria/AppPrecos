@@ -94,7 +94,7 @@ def _check_nfce_duplicate(raw_url: str, exclude_id: int | None = None):
         result = q.limit(1).execute()
         return result.data[0] if result.data else None
 
-    # Step 1: original_url column (may not exist on older schemas — isolated try)
+    # Step 1: original_url column (isolated try for backward compat)
     try:
         row = _query('original_url', raw_url)
         if row:
@@ -325,6 +325,7 @@ def process_nfce_in_background(url, url_record_id):
                 if 'unique' in err_str or 'duplicate' in err_str or '23505' in err_str:
                     supabase.table('processed_urls').update({
                         'status': 'error',
+                        'market_id': 'UNRESOLVED',
                         'error_message': 'Duplicado (URL resolvida já existe no banco)'
                     }).eq('id', url_record_id).execute()
                     print(f"[BACKGROUND #{url_record_id}] UNIQUE constraint on resolved URL — duplicate")
@@ -344,6 +345,7 @@ def process_nfce_in_background(url, url_record_id):
         if dup:
             supabase.table('processed_urls').update({
                 'status': 'error',
+                'market_id': 'UNRESOLVED',
                 'error_message': 'Duplicado (URL já em processamento ou processada)'
             }).eq('id', url_record_id).execute()
             print(f"[BACKGROUND #{url_record_id}] Duplicate detected after resolve, skipping")
@@ -356,6 +358,7 @@ def process_nfce_in_background(url, url_record_id):
         try:
             supabase.table('processed_urls').update({
                 'status': 'error',
+                'market_id': 'UNRESOLVED',
                 'error_message': f'Erro na preparação: {str(pre_err)[:200]}'
             }).eq('id', url_record_id).execute()
         except Exception:
@@ -372,6 +375,7 @@ def process_nfce_in_background(url, url_record_id):
     if not acquire_extraction_lock(url_record_id, max_wait_seconds=1800):
         supabase.table('processed_urls').update({
             'status': 'error',
+            'market_id': 'UNRESOLVED',
             'error_message': 'Timeout waiting for extraction slot'
         }).eq('id', url_record_id).execute()
         print(f"[FAIL] [BACKGROUND #{url_record_id}] Timeout waiting for lock")
@@ -409,6 +413,7 @@ def process_nfce_in_background(url, url_record_id):
 
         if not products or not market_info.get('name') or not market_info.get('address'):
             release_extraction_lock(url_record_id, 'error',
+                market_id='UNRESOLVED',
                 error_message='No products or market info extracted'
             )
             print(f"[FAIL] [BACKGROUND #{url_record_id}] No products or market info extracted")
@@ -456,6 +461,7 @@ def process_nfce_in_background(url, url_record_id):
 
     except Exception as e:
         release_extraction_lock(url_record_id, 'error',
+            market_id='UNRESOLVED',
             error_message=str(e)[:200]
         )
         total_time = time.time() - start_time
@@ -649,12 +655,7 @@ def extract_nfce():
             'status': 'queued',
             'processed_at': datetime.utcnow().isoformat()
         }
-        try:
-            url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
-        except Exception:
-            # Fallback: original_url column might not exist yet
-            temp_url_data.pop('original_url', None)
-            url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
+        url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
         url_record_id = url_insert.data[0]['id']
 
         task_queue.enqueue_nfce(raw_url, url_record_id)
@@ -889,7 +890,7 @@ def compare_products():
     Compare product prices across selected markets
     Request body: {
         "products": [{"ean": "...", "ncm": "...", "product_name": "..."}],
-        "market_ids": ["MKT123", "MKT456"]
+        "market_ids": ["48093892001030", "20276483000592"]
     }
     Returns price comparison table
     """

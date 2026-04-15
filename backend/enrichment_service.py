@@ -305,16 +305,12 @@ def log_product_lookup(nfce_url, market_id, gtin, ncm, original_name, final_name
                 'api_time_ms': cosmos_result.get('time_ms'),
             })
         
-        # We use a try-except here because the column might not exist yet
+        # Log the result to the database
         try:
             supabase.table('product_lookup_log').insert(log_data).execute()
-        except Exception as insert_error:
-            # If it failed, maybe it's the new column. Try without it.
-            if 'api_image_url' in log_data:
-                del log_data['api_image_url']
-                supabase.table('product_lookup_log').insert(log_data).execute()
-            else:
-                raise insert_error
+        except Exception as e:
+            print(f"  [WARN] Failed to log product lookup: {e}")
+            raise e
         
     except Exception as e:
         # Don't fail the main process if logging fails

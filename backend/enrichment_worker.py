@@ -443,11 +443,8 @@ def enrich_single_purchase(item):
                 try:
                     supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
                 except Exception as e:
-                    if 'image_url' in unique_data:
-                        del unique_data['image_url']
-                        supabase.table('unique_products').update(unique_data).eq('id', existing.data[0]['id']).execute()
-                    else:
-                        raise e
+                    logger.error(f"Failed to update product {existing.data[0]['id']}: {e}")
+                    raise e
                 logger.info(f"Updated product {existing.data[0]['id']} in market {market_id} (purchase_date: {item_purchase_date_iso})")
             else:
                 logger.info(f"Skipped product {existing.data[0]['id']} — existing record has a newer purchase_date ({existing_purchase_date})")
@@ -455,11 +452,8 @@ def enrich_single_purchase(item):
             try:
                 supabase.table('unique_products').insert(unique_data).execute()
             except Exception as e:
-                if 'image_url' in unique_data:
-                    del unique_data['image_url']
-                    supabase.table('unique_products').insert(unique_data).execute()
-                else:
-                    raise e
+                logger.error(f"Failed to insert product with EAN {ean}: {e}")
+                raise e
             logger.info(f"Inserted new product with GTIN {ean} in market {market_id}")
             
         return 'completed'
