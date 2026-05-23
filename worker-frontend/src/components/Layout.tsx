@@ -27,19 +27,27 @@ const Layout: React.FC = () => {
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => navigate('/')}
           >
-            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#EFF6FF' }}>
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shrink-0" style={{ backgroundColor: '#EFF6FF' }}>
               <img
                 src="/app-logo.png"
-                alt="Logo"
+                alt="economiX Logo"
                 className="w-full h-full object-contain object-center"
               />
             </div>
-            <h1
-              className="text-xl font-bold"
-              style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
-            >
-              economiX <span className="text-sm font-medium" style={{ color: 'var(--color-cta)' }}>- Funcionário</span>
-            </h1>
+            <div className="flex flex-col leading-tight min-w-0">
+              <h1
+                className="text-xl font-bold truncate"
+                style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
+              >
+                economiX
+              </h1>
+              <span
+                className="text-[11px] font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--color-cta)', fontFamily: 'var(--font-body)' }}
+              >
+                Funcionário
+              </span>
+            </div>
           </div>
         </div>
 

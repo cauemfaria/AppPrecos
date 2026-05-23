@@ -3,10 +3,29 @@ import {
   User, Bell, Shield,
   HelpCircle, Info,
   Globe, Heart, type LucideProps,
-  ChevronRight, Database,
+  ChevronRight, Database, Trash2, Store,
 } from 'lucide-react';
+import { useStore } from '../store/useStore';
 
 const SettingsPage: React.FC = () => {
+  const { selectedMarket, setSelectedMarket, clearScans, recentScans, scanCount } = useStore();
+
+  const handleClearMarket = () => {
+    if (window.confirm('Deseja remover o mercado selecionado?')) {
+      setSelectedMarket(null);
+    }
+  };
+
+  const handleClearScans = () => {
+    if (recentScans.length === 0 && scanCount === 0) {
+      alert('Nenhum dado para limpar.');
+      return;
+    }
+    if (window.confirm('Tem certeza que deseja apagar o histórico de escaneamentos e zerar o contador?')) {
+      clearScans();
+    }
+  };
+
   return (
     <div
       className="p-4 space-y-5 pb-32"
@@ -45,6 +64,27 @@ const SettingsPage: React.FC = () => {
           iconBg="#F0FDF4"
           iconColor="#16A34A"
           label="Privacidade e Segurança"
+          isLast
+        />
+      </Section>
+
+      {/* DADOS LOCAIS */}
+      <Section label="Dados Locais">
+        <SettingsItem
+          icon={<Store />}
+          iconBg="#EFF6FF"
+          iconColor="var(--color-primary)"
+          label="Mercado Selecionado"
+          value={selectedMarket ? selectedMarket.name : 'Nenhum'}
+          onClick={selectedMarket ? handleClearMarket : undefined}
+        />
+        <SettingsItem
+          icon={<Trash2 />}
+          iconBg="#FEF2F2"
+          iconColor="#EF4444"
+          label="Limpar Histórico de Escaneamentos"
+          onClick={handleClearScans}
+          destructive
           isLast
         />
       </Section>
@@ -125,47 +165,62 @@ interface SettingsItemProps {
   value?: string;
   valueColor?: string;
   isLast?: boolean;
+  onClick?: () => void;
+  destructive?: boolean;
 }
 
 const SettingsItem: React.FC<SettingsItemProps> = ({
-  icon, iconBg, iconColor, label, value, valueColor, isLast,
-}) => (
-  <div
-    className="w-full flex items-center justify-between px-4 py-3"
-    style={{
-      borderBottom: isLast ? 'none' : '1px solid var(--color-border)',
-      fontFamily: 'var(--font-body)',
-    }}
-  >
-    <div className="flex items-center gap-3">
-      <div
-        className="flex items-center justify-center w-8 h-8 rounded-lg"
-        style={{ backgroundColor: iconBg }}
-      >
-        {React.cloneElement(icon, {
-          size: 16,
-          style: { color: iconColor },
-        } as LucideProps & { style: React.CSSProperties })}
-      </div>
-      <span
-        className="text-sm font-medium"
-        style={{ color: 'var(--color-text)', fontFamily: 'var(--font-body)' }}
-      >
-        {label}
-      </span>
-    </div>
-    <div className="flex items-center gap-2">
-      {value && (
-        <span
-          className="text-xs font-medium"
-          style={{ color: valueColor || 'var(--color-text-muted)' }}
+  icon, iconBg, iconColor, label, value, valueColor, isLast, onClick, destructive,
+}) => {
+  const interactive = !!onClick;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!interactive}
+      className="w-full flex items-center justify-between px-4 py-3 transition-colors duration-150 disabled:cursor-default cursor-pointer text-left"
+      style={{
+        borderBottom: isLast ? 'none' : '1px solid var(--color-border)',
+        fontFamily: 'var(--font-body)',
+        backgroundColor: 'transparent',
+      }}
+      onMouseEnter={e => {
+        if (interactive) (e.currentTarget as HTMLElement).style.backgroundColor = '#F8FAFC';
+      }}
+      onMouseLeave={e => {
+        if (interactive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex items-center justify-center w-8 h-8 rounded-lg"
+          style={{ backgroundColor: iconBg }}
         >
-          {value}
+          {React.cloneElement(icon, {
+            size: 16,
+            style: { color: iconColor },
+          } as LucideProps & { style: React.CSSProperties })}
+        </div>
+        <span
+          className="text-sm font-medium"
+          style={{ color: destructive ? '#DC2626' : 'var(--color-text)', fontFamily: 'var(--font-body)' }}
+        >
+          {label}
         </span>
-      )}
-      <ChevronRight className="w-4 h-4" style={{ color: '#CBD5E1' }} />
-    </div>
-  </div>
-);
+      </div>
+      <div className="flex items-center gap-2">
+        {value && (
+          <span
+            className="text-xs font-medium truncate max-w-[140px]"
+            style={{ color: valueColor || 'var(--color-text-muted)' }}
+          >
+            {value}
+          </span>
+        )}
+        <ChevronRight className="w-4 h-4 shrink-0" style={{ color: '#CBD5E1' }} />
+      </div>
+    </button>
+  );
+};
 
 export default SettingsPage;
