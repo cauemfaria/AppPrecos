@@ -9,25 +9,17 @@ For each unique nfce_url in purchases:
      using the most recent purchase_date per (market_id, ean)
 """
 import os
-import sys
 import re
 import time
 from datetime import datetime
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Clear Render's Playwright path if it doesn't exist locally
 pw_path = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
 if pw_path and not os.path.exists(pw_path):
     del os.environ['PLAYWRIGHT_BROWSERS_PATH']
 
-from supabase import create_client
+from supabase_client import supabase as sb
 from playwright.sync_api import sync_playwright
-
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def extract_emission_date(page, url):

@@ -80,7 +80,7 @@ def recover_orphaned_tasks():
     Handles items orphaned by worker restarts or crashes.
     """
     try:
-        from app import supabase
+        from supabase_client import supabase
 
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=STALE_RECOVERY_AGE_SECONDS)).isoformat()
 

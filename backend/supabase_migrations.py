@@ -145,8 +145,7 @@ CREATE INDEX idx_unique_products_name ON unique_products(product_name);
 CREATE INDEX idx_processed_status ON processed_urls(status);
 CREATE INDEX idx_processed_original_url ON processed_urls(original_url);
 """
-"""
-    
+
     print("\nCopy and run this SQL in Supabase SQL Editor:")
     print("-" * 77)
     print(sql_command)

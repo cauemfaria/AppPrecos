@@ -3,16 +3,8 @@ import time
 import requests
 import difflib
 from datetime import datetime, timezone
-from supabase import create_client
 
-# Load environment variables (just in case, though they should be loaded by the caller)
-from dotenv import load_dotenv
-load_dotenv()
-
-# Supabase configuration
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+from supabase_client import supabase  # shared singleton client
 
 # Bluesoft Cosmos API configuration
 COSMOS_TOKENS = os.getenv('COSMOS_TOKENS', '').split(',') if os.getenv('COSMOS_TOKENS') else []
@@ -200,7 +192,7 @@ def acquire_enrichment_lock(worker_id="default", max_retries=15):
         try:
             lock_record = supabase.table('system_locks').select('*').eq('lock_name', ENRICHMENT_LOCK_NAME).execute()
             
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             
             if not lock_record.data:
                 try:
@@ -269,7 +261,7 @@ def release_enrichment_lock():
         supabase.table('system_locks').update({
             'status': 'idle',
             'locked_by': None,
-            'updated_at': datetime.utcnow().isoformat()
+            'updated_at': datetime.now(timezone.utc).isoformat()
         }).eq('lock_name', ENRICHMENT_LOCK_NAME).execute()
         print("[LOCK] Enrichment lock released.")
     except Exception as e:

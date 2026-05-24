@@ -13,40 +13,48 @@ import sys
 import threading
 import time
 import requests
-from dotenv import load_dotenv
-from supabase import create_client
+
+from supabase_client import supabase, SUPABASE_URL
+from constants import (
+    STATUS_QUEUED, STATUS_PROCESSING, STATUS_EXTRACTING,
+    STATUS_SUCCESS, STATUS_ERROR, ACTIVE_NFCE_STATUSES,
+    MARKET_ID_QUEUED, MARKET_ID_UNRESOLVED,
+)
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware UTC now. Use everywhere instead of deprecated _utcnow()."""
+    return datetime.now(timezone.utc)
+
 
 # Database-based lock for extraction (works across Gunicorn workers)
 # We use the processed_urls table status='extracting' as the lock
-
-# Load environment variables
-load_dotenv()
-
-# Supabase configuration
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-
-# Validate required environment variables
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    raise ValueError("Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
 
 # Initialize Flask app
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max request size
 
-# Enable CORS for Android app
+# CORS allowlist. Set CORS_ALLOWED_ORIGINS to a comma-separated list of origins
+# (e.g. "https://economix.app,https://worker.economix.app"). Falls back to "*"
+# only in development; production should always set this explicitly.
+_cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '').strip()
+if _cors_env:
+    _cors_origins = [o.strip() for o in _cors_env.split(',') if o.strip()]
+else:
+    _cors_origins = '*'
+    if os.getenv('FLASK_ENV') == 'production':
+        print("[WARN] CORS_ALLOWED_ORIGINS not set in production — falling back to '*'. "
+              "Set this env var to an explicit allowlist for safety.")
+
 CORS(app, resources={
     r"/api/*": {
-        "origins": "*",
+        "origins": _cors_origins,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
-        "max_age": 3600
+        "max_age": 3600,
     }
 })
-
-# Get Supabase admin client
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 print("[OK] Supabase client initialized")
 
@@ -62,13 +70,23 @@ def resolve_nfce_url(url: str) -> str:
     - Output: https://www.nfce.fazenda.sp.gov.br/NFCeConsultaPublica/Paginas/ConsultaQRCode.aspx?p=...
     
     This ensures consistent URL storage and duplicate detection.
+
+    Some SEFAZ endpoints reject HEAD; we fall back to a streamed GET so we
+    don't download the whole HTML page just to read the final redirect URL.
     """
     try:
         response = requests.head(url, allow_redirects=True, timeout=10)
+        # 405 (Method Not Allowed) or 403 sometimes returned for HEAD — retry with GET
+        if response.status_code in (403, 405, 501):
+            raise requests.RequestException(f"HEAD returned {response.status_code}")
         return response.url
     except Exception as e:
-        print(f"[WARN] Failed to resolve NFCe URL, using original: {e}")
-        return url
+        try:
+            with requests.get(url, allow_redirects=True, timeout=10, stream=True) as r:
+                return r.url
+        except Exception as e2:
+            print(f"[WARN] Failed to resolve NFCe URL (head={e}; get={e2}), using original")
+            return url
 
 
 def _check_nfce_duplicate(raw_url: str, exclude_id: int | None = None):
@@ -82,7 +100,7 @@ def _check_nfce_duplicate(raw_url: str, exclude_id: int | None = None):
     Returns the first matching processed_urls row dict, or None if no duplicate found.
     Each step is isolated so a failure in one doesn't prevent the others from running.
     """
-    match_statuses = ['success', 'processing', 'extracting', 'queued']
+    match_statuses = ACTIVE_NFCE_STATUSES
 
     def _query(col, val):
         q = supabase.table('processed_urls') \
@@ -134,11 +152,6 @@ from enrichment_service import (
     search_product_on_cosmos,
     log_product_lookup
 )
-
-# ============================================================================
-# NFCe URL Resolution - Get final browser URL after redirect
-# ============================================================================
-
 
 # ============================================================================
 # Database-based extraction lock (works across Gunicorn workers)
@@ -211,7 +224,7 @@ def acquire_extraction_lock(record_id, max_wait_seconds=600):
             try:
                 supabase.table('processed_urls').update({
                     'status': 'extracting',
-                    'processed_at': datetime.utcnow().isoformat()  # Update timestamp for stale detection
+                    'processed_at': _utcnow().isoformat()  # Update timestamp for stale detection
                 }).eq('id', record_id).eq('status', 'processing').execute()
                 
                 # Small delay to let any concurrent updates settle
@@ -325,7 +338,7 @@ def process_nfce_in_background(url, url_record_id):
                 if 'unique' in err_str or 'duplicate' in err_str or '23505' in err_str:
                     supabase.table('processed_urls').update({
                         'status': 'error',
-                        'market_id': 'UNRESOLVED',
+                        'market_id': MARKET_ID_UNRESOLVED,
                         'error_message': 'Duplicado (URL resolvida já existe no banco)'
                     }).eq('id', url_record_id).execute()
                     print(f"[BACKGROUND #{url_record_id}] UNIQUE constraint on resolved URL — duplicate")
@@ -345,7 +358,7 @@ def process_nfce_in_background(url, url_record_id):
         if dup:
             supabase.table('processed_urls').update({
                 'status': 'error',
-                'market_id': 'UNRESOLVED',
+                'market_id': MARKET_ID_UNRESOLVED,
                 'error_message': 'Duplicado (URL já em processamento ou processada)'
             }).eq('id', url_record_id).execute()
             print(f"[BACKGROUND #{url_record_id}] Duplicate detected after resolve, skipping")
@@ -358,7 +371,7 @@ def process_nfce_in_background(url, url_record_id):
         try:
             supabase.table('processed_urls').update({
                 'status': 'error',
-                'market_id': 'UNRESOLVED',
+                'market_id': MARKET_ID_UNRESOLVED,
                 'error_message': f'Erro na preparação: {str(pre_err)[:200]}'
             }).eq('id', url_record_id).execute()
         except Exception:
@@ -367,7 +380,7 @@ def process_nfce_in_background(url, url_record_id):
 
     # Refresh timestamp (status already 'processing' from atomic claim above)
     supabase.table('processed_urls').update({
-        'processed_at': datetime.utcnow().isoformat()
+        'processed_at': _utcnow().isoformat()
     }).eq('id', url_record_id).execute()
 
     print(f"[BACKGROUND #{url_record_id}] Waiting for extraction slot (database lock)...")
@@ -476,7 +489,7 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
     Uses a single batch insert for atomicity and speed.
     """
     if purchase_date is None:
-        purchase_date = datetime.utcnow()
+        purchase_date = _utcnow()
 
     print(f"[SAVE] Batch inserting {len(products)} products for market {market_id}")
 
@@ -517,39 +530,28 @@ def save_products_to_supabase(market_id, products, nfce_url, purchase_date=None)
 
 @app.route('/')
 def index():
-    """API information endpoint"""
-    return jsonify({
-        'name': 'economiX API',
-        'status': 'running',
-        'endpoints': {
-            'markets': '/api/markets',
-            'market_products': '/api/markets/{market_id}/products',
-            'nfce_extract': '/api/nfce/extract',
-            'nfce_status': '/api/nfce/status/{record_id}',
-            'products_search': '/api/products/search',
-            'products_compare': '/api/products/compare',
-            'enrich_trigger': '/api/enrich/trigger',
-            'health': '/health'
-        }
-    })
+    """Lightweight liveness probe used by Render's default healthCheckPath.
+    Does NOT hit the database to avoid hammering Supabase from health checks."""
+    return jsonify({'name': 'economiX API', 'status': 'running'})
 
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint for monitoring"""
+    """Deep health check: verifies the database is reachable.
+    Use this for uptime monitors, not for the load balancer's healthcheck."""
     try:
         supabase.table('markets').select('id').limit(1).execute()
         return jsonify({
             'status': 'healthy',
             'database': 'connected',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': _utcnow().isoformat()
         }), 200
     except Exception as e:
         return jsonify({
             'status': 'unhealthy',
             'database': 'disconnected',
             'error': str(e),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': _utcnow().isoformat()
         }), 503
 
 
@@ -649,11 +651,11 @@ def extract_nfce():
         temp_url_data = {
             'nfce_url': raw_url,
             'original_url': raw_url,
-            'market_id': 'QUEUED',
+            'market_id': MARKET_ID_QUEUED,
             'market_name': '',
             'products_count': 0,
-            'status': 'queued',
-            'processed_at': datetime.utcnow().isoformat()
+            'status': STATUS_QUEUED,
+            'processed_at': _utcnow().isoformat()
         }
         url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
         url_record_id = url_insert.data[0]['id']
@@ -746,7 +748,7 @@ def get_nfce_status_batch():
 def get_processing_nfces():
     """Get all currently processing NFCe URLs"""
     try:
-        ten_minutes_ago = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
+        ten_minutes_ago = (_utcnow() - timedelta(minutes=10)).isoformat()
 
         result = supabase.table('processed_urls')\
             .select('*')\

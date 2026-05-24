@@ -4,21 +4,22 @@ Processes pending items in the purchases table and performs product enrichment.
 Handles Bluesoft Cosmos API token rotation and singleton execution via database lock.
 """
 
-import os
 import time
 import logging
-from datetime import datetime
-from dotenv import load_dotenv
+from datetime import datetime, timezone
 
-# Import enrichment logic from enrichment_service
+from supabase_client import supabase
 from enrichment_service import (
-    supabase, 
-    get_product_from_cosmos, 
+    get_product_from_cosmos,
     search_product_on_cosmos,
     log_product_lookup,
     acquire_enrichment_lock,
-    release_enrichment_lock
+    release_enrichment_lock,
 )
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 # Setup logging
 logging.basicConfig(
@@ -27,9 +28,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
 
 def _parse_iso_date(s: str) -> datetime:
     """Parse an ISO-8601 timestamp string, stripping timezone info for comparison."""
@@ -78,7 +76,17 @@ def _process_purchases_queue():
     logger.info("--- Phase 1: Processing purchases queue ---")
     while True:
         try:
-            response = supabase.table('purchases').select('*').eq('enriched', False).limit(BATCH_SIZE).execute()
+            # Order by created_at so the oldest pending purchases always drain first.
+            # Without an order, Postgres can return rows in any sequence and old items
+            # may sit unenriched indefinitely under continuous insert load.
+            response = (
+                supabase.table('purchases')
+                .select('*')
+                .eq('enriched', False)
+                .order('created_at')
+                .limit(BATCH_SIZE)
+                .execute()
+            )
             pending_items = response.data
             
             if not pending_items:
@@ -120,7 +128,7 @@ def _process_purchases_queue():
                         'original_product_name': item['product_name'],
                         'ncm': item['ncm'],
                         'ean': item['ean'],
-                        'created_at': datetime.utcnow().isoformat()
+                        'created_at': _utcnow_iso()
                     }
                     supabase.table('product_backlog').insert(backlog_data).execute()
                     logger.info(f"Purchase {item['id']} moved to backlog (status: {status})")
@@ -255,7 +263,7 @@ def _upsert_unique_product_from_scan(item, product_name, brand, image_url, ncm):
         'market_id': market_id,
         'ean': ean,
         'varejo_price': varejo_price,
-        'purchase_date': item.get('scanned_at', datetime.utcnow().isoformat()),
+        'purchase_date': item.get('scanned_at', _utcnow_iso()),
     }
     if atacado_price:
         unique_data['atacado_price'] = atacado_price
@@ -406,7 +414,7 @@ def enrich_single_purchase(item):
         elif item_purchase_date:
             item_purchase_date_iso = item_purchase_date.isoformat()
         else:
-            item_purchase_date_iso = datetime.utcnow().isoformat()
+            item_purchase_date_iso = _utcnow_iso()
 
         unique_data = {
             'market_id': market_id,
