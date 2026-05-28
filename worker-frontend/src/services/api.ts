@@ -9,11 +9,19 @@ const api = axios.create({
   timeout: 15000,
 });
 
+// Global error interceptor for network failures (matches main frontend behavior).
 api.interceptors.response.use(
   response => response,
   error => {
     if (!error.response) {
-      (error as any).isBackendDown = true;
+      const message = error.code === 'ECONNABORTED'
+        ? 'Tempo esgotado - o servidor não está respondendo'
+        : 'Servidor inacessível. Verifique sua conexão com a internet.';
+
+      console.error('[API Error]', message, error.message);
+
+      error.isBackendDown = true;
+      error.backendErrorMessage = message;
     }
     return Promise.reject(error);
   }

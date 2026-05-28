@@ -5,6 +5,32 @@ import { scanService } from '../services/api';
 import { X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { BarcodeDetector as BarcodeDetectorPolyfill } from 'barcode-detector/pure';
 
+type BarcodeDetectorLike = {
+  detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
+};
+
+type BarcodeDetectorCtor = new (opts: { formats: string[] }) => BarcodeDetectorLike;
+
+const sanitizePriceInput = (raw: string) => {
+  // Allow only digits and a single separator (comma or dot)
+  let cleaned = raw.replace(/[^\d.,]/g, '');
+  // Normalise: keep only the first separator
+  const firstSep = cleaned.search(/[.,]/);
+  if (firstSep !== -1) {
+    const head = cleaned.slice(0, firstSep + 1);
+    const tail = cleaned.slice(firstSep + 1).replace(/[.,]/g, '');
+    cleaned = head + tail;
+  }
+  return cleaned;
+};
+
+const parsePrice = (raw: string): number | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = parseFloat(trimmed.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+};
+
 const BarcodeScannerPage: React.FC = () => {
   const navigate = useNavigate();
   const { selectedMarket, incrementScanCount, addScan, scanCount } = useStore();
@@ -77,15 +103,18 @@ const BarcodeScannerPage: React.FC = () => {
     const targetFormats = ['ean_13', 'ean_8', 'upc_a'];
 
     // Use native BarcodeDetector if available (Chrome/Android), otherwise polyfill (Safari/iOS)
-    let DetectorClass: any = (window as any).BarcodeDetector;
-    if (!DetectorClass) {
-      DetectorClass = BarcodeDetectorPolyfill;
-    }
+    const nativeDetector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor & {
+      getSupportedFormats?: () => Promise<string[]>;
+    } }).BarcodeDetector;
+    const DetectorClass: BarcodeDetectorCtor & { getSupportedFormats?: () => Promise<string[]> } =
+      nativeDetector ?? (BarcodeDetectorPolyfill as unknown as BarcodeDetectorCtor & {
+        getSupportedFormats?: () => Promise<string[]>;
+      });
 
     try {
       if (DetectorClass.getSupportedFormats) {
         const supported = await DetectorClass.getSupportedFormats();
-        const available = targetFormats.filter((f: string) => supported.includes(f));
+        const available = targetFormats.filter(f => supported.includes(f));
         if (available.length === 0) throw new Error('No EAN formats supported');
       }
 
@@ -118,12 +147,13 @@ const BarcodeScannerPage: React.FC = () => {
       detectFrameRef.current = detectFrame;
       animationFrameRef.current = requestAnimationFrame(detectFrame);
       return true;
-    } catch {
+    } catch (err) {
+      console.error('Scanner init failed', err);
       return false;
     }
   }, [onBarcodeDetected]);
 
-  const startScanning = async () => {
+  const startScanning = useCallback(async () => {
     setScannerError(null);
     setIsScanning(true);
     isPausedRef.current = false;
@@ -132,7 +162,7 @@ const BarcodeScannerPage: React.FC = () => {
       setScannerError('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
       setIsScanning(false);
     }
-  };
+  }, [startScanner]);
 
   useEffect(() => {
     if (selectedMarket) startScanning();
@@ -141,14 +171,24 @@ const BarcodeScannerPage: React.FC = () => {
   }, []);
 
   const handleSave = async () => {
-    if (!selectedMarket || !detectedEan) return;
-    const varejo = parseFloat(varejoInput.replace(',', '.'));
-    if (isNaN(varejo) || varejo <= 0) {
-      setSaveError('Informe o preço varejo');
+    if (!selectedMarket || !detectedEan || isSaving) return;
+    const varejo = parsePrice(varejoInput);
+    if (varejo === null || varejo <= 0) {
+      setSaveError('Informe um preço varejo válido');
+      varejoInputRef.current?.focus();
       return;
     }
 
-    const atacado = atacadoInput.trim() ? parseFloat(atacadoInput.replace(',', '.')) : undefined;
+    const atacadoRaw = atacadoInput.trim();
+    let atacado: number | undefined;
+    if (atacadoRaw) {
+      const parsed = parsePrice(atacadoRaw);
+      if (parsed === null || parsed <= 0) {
+        setSaveError('Preço atacado inválido');
+        return;
+      }
+      atacado = parsed;
+    }
 
     setIsSaving(true);
     setSaveError(null);
@@ -158,14 +198,14 @@ const BarcodeScannerPage: React.FC = () => {
         market_id: selectedMarket.market_id,
         ean: detectedEan,
         varejo_price: varejo,
-        atacado_price: atacado && atacado > 0 ? atacado : undefined,
+        atacado_price: atacado,
       });
 
       incrementScanCount();
       addScan({
         ean: detectedEan,
         varejo_price: varejo,
-        atacado_price: atacado && atacado > 0 ? atacado : undefined,
+        atacado_price: atacado,
         savedAt: Date.now(),
       });
 
@@ -173,8 +213,12 @@ const BarcodeScannerPage: React.FC = () => {
       setTimeout(() => setScanFlash(false), 400);
 
       setTimeout(() => resumeDetection(), 500);
-    } catch (err: any) {
-      setSaveError(err.response?.data?.error || 'Falha ao salvar');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } }; isBackendDown?: boolean; message?: string };
+      const message = e.isBackendDown
+        ? 'Servidor inacessível. Verifique sua conexão.'
+        : e.response?.data?.error || e.message || 'Falha ao salvar';
+      setSaveError(message);
     } finally {
       setIsSaving(false);
     }
@@ -203,6 +247,7 @@ const BarcodeScannerPage: React.FC = () => {
           Selecione um mercado na tela inicial antes de escanear.
         </p>
         <button
+          type="button"
           onClick={() => navigate('/')}
           className="px-6 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-200 active:scale-[0.97]"
           style={{
@@ -228,6 +273,7 @@ const BarcodeScannerPage: React.FC = () => {
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
         <button
+          type="button"
           onClick={() => { stopScanning(); navigate('/'); }}
           className="flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-all duration-200 hover:opacity-80"
           style={{ backgroundColor: '#F1F5F9' }}
@@ -236,14 +282,14 @@ const BarcodeScannerPage: React.FC = () => {
           <X className="w-5 h-5" style={{ color: 'var(--color-text)' }} />
         </button>
 
-        <div className="text-center">
+        <div className="text-center min-w-0 px-2">
           <h1
-            className="text-base font-semibold"
+            className="text-base font-semibold truncate"
             style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-text)' }}
           >
             Escanear Código
           </h1>
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
             {selectedMarket.name}
           </p>
         </div>
@@ -252,6 +298,7 @@ const BarcodeScannerPage: React.FC = () => {
           <div
             className="flex items-center justify-center h-9 px-3 rounded-full text-xs font-bold text-white"
             style={{ backgroundColor: '#10B981', minWidth: '2.25rem' }}
+            aria-label={`${scanCount} escaneamentos`}
           >
             {scanCount}
           </div>
@@ -289,15 +336,15 @@ const BarcodeScannerPage: React.FC = () => {
                   {/* EAN Display */}
                   <div className="flex items-center gap-3">
                     <div
-                      className="flex items-center justify-center w-10 h-10 rounded-xl"
+                      className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
                       style={{ backgroundColor: '#F0FDF4' }}
                     >
                       <CheckCircle2 className="w-5 h-5" style={{ color: '#16A34A' }} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Código EAN</p>
                       <p
-                        className="text-lg font-bold font-mono"
+                        className="text-lg font-bold font-mono truncate"
                         style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading)' }}
                       >
                         {detectedEan}
@@ -308,23 +355,25 @@ const BarcodeScannerPage: React.FC = () => {
                   {/* Price Inputs */}
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs font-semibold mb-1 block" style={{ color: 'var(--color-text)' }}>
+                      <label htmlFor="varejo-price" className="text-xs font-semibold mb-1 block" style={{ color: 'var(--color-text)' }}>
                         Preço Varejo *
                       </label>
                       <div className="relative">
                         <span
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none"
                           style={{ color: 'var(--color-text-muted)' }}
                         >
                           R$
                         </span>
                         <input
+                          id="varejo-price"
                           ref={varejoInputRef}
                           type="text"
                           inputMode="decimal"
+                          autoComplete="off"
                           placeholder="0,00"
                           value={varejoInput}
-                          onChange={e => setVarejoInput(e.target.value)}
+                          onChange={e => setVarejoInput(sanitizePriceInput(e.target.value))}
                           onKeyDown={e => e.key === 'Enter' && handleSave()}
                           className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-semibold"
                           style={{
@@ -341,22 +390,24 @@ const BarcodeScannerPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-xs font-semibold mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
+                      <label htmlFor="atacado-price" className="text-xs font-semibold mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
                         Preço Atacado (opcional)
                       </label>
                       <div className="relative">
                         <span
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none"
                           style={{ color: 'var(--color-text-muted)' }}
                         >
                           R$
                         </span>
                         <input
+                          id="atacado-price"
                           type="text"
                           inputMode="decimal"
+                          autoComplete="off"
                           placeholder="0,00"
                           value={atacadoInput}
-                          onChange={e => setAtacadoInput(e.target.value)}
+                          onChange={e => setAtacadoInput(sanitizePriceInput(e.target.value))}
                           onKeyDown={e => e.key === 'Enter' && handleSave()}
                           className="w-full pl-10 pr-4 py-3 rounded-xl text-sm"
                           style={{
@@ -374,7 +425,11 @@ const BarcodeScannerPage: React.FC = () => {
                   </div>
 
                   {saveError && (
-                    <p className="text-xs font-semibold text-center" style={{ color: '#EF4444' }}>
+                    <p
+                      role="alert"
+                      className="text-xs font-semibold text-center px-3 py-2 rounded-lg"
+                      style={{ color: '#991B1B', backgroundColor: '#FEF2F2', border: '1px solid #FECACA' }}
+                    >
                       {saveError}
                     </p>
                   )}
@@ -382,8 +437,10 @@ const BarcodeScannerPage: React.FC = () => {
                   {/* Action Buttons */}
                   <div className="flex gap-3">
                     <button
+                      type="button"
                       onClick={resumeDetection}
-                      className="flex-1 py-3.5 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-200"
+                      disabled={isSaving}
+                      className="flex-1 py-3.5 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{
                         backgroundColor: '#F1F5F9',
                         color: 'var(--color-text-muted)',
@@ -393,9 +450,10 @@ const BarcodeScannerPage: React.FC = () => {
                       Pular
                     </button>
                     <button
+                      type="button"
                       onClick={handleSave}
                       disabled={isSaving || !varejoInput.trim()}
-                      className="flex-[2] py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 active:scale-[0.97] disabled:opacity-50"
+                      className="flex-[2] py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{
                         backgroundColor: 'var(--color-cta)',
                         color: 'white',
@@ -420,11 +478,18 @@ const BarcodeScannerPage: React.FC = () => {
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             {scannerError ? (
-              <div className="text-center px-8">
-                <p className="text-white text-sm">{scannerError}</p>
+              <div className="text-center px-8 max-w-sm">
+                <div
+                  className="w-14 h-14 mx-auto flex items-center justify-center rounded-2xl mb-3"
+                  style={{ backgroundColor: 'rgba(239,68,68,0.15)' }}
+                >
+                  <AlertTriangle className="w-7 h-7" style={{ color: '#FCA5A5' }} />
+                </div>
+                <p className="text-white text-sm font-medium">{scannerError}</p>
                 <button
+                  type="button"
                   onClick={startScanning}
-                  className="mt-4 px-6 py-2 rounded-full text-sm font-semibold cursor-pointer"
+                  className="mt-4 px-6 py-2 rounded-full text-sm font-semibold cursor-pointer transition-all duration-200 active:scale-[0.97]"
                   style={{ backgroundColor: 'var(--color-cta)', color: 'white' }}
                 >
                   Tentar novamente

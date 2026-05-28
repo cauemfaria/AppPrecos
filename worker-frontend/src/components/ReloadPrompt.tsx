@@ -7,14 +7,12 @@ const ReloadPrompt = () => {
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r: ServiceWorkerRegistration | undefined) {
-      // eslint-disable-next-line no-console
       console.log('SW Registered: ' + r)
       if (r) {
         setInterval(() => { r.update() }, 60 * 60 * 1000)
       }
     },
-    onRegisterError(error: any) {
-      // eslint-disable-next-line no-console
+    onRegisterError(error: unknown) {
       console.log('SW registration error', error)
     },
   })

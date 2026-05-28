@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, ScanBarcode, ChevronDown, Barcode, MapPin } from 'lucide-react';
+import { Store, ScanBarcode, ChevronDown, Barcode, MapPin, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { marketService } from '../services/api';
 import type { Market } from '../types';
@@ -10,18 +10,52 @@ const HomePage: React.FC = () => {
   const { selectedMarket, setSelectedMarket, scanCount, recentScans } = useStore();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
     marketService.getMarkets()
-      .then(setMarkets)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+      .then(data => { if (!cancelled) setMarkets(data); })
+      .catch(err => {
+        if (!cancelled) {
+          console.error('Failed to load markets', err);
+          setLoadError('Não foi possível carregar a lista de mercados.');
+        }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [dropdownOpen]);
 
   const handleSelect = (market: Market) => {
     setSelectedMarket(market);
     setDropdownOpen(false);
+  };
+
+  const handleRetryLoadMarkets = () => {
+    setLoading(true);
+    setLoadError(null);
+    setReloadKey(k => k + 1);
   };
 
   return (
@@ -43,7 +77,7 @@ const HomePage: React.FC = () => {
       </div>
 
       {/* Market Selector */}
-      <div className="relative">
+      <div className="relative" ref={dropdownRef}>
         <p
           className="text-xs font-bold uppercase tracking-widest px-1 mb-1.5"
           style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-body)' }}
@@ -51,8 +85,12 @@ const HomePage: React.FC = () => {
           Mercado
         </p>
         <button
-          onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="w-full flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all duration-200 active:opacity-80"
+          type="button"
+          onClick={() => setDropdownOpen(o => !o)}
+          aria-expanded={dropdownOpen}
+          aria-haspopup="listbox"
+          disabled={loading || !!loadError}
+          className="w-full flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all duration-200 active:opacity-80 disabled:cursor-not-allowed disabled:opacity-70"
           style={{
             backgroundColor: 'var(--color-surface)',
             border: `1px solid ${selectedMarket ? 'var(--color-primary)' : 'var(--color-border)'}`,
@@ -66,7 +104,7 @@ const HomePage: React.FC = () => {
             >
               <Store className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 text-left">
               {selectedMarket ? (
                 <>
                   <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
@@ -92,9 +130,35 @@ const HomePage: React.FC = () => {
           />
         </button>
 
+        {loadError && (
+          <div
+            className="mt-2 flex items-center justify-between gap-3 p-3 rounded-xl"
+            style={{
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FECACA',
+            }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertCircle className="w-4 h-4 shrink-0" style={{ color: '#DC2626' }} />
+              <p className="text-xs font-medium truncate" style={{ color: '#991B1B' }}>
+                {loadError}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRetryLoadMarkets}
+              className="text-xs font-bold px-3 py-1 rounded-lg cursor-pointer shrink-0"
+              style={{ backgroundColor: '#DC2626', color: 'white' }}
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
         {/* Dropdown */}
         {dropdownOpen && (
           <div
+            role="listbox"
             className="absolute left-0 right-0 mt-2 rounded-xl overflow-hidden z-20"
             style={{
               backgroundColor: 'var(--color-surface)',
@@ -104,37 +168,44 @@ const HomePage: React.FC = () => {
               overflowY: 'auto',
             }}
           >
-            {markets.map((market) => (
-              <button
-                key={market.market_id}
-                onClick={() => handleSelect(market)}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer transition-colors duration-150"
-                style={{
-                  borderBottom: '1px solid var(--color-border)',
-                  backgroundColor: selectedMarket?.market_id === market.market_id ? '#EFF6FF' : 'transparent',
-                }}
-                onMouseEnter={e => ((e.currentTarget as HTMLElement).style.backgroundColor = '#F8FAFC')}
-                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.backgroundColor =
-                  selectedMarket?.market_id === market.market_id ? '#EFF6FF' : 'transparent'
-                )}
-              >
-                <div
-                  className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
-                  style={{ backgroundColor: selectedMarket?.market_id === market.market_id ? '#DBEAFE' : '#F1F5F9' }}
+            {markets.map((market, idx) => {
+              const isSelected = selectedMarket?.market_id === market.market_id;
+              const isLast = idx === markets.length - 1;
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  key={market.market_id}
+                  onClick={() => handleSelect(market)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer transition-colors duration-150"
+                  style={{
+                    borderBottom: isLast ? 'none' : '1px solid var(--color-border)',
+                    backgroundColor: isSelected ? '#EFF6FF' : 'transparent',
+                  }}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.backgroundColor = '#F8FAFC')}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.backgroundColor =
+                    isSelected ? '#EFF6FF' : 'transparent'
+                  )}
                 >
-                  <Store className="w-4 h-4" style={{ color: selectedMarket?.market_id === market.market_id ? 'var(--color-primary)' : '#94A3B8' }} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                    {market.name}
-                  </p>
-                  <p className="text-xs truncate flex items-center gap-1" style={{ color: 'var(--color-text-muted)' }}>
-                    <MapPin className="w-3 h-3 shrink-0" />
-                    {market.address}
-                  </p>
-                </div>
-              </button>
-            ))}
+                  <div
+                    className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
+                    style={{ backgroundColor: isSelected ? '#DBEAFE' : '#F1F5F9' }}
+                  >
+                    <Store className="w-4 h-4" style={{ color: isSelected ? 'var(--color-primary)' : '#94A3B8' }} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                      {market.name}
+                    </p>
+                    <p className="text-xs truncate flex items-center gap-1" style={{ color: 'var(--color-text-muted)' }}>
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      {market.address}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
             {markets.length === 0 && !loading && (
               <div className="px-4 py-6 text-center">
                 <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Nenhum mercado disponível</p>
@@ -188,6 +259,7 @@ const HomePage: React.FC = () => {
           <p
             className="text-lg font-bold truncate"
             style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
+            title={selectedMarket?.name}
           >
             {selectedMarket ? selectedMarket.name : 'Nenhum'}
           </p>
@@ -200,6 +272,7 @@ const HomePage: React.FC = () => {
       {/* CTA */}
       {selectedMarket && (
         <button
+          type="button"
           onClick={() => navigate('/scanner')}
           className="w-full py-4 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 active:scale-[0.98]"
           style={{
@@ -278,7 +351,7 @@ const HomePage: React.FC = () => {
                     <Barcode className="w-4 h-4" style={{ color: '#16A34A' }} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-mono font-medium" style={{ color: 'var(--color-text)' }}>
+                    <p className="text-sm font-mono font-medium truncate" style={{ color: 'var(--color-text)' }}>
                       {scan.ean}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -290,7 +363,7 @@ const HomePage: React.FC = () => {
                   <p className="text-sm font-bold" style={{ color: 'var(--color-cta)' }}>
                     R$ {scan.varejo_price.toFixed(2)}
                   </p>
-                  {scan.atacado_price && (
+                  {typeof scan.atacado_price === 'number' && (
                     <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                       Atacado: R$ {scan.atacado_price.toFixed(2)}
                     </p>
