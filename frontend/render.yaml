@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: economix-worker
+    name: economix-frontend
     env: static
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist

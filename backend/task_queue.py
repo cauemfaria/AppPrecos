@@ -8,6 +8,7 @@ and keeps memory usage under the 512MB Render limit.
 The database lock (acquire_extraction_lock) still coordinates across Gunicorn workers.
 """
 
+import os
 import queue
 import threading
 import time
@@ -39,7 +40,9 @@ def _consumer_loop():
 
 
 def _ensure_worker_started():
-    """Start the consumer thread once (lazy initialization)."""
+    """Start the consumer thread once, if RUN_INPROCESS_WORKER is enabled."""
+    if os.getenv('RUN_INPROCESS_WORKER', 'true').lower() == 'false':
+        return  # Extraction handled by a separate worker service
     global _worker_started
     if _worker_started:
         return
@@ -79,6 +82,9 @@ def recover_orphaned_tasks():
     On startup, find records stuck in 'queued' or 'processing' and re-enqueue them.
     Handles items orphaned by worker restarts or crashes.
     """
+    if os.getenv('RUN_INPROCESS_WORKER', 'true').lower() == 'false':
+        print("[QUEUE] RUN_INPROCESS_WORKER=false — skipping orphan recovery (handled by worker service)")
+        return
     try:
         from supabase_client import supabase
 

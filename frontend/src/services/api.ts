@@ -12,6 +12,8 @@ import type {
   BestMarketsResponse,
   PriceHistoryResponse
 } from '../types';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/useAuthStore';
 
 // Use environment variable for API base URL, fallback to existing one
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://appprecos.onrender.com/api';
@@ -23,6 +25,31 @@ const api = axios.create({
   },
   timeout: 30000, // 30 second timeout
 });
+
+// Attach JWT to every request
+api.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
+  }
+  return config;
+});
+
+// On 401, try token refresh then sign out
+api.interceptors.response.use(
+  response => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (session) {
+        error.config.headers.Authorization = `Bearer ${session.access_token}`;
+        return api(error.config);
+      }
+      await useAuthStore.getState().signOut();
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Global error interceptor for network failures
 api.interceptors.response.use(

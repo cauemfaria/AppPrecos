@@ -1,14 +1,19 @@
 import React, { type ReactElement } from 'react';
 import {
   User, Bell, Shield,
-  HelpCircle, Info,
+  HelpCircle, Info, LogOut,
   Globe, Heart, type LucideProps,
   ChevronRight, Database, Trash2, Store,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useAuthStore } from '../store/useAuthStore';
 
 const SettingsPage: React.FC = () => {
   const { selectedMarket, setSelectedMarket, clearScans, recentScans, scanCount } = useStore();
+  const { profile, user, signOut } = useAuthStore();
+
+  const displayName = profile?.full_name || user?.email || 'Colaborador';
+  const displayEmail = user?.email || '';
 
   const handleClearMarket = () => {
     if (window.confirm('Deseja remover o mercado selecionado?')) {
@@ -50,8 +55,8 @@ const SettingsPage: React.FC = () => {
           icon={<User />}
           iconBg="#EFF6FF"
           iconColor="var(--color-primary)"
-          label="Perfil"
-          value="Colaborador"
+          label={displayName}
+          value={displayEmail}
         />
         <SettingsItem
           icon={<Bell />}
@@ -132,6 +137,21 @@ const SettingsPage: React.FC = () => {
           isLast
         />
       </Section>
+
+      {/* Sign out */}
+      <button
+        onClick={() => signOut()}
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm cursor-pointer transition-all duration-200 hover:opacity-80"
+        style={{
+          backgroundColor: '#FEF2F2',
+          color: '#DC2626',
+          border: '1px solid #FECACA',
+          fontFamily: 'var(--font-body)',
+        }}
+      >
+        <LogOut className="w-4 h-4" />
+        Sair
+      </button>
     </div>
   );
 };

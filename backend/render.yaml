@@ -22,4 +22,12 @@ services:
         value: production
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/.playwright
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: MAX_ACTIVE_NFCE_PER_USER
+        value: "5"
+      - key: RUN_INPROCESS_WORKER
+        value: "true"
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
 

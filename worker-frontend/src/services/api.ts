@@ -1,5 +1,7 @@
 import axios from 'axios';
 import type { Market, SaveScanResponse } from '../types';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/useAuthStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://appprecos.onrender.com/api';
 
@@ -8,6 +10,31 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
+
+// Attach JWT to every request
+api.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
+  }
+  return config;
+});
+
+// On 401, try token refresh then sign out
+api.interceptors.response.use(
+  response => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (session) {
+        error.config.headers.Authorization = `Bearer ${session.access_token}`;
+        return api(error.config);
+      }
+      await useAuthStore.getState().signOut();
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Global error interceptor for network failures (matches main frontend behavior).
 api.interceptors.response.use(

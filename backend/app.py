@@ -4,7 +4,7 @@ economiX Backend API
 Using Supabase REST API
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, parse_qs, unquote
@@ -15,6 +15,7 @@ import time
 import requests
 
 from supabase_client import supabase, SUPABASE_URL
+from auth import get_user_id_from_token
 from constants import (
     STATUS_QUEUED, STATUS_PROCESSING, STATUS_EXTRACTING,
     STATUS_SUCCESS, STATUS_ERROR, ACTIVE_NFCE_STATUSES,
@@ -55,6 +56,20 @@ CORS(app, resources={
         "max_age": 3600,
     }
 })
+
+UNPROTECTED_PATHS = {'/', '/health'}
+
+@app.before_request
+def authenticate_api():
+    """Require a valid JWT for all /api/* routes except OPTIONS (CORS preflight)."""
+    if request.method == 'OPTIONS':
+        return  # CORS preflight — let Flask-CORS handle it
+    if not request.path.startswith('/api/'):
+        return  # health check and root liveness are open
+    user_id = get_user_id_from_token()
+    if user_id is None:
+        return jsonify({'error': 'Autenticação necessária'}), 401
+    g.user_id = user_id
 
 print("[OK] Supabase client initialized")
 
@@ -646,6 +661,18 @@ def extract_nfce():
                 'products_count': dup.get('products_count', 0),
             }), 409
 
+        # Per-user fairness guard: prevent one user from flooding the extraction queue
+        max_active = int(os.getenv('MAX_ACTIVE_NFCE_PER_USER', '5'))
+        active_count = supabase.table('processed_urls') \
+            .select('id', count='exact') \
+            .eq('scanned_by', g.user_id) \
+            .in_('status', list(ACTIVE_NFCE_STATUSES)) \
+            .execute()
+        if (active_count.count or 0) >= max_active:
+            return jsonify({
+                'error': f'Você já tem {max_active} NFCes em processamento. Aguarde antes de enviar mais.'
+            }), 429
+
         # Insert with status='queued' and return immediately.
         # URL resolution and extraction happen in the background worker.
         temp_url_data = {
@@ -655,7 +682,8 @@ def extract_nfce():
             'market_name': '',
             'products_count': 0,
             'status': STATUS_QUEUED,
-            'processed_at': _utcnow().isoformat()
+            'processed_at': _utcnow().isoformat(),
+            'scanned_by': g.user_id,
         }
         url_insert = supabase.table('processed_urls').insert(temp_url_data).execute()
         url_record_id = url_insert.data[0]['id']
@@ -792,6 +820,7 @@ def save_barcode_scan():
             'enriched': False,
             'enrichment_status': 'pending',
             'source': 'worker_scan',
+            'scanned_by': g.user_id,
         }
         if atacado_price is not None and float(atacado_price) > 0:
             row['atacado_price'] = float(atacado_price)
