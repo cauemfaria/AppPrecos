@@ -12,44 +12,64 @@ import { useBackendConnection } from './hooks/useBackendConnection'
 
 function App() {
   const { session, loading, initialize } = useAuthStore()
-  const { isConnected, isChecking, error } = useBackendConnection()
+  const { isConnected, isChecking, error, retry } = useBackendConnection()
 
+  // [] is correct — initialize is a stable Zustand action ref, never changes
   useEffect(() => {
     const unsubscribe = initialize()
     return unsubscribe
-  }, [initialize])
+  }, [])
 
-  // ReloadPrompt (PWA updates) always mounts regardless of connection/auth state
+  const renderContent = () => {
+    // Step 1: Wait for Supabase to resolve the stored session (brief, ~100–300ms)
+    if (loading) {
+      return (
+        <div
+          className="min-h-screen flex items-center justify-center"
+          style={{ backgroundColor: 'var(--color-background)' }}
+        >
+          <span
+            className="w-10 h-10 border-4 rounded-full animate-spin"
+            style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
+          />
+        </div>
+      )
+    }
 
-  if (loading || !isConnected || isChecking) {
+    // Step 2: Not signed in — login page never blocked by backend connection
+    if (!session) {
+      return <LoginPage />
+    }
+
+    // Step 3: Signed in, backend not yet available
+    if (!isConnected || isChecking) {
+      return <ConnectionModal isChecking={isChecking} error={error} onRetry={retry} />
+    }
+
+    // Step 4: Fully ready
     return (
-      <>
-        <ReloadPrompt />
-        <ConnectionModal isConnected={isConnected && !loading} isChecking={isChecking || loading} error={error} />
-      </>
-    )
-  }
-
-  if (!session) {
-    return (
-      <>
-        <ReloadPrompt />
-        <LoginPage />
-      </>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<HomePage />} />
+            <Route path="scanner" element={<BarcodeScannerPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
     )
   }
 
   return (
-    <BrowserRouter>
-      <ReloadPrompt />
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<HomePage />} />
-          <Route path="scanner" element={<BarcodeScannerPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <>
+      {/*
+        ReloadPrompt is always at position 0 in the fragment — React never unmounts it
+        across auth/connection state transitions. autoUpdate=true when there is no active
+        session (login page), so updates apply immediately with no data-loss risk.
+      */}
+      <ReloadPrompt autoUpdate={!session} />
+      {renderContent()}
+    </>
   )
 }
 

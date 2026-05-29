@@ -1,21 +1,17 @@
 interface ConnectionModalProps {
-  isConnected: boolean
   isChecking: boolean
   error: string | null
+  onRetry?: () => void
 }
 
-export default function ConnectionModal({ isConnected, isChecking, error }: ConnectionModalProps) {
-  if (isConnected && !isChecking) {
-    return null  // Hide when connected
-  }
-
+export default function ConnectionModal({ isChecking, error, onRetry }: ConnectionModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
     >
       <div
-        className="rounded-2xl p-8 w-96 max-w-sm"
+        className="rounded-2xl p-8 w-96 max-w-sm mx-4"
         style={{
           backgroundColor: 'var(--color-surface)',
           boxShadow: 'var(--shadow-lg)',
@@ -23,7 +19,7 @@ export default function ConnectionModal({ isConnected, isChecking, error }: Conn
         }}
       >
         <div className="flex flex-col items-center gap-4">
-          {isChecking && !error ? (
+          {isChecking ? (
             <>
               <span
                 className="w-12 h-12 border-4 rounded-full animate-spin"
@@ -34,31 +30,44 @@ export default function ConnectionModal({ isConnected, isChecking, error }: Conn
                   Conectando ao servidor...
                 </p>
                 <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                  Por favor, aguarde
+                  {error ?? 'Por favor, aguarde'}
                 </p>
               </div>
             </>
-          ) : error ? (
+          ) : (
             <>
               <div
-                className="w-12 h-12 rounded-full flex items-center justify-center"
+                className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
                 style={{ backgroundColor: '#FEF2F2' }}
               >
-                <span style={{ color: '#DC2626', fontSize: '20px' }}>⚠️</span>
+                ⚠️
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold" style={{ color: '#DC2626' }}>
                   Erro de conexão
                 </p>
                 <p className="text-xs mt-2" style={{ color: 'var(--color-text-muted)' }}>
-                  {error}
+                  {error ?? 'Não foi possível conectar ao servidor.'}
                 </p>
-                <p className="text-xs mt-3" style={{ color: 'var(--color-text-muted)' }}>
-                  Tentando reconectar...
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                  Tentando reconectar automaticamente...
                 </p>
               </div>
+              {onRetry && (
+                <button
+                  onClick={onRetry}
+                  className="mt-1 px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
+                  style={{
+                    backgroundColor: 'var(--color-primary)',
+                    color: 'white',
+                    fontFamily: 'var(--font-body)',
+                  }}
+                >
+                  Tentar novamente
+                </button>
+              )}
             </>
-          ) : null}
+          )}
         </div>
       </div>
     </div>
