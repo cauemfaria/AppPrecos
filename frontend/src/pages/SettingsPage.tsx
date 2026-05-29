@@ -1,14 +1,17 @@
 import React, { type ReactElement } from 'react';
 import {
-  User, LogOut, ChevronRight, Trash2,
+  User, LogOut, ChevronRight, Trash2, Sun, Moon,
   type LucideProps,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useTheme } from '../hooks/useTheme';
+import { semanticColors } from '../utils/themeColors';
 
 const SettingsPage: React.FC = () => {
   const { clearShoppingList, clearMarketSelection } = useStore();
   const { profile, user, signOut } = useAuthStore();
+  const { theme, setTheme } = useTheme();
 
   const displayName = profile?.full_name || user?.email || 'Usuário Convidado';
   const displayEmail = user?.email || '';
@@ -43,8 +46,8 @@ const SettingsPage: React.FC = () => {
       <Section label="Conta">
         <SettingsItem
           icon={<User />}
-          iconBg="#EFF6FF"
-          iconColor="var(--color-primary)"
+          iconBg={semanticColors.iconBg.primary}
+          iconColor={semanticColors.iconColor.primary}
           label={displayName}
           value={displayEmail}
           isLast
@@ -55,8 +58,8 @@ const SettingsPage: React.FC = () => {
       <Section label="Armazenamento e Dados">
         <SettingsItem
           icon={<Trash2 />}
-          iconBg="#FEF2F2"
-          iconColor="#EF4444"
+          iconBg={semanticColors.iconBg.error}
+          iconColor={semanticColors.iconColor.error}
           label="Limpar Dados Locais"
           onClick={handleClearData}
           destructive
@@ -64,14 +67,56 @@ const SettingsPage: React.FC = () => {
         />
       </Section>
 
+      {/* APARÊNCIA */}
+      <Section label="Aparência">
+        <div className="flex flex-col divide-y" style={{ borderColor: 'var(--color-border)' }}>
+          {(['light', 'dark', 'system'] as const).map((mode, idx) => (
+            <button
+              key={mode}
+              onClick={() => setTheme(mode)}
+              className="w-full flex items-center justify-between px-4 py-3 transition-colors duration-150 cursor-pointer text-left hover:bg-opacity-50"
+              style={{
+                borderBottom: idx === 2 ? 'none' : '1px solid var(--color-border)',
+              }}
+              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--color-primary) 3%, var(--color-surface))')}
+              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex items-center justify-center w-8 h-8 rounded-lg"
+                  style={{ backgroundColor: semanticColors.iconBg.primary }}
+                >
+                  {mode === 'light' ? (
+                    <Sun size={16} style={{ color: semanticColors.iconColor.primary }} />
+                  ) : mode === 'dark' ? (
+                    <Moon size={16} style={{ color: semanticColors.iconColor.primary }} />
+                  ) : (
+                    <div style={{ color: semanticColors.iconColor.primary, fontSize: '16px' }}>◐</div>
+                  )}
+                </div>
+                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                  {mode === 'light' ? 'Claro' : mode === 'dark' ? 'Escuro' : 'Sistema'}
+                </span>
+              </div>
+              {theme === mode && (
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      </Section>
+
       {/* Sign out */}
       <button
         onClick={() => signOut()}
         className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm cursor-pointer transition-all duration-200 hover:opacity-80"
         style={{
-          backgroundColor: '#FEF2F2',
-          color: '#DC2626',
-          border: '1px solid #FECACA',
+          backgroundColor: 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))',
+          color: 'var(--color-error)',
+          border: '1px solid color-mix(in srgb, var(--color-error) 20%, var(--color-surface))',
           fontFamily: 'var(--font-body)',
         }}
       >

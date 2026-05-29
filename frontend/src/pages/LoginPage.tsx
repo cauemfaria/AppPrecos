@@ -98,12 +98,12 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl text-sm" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+          <div className="mb-4 p-3 rounded-xl text-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))', color: 'var(--color-error)' }}>
             {error}
           </div>
         )}
         {success && (
-          <div className="mb-4 p-3 rounded-xl text-sm" style={{ backgroundColor: '#F0FDF4', color: '#16A34A' }}>
+          <div className="mb-4 p-3 rounded-xl text-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--color-success) 5%, var(--color-surface))', color: 'var(--color-success)' }}>
             {success}
           </div>
         )}

@@ -38,12 +38,12 @@ export default function ConnectionModal({ isChecking, error, onRetry }: Connecti
             <>
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
-                style={{ backgroundColor: '#FEF2F2' }}
+                style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))' }}
               >
                 ⚠️
               </div>
               <div className="text-center">
-                <p className="text-sm font-semibold" style={{ color: '#DC2626' }}>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-error)' }}>
                   Erro de conexão
                 </p>
                 <p className="text-xs mt-2" style={{ color: 'var(--color-text-muted)' }}>
