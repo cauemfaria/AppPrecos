@@ -13,14 +13,14 @@ const STATS = [
     value: '142',
     icon: Receipt,
     accent: 'var(--color-primary)',
-    bg: '#EFF6FF',
+    bg: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))',
   },
   {
     label: 'Créditos',
     value: '85',
     icon: Coins,
     accent: 'var(--color-cta)',
-    bg: '#FFF7ED',
+    bg: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))',
   },
 ];
 
@@ -48,34 +48,34 @@ const statusConfig: Record<StatusKey, {
   success: {
     label: (item: ProcessingItem) => item.market_name ?? 'Concluído',
     sublabel: (item: ProcessingItem) => item.products_count ? `${item.products_count} produto${item.products_count !== 1 ? 's' : ''} extraído${item.products_count !== 1 ? 's' : ''}` : 'Processado com sucesso',
-    iconBg: '#DCFCE7',
-    iconColor: '#16A34A',
-    rowBg: '#F0FDF4',
-    textColor: '#166534',
+    iconBg: 'color-mix(in srgb, var(--color-success) 10%, var(--color-surface))',
+    iconColor: 'var(--color-success)',
+    rowBg: 'color-mix(in srgb, var(--color-success) 5%, var(--color-surface))',
+    textColor: 'var(--color-success)',
   },
   error: {
     label: (item: ProcessingItem) => item.market_name ?? domainFromUrl(item.url),
     sublabel: (item: ProcessingItem) => item.error_message ?? 'Erro ao processar',
-    iconBg: '#FEE2E2',
-    iconColor: '#DC2626',
-    rowBg: '#FEF2F2',
-    textColor: '#991B1B',
+    iconBg: 'color-mix(in srgb, var(--color-error) 10%, var(--color-surface))',
+    iconColor: 'var(--color-error)',
+    rowBg: 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))',
+    textColor: 'var(--color-error)',
   },
   duplicate: {
     label: (item: ProcessingItem) => item.market_name ?? domainFromUrl(item.url),
     sublabel: () => 'Cupom já registrado',
-    iconBg: '#FEF3C7',
-    iconColor: '#D97706',
-    rowBg: '#FFFBEB',
-    textColor: '#92400E',
+    iconBg: 'color-mix(in srgb, var(--color-cta) 10%, var(--color-surface))',
+    iconColor: 'var(--color-cta)',
+    rowBg: 'color-mix(in srgb, var(--color-cta) 5%, var(--color-surface))',
+    textColor: 'var(--color-cta)',
   },
   pending: {
     label: (item: ProcessingItem) => item.market_name ?? domainFromUrl(item.url),
     sublabel: () => 'Aguardando envio...',
-    iconBg: '#F1F5F9',
-    iconColor: '#94A3B8',
-    rowBg: '#FFFFFF',
-    textColor: '#475569',
+    iconBg: 'var(--color-bg-subtle)',
+    iconColor: 'var(--color-text-muted)',
+    rowBg: 'var(--color-surface)',
+    textColor: 'var(--color-text-muted)',
   },
 };
 
@@ -119,7 +119,7 @@ const QueueItem: React.FC<{ item: ProcessingItem }> = ({ item }) => {
       {/* Icon */}
       <div
         className="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl"
-        style={{ backgroundColor: isActive ? '#EFF6FF' : cfg.iconBg }}
+              style={{ backgroundColor: isActive ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' : cfg.iconBg }}
       >
         {isActive ? (
           <svg
@@ -242,7 +242,7 @@ const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <div
               className="w-7 h-7 flex items-center justify-center rounded-lg"
-              style={{ backgroundColor: '#EFF6FF' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
             >
               <Clock className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
             </div>
@@ -257,7 +257,7 @@ const DashboardPage: React.FC = () => {
             <span
               className="text-xs font-bold px-2 py-0.5 rounded-full"
               style={{
-                backgroundColor: '#EFF6FF',
+                backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))',
                 color: 'var(--color-primary)',
               }}
             >
@@ -271,14 +271,14 @@ const DashboardPage: React.FC = () => {
           <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
             <div
               className="w-12 h-12 flex items-center justify-center rounded-2xl mb-3"
-              style={{ backgroundColor: '#F8FAFC' }}
+              style={{ backgroundColor: 'var(--color-bg-muted)' }}
             >
-              <Clock className="w-6 h-6" style={{ color: '#CBD5E1' }} />
+              <Clock className="w-6 h-6" style={{ color: 'var(--color-icon-muted)' }} />
             </div>
             <p className="text-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>
               Nenhum processo ativo
             </p>
-            <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-light-muted)' }}>
               Cupons escaneados aparecem aqui
             </p>
           </div>
@@ -294,9 +294,9 @@ const DashboardPage: React.FC = () => {
         {processingQueue.length > 0 && (
           <div
             className="px-4 py-2.5 text-center"
-            style={{ borderTop: '1px solid var(--color-border)', backgroundColor: '#FAFAFA' }}
+            style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-light)' }}
           >
-            <p className="text-xs" style={{ color: '#94A3B8' }}>
+            <p className="text-xs" style={{ color: 'var(--color-text-light-muted)' }}>
               Itens removidos automaticamente após conclusão
             </p>
           </div>

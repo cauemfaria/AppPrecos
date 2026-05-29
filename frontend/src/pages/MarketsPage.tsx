@@ -109,7 +109,7 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
           <button
             onClick={onClose}
             className="flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-opacity duration-150 active:opacity-70"
-            style={{ backgroundColor: '#F1F5F9' }}
+            style={{ backgroundColor: 'var(--color-bg-subtle)' }}
           >
             <ArrowLeft className="w-4 h-4" style={{ color: 'var(--color-text)' }} />
           </button>
@@ -127,7 +127,7 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
           {/* Hero image */}
           <div
             className="w-full flex items-center justify-center py-8"
-            style={{ backgroundColor: '#EFF6FF' }}
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
           >
             {product.image_url ? (
               <img
@@ -143,11 +143,11 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
             <div
               className="w-40 h-40 rounded-2xl flex items-center justify-center"
               style={{
-                backgroundColor: '#DBEAFE',
+                backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))',
                 display: product.image_url ? 'none' : 'flex',
               }}
             >
-              <Package className="w-16 h-16" style={{ color: '#93C5FD' }} />
+              <Package className="w-16 h-16" style={{ color: 'var(--color-chart-blue)' }} />
             </div>
           </div>
 
@@ -186,7 +186,7 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
                   <span
                     className="inline-block text-xs px-2 py-0.5 rounded-lg"
                     style={{
-                      backgroundColor: '#F1F5F9',
+                      backgroundColor: 'var(--color-bg-subtle)',
                       color: 'var(--color-text-muted)',
                       border: '1px solid var(--color-border)',
                     }}
@@ -194,7 +194,7 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
                     {product.unidade_comercial}
                   </span>
                   {timeAgo(product.purchase_date) && (
-                    <p className="text-xs" style={{ color: '#94A3B8' }}>
+                    <p className="text-xs" style={{ color: 'var(--color-text-light-muted)' }}>
                       {timeAgo(product.purchase_date)}
                     </p>
                   )}
@@ -226,8 +226,8 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
                   <span
                     className="text-xs font-semibold px-2 py-0.5 rounded-lg"
                     style={{
-                      backgroundColor: priceDiff > 0 ? '#FEF2F2' : '#F0FDF4',
-                      color: priceDiff > 0 ? '#EF4444' : '#22C55E',
+                      backgroundColor: priceDiff > 0 ? 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))' : 'color-mix(in srgb, var(--color-success) 5%, var(--color-surface))',
+                      color: priceDiff > 0 ? 'var(--color-error)' : 'var(--color-success)',
                     }}
                   >
                     {priceDiff > 0 ? '+' : ''}R$ {priceDiff.toFixed(2)}
@@ -244,11 +244,11 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
                 </div>
               ) : history.length < 2 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <TrendingUp className="w-8 h-8 mb-2" style={{ color: '#CBD5E1' }} />
+                  <TrendingUp className="w-8 h-8 mb-2" style={{ color: 'var(--color-icon-muted)' }} />
                   <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
                     Dados insuficientes
                   </p>
-                  <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-text-light-muted)' }}>
                     Histórico disponível após múltiplas compras
                   </p>
                 </div>
@@ -262,17 +262,17 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
                           <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                       <XAxis
                         dataKey="date"
                         tickFormatter={fmtDate}
-                        tick={{ fontSize: 10, fill: '#94A3B8' }}
+                        tick={{ fontSize: 10, fill: 'var(--color-text-light-muted)' }}
                         axisLine={false}
                         tickLine={false}
                         interval="preserveStartEnd"
                       />
                       <YAxis
-                        tick={{ fontSize: 10, fill: '#94A3B8' }}
+                        tick={{ fontSize: 10, fill: 'var(--color-text-light-muted)' }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={v => `${v.toFixed(0)}`}
@@ -285,7 +285,7 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
                         stroke="#F97316"
                         strokeWidth={2.5}
                         dot={false}
-                        activeDot={{ r: 5, fill: '#F97316', strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: 'var(--color-cta)', strokeWidth: 0 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -296,20 +296,20 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
                     style={{ borderTop: '1px solid var(--color-border)' }}
                   >
                     <div className="text-center">
-                      <p className="text-xs" style={{ color: '#94A3B8' }}>Mínimo</p>
-                      <p className="text-sm font-bold" style={{ color: '#22C55E' }}>
+                      <p className="text-xs" style={{ color: 'var(--color-text-light-muted)' }}>Mínimo</p>
+                      <p className="text-sm font-bold" style={{ color: 'var(--color-success)' }}>
                         R$ {minPrice.toFixed(2)}
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-xs" style={{ color: '#94A3B8' }}>Registros</p>
+                      <p className="text-xs" style={{ color: 'var(--color-text-light-muted)' }}>Registros</p>
                       <p className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
                         {history.length}
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-xs" style={{ color: '#94A3B8' }}>Máximo</p>
-                      <p className="text-sm font-bold" style={{ color: '#EF4444' }}>
+                      <p className="text-xs" style={{ color: 'var(--color-text-light-muted)' }}>Máximo</p>
+                      <p className="text-sm font-bold" style={{ color: 'var(--color-error)' }}>
                         R$ {maxPrice.toFixed(2)}
                       </p>
                     </div>
@@ -349,13 +349,13 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
                     </span>
                     <span
                       className="text-xs font-mono px-2 py-0.5 rounded"
-                      style={{
-                        backgroundColor: '#F8FAFC',
-                        border: '1px solid var(--color-border)',
-                        color: 'var(--color-text)',
-                      }}
-                    >
-                      {product.ean}
+                    style={{
+                      backgroundColor: 'var(--color-bg-muted)',
+                      border: '1px solid var(--color-border)',
+                      color: 'var(--color-text)',
+                    }}
+                  >
+                    {product.ean}
                     </span>
                   </div>
                 )}
@@ -558,7 +558,7 @@ const MarketsPage: React.FC = () => {
               <div className="flex items-start justify-between mb-3">
                 <div
                   className="flex items-center justify-center w-10 h-10 rounded-xl"
-                  style={{ backgroundColor: '#EFF6FF' }}
+                  style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
                 >
                   <Store className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                 </div>
@@ -585,14 +585,14 @@ const MarketsPage: React.FC = () => {
             <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
               <div
                 className="w-14 h-14 flex items-center justify-center rounded-2xl mb-4"
-                style={{ backgroundColor: '#F8FAFC' }}
-              >
-                <Store className="w-7 h-7" style={{ color: '#CBD5E1' }} />
+              style={{ backgroundColor: 'var(--color-bg-muted)' }}
+            >
+              <Store className="w-7 h-7" style={{ color: 'var(--color-icon-muted)' }} />
               </div>
               <p className="font-medium" style={{ color: 'var(--color-text-muted)' }}>
                 Nenhum mercado encontrado
               </p>
-              <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-light-muted)' }}>
                 Tente outro termo de busca.
               </p>
             </div>
@@ -631,7 +631,7 @@ const MarketsPage: React.FC = () => {
             >
               <div
                 className="w-10 h-1.5 rounded-full"
-                style={{ backgroundColor: '#CBD5E1' }}
+                style={{ backgroundColor: 'var(--color-icon-muted)' }}
               />
             </div>
 
@@ -647,7 +647,7 @@ const MarketsPage: React.FC = () => {
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-                    style={{ backgroundColor: '#EFF6FF' }}
+                    style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
                   >
                     <Store className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                   </div>
@@ -670,7 +670,7 @@ const MarketsPage: React.FC = () => {
                 <button
                   onClick={() => setSelectedMarket(null)}
                   className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-opacity duration-150 active:opacity-70"
-                  style={{ backgroundColor: '#F1F5F9' }}
+                  style={{ backgroundColor: 'var(--color-bg-subtle)' }}
                 >
                   <X className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
                 </button>
@@ -689,7 +689,7 @@ const MarketsPage: React.FC = () => {
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm"
                   style={{
                     border: '1px solid var(--color-border)',
-                    backgroundColor: '#F8FAFC',
+                    backgroundColor: 'var(--color-bg-muted)',
                     color: 'var(--color-text)',
                     fontFamily: 'var(--font-body)',
                     outline: 'none',
@@ -717,7 +717,7 @@ const MarketsPage: React.FC = () => {
                       onClick={() => setSelectedProduct(product)}
                       className="w-full flex items-center gap-3 p-3 rounded-xl text-left cursor-pointer transition-opacity duration-150 active:opacity-70"
                       style={{
-                        backgroundColor: '#F8FAFC',
+                        backgroundColor: 'var(--color-bg-muted)',
                         border: '1px solid var(--color-border)',
                       }}
                     >
@@ -743,9 +743,9 @@ const MarketsPage: React.FC = () => {
                       ) : (
                         <div
                           className="w-11 h-11 rounded-lg shrink-0 flex items-center justify-center"
-                          style={{ backgroundColor: '#F1F5F9' }}
+                          style={{ backgroundColor: 'var(--color-bg-subtle)' }}
                         >
-                          <Package className="w-5 h-5" style={{ color: '#CBD5E1' }} />
+                          <Package className="w-5 h-5" style={{ color: 'var(--color-icon-muted)' }} />
                         </div>
                       )}
 
@@ -769,7 +769,7 @@ const MarketsPage: React.FC = () => {
                             {product.unidade_comercial}
                           </span>
                           {timeAgo(product.purchase_date) && (
-                            <span className="text-xs" style={{ color: '#94A3B8' }}>
+                            <span className="text-xs" style={{ color: 'var(--color-text-light-muted)' }}>
                               · {timeAgo(product.purchase_date)}
                             </span>
                           )}
@@ -792,9 +792,9 @@ const MarketsPage: React.FC = () => {
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                       <div
                         className="w-12 h-12 flex items-center justify-center rounded-2xl mb-3"
-                        style={{ backgroundColor: '#F8FAFC' }}
+                        style={{ backgroundColor: 'var(--color-bg-muted)' }}
                       >
-                        <Package className="w-6 h-6" style={{ color: '#CBD5E1' }} />
+                        <Package className="w-6 h-6" style={{ color: 'var(--color-icon-muted)' }} />
                       </div>
                       <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
                         Nenhum produto encontrado

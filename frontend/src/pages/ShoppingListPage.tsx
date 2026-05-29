@@ -79,7 +79,7 @@ const ModalWrapper: React.FC<{
           onTouchMove={onDragMove}
           onTouchEnd={onDragEnd}
         >
-          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: '#CBD5E1' }} />
+          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'var(--color-icon-muted)' }} />
         </div>
         {children}
       </div>
@@ -116,7 +116,7 @@ const ModalHeader: React.FC<{
       <button
         onClick={onClose}
         className="flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-opacity duration-150 active:opacity-70 shrink-0"
-        style={{ backgroundColor: '#F1F5F9' }}
+        style={{ backgroundColor: 'var(--color-bg-subtle)' }}
       >
         <X className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
       </button>
@@ -291,10 +291,10 @@ const ShoppingListPage: React.FC = () => {
             <button
               onClick={clearShoppingList}
               className="flex items-center justify-center w-9 h-9 rounded-xl cursor-pointer transition-opacity duration-150 active:opacity-70"
-              style={{ backgroundColor: '#FEF2F2' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface))' }}
               title="Limpar lista"
             >
-              <Trash2 className="w-4 h-4" style={{ color: '#EF4444' }} />
+              <Trash2 className="w-4 h-4" style={{ color: 'var(--color-error)' }} />
             </button>
           )}
           <button
@@ -318,9 +318,9 @@ const ShoppingListPage: React.FC = () => {
         <div
           className="mb-4 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium"
           style={{
-            backgroundColor: '#FEF2F2',
-            border: '1px solid #FECACA',
-            color: '#DC2626',
+            backgroundColor: 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))',
+            border: '1px solid color-mix(in srgb, var(--color-error) 20%, var(--color-surface))',
+            color: 'var(--color-error)',
           }}
         >
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -340,14 +340,14 @@ const ShoppingListPage: React.FC = () => {
           >
             <div
               className="w-14 h-14 flex items-center justify-center rounded-2xl mb-3"
-              style={{ backgroundColor: '#F8FAFC' }}
+              style={{ backgroundColor: 'var(--color-bg-muted)' }}
             >
-              <ShoppingBasket className="w-7 h-7" style={{ color: '#CBD5E1' }} />
+              <ShoppingBasket className="w-7 h-7" style={{ color: 'var(--color-icon-muted)' }} />
             </div>
             <p className="font-semibold" style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-heading)' }}>
               Sua lista está vazia
             </p>
-            <p className="text-xs mt-1 max-w-[180px]" style={{ color: '#94A3B8' }}>
+            <p className="text-xs mt-1 max-w-[180px]" style={{ color: 'var(--color-text-light-muted)' }}>
               Adicione produtos para comparar preços.
             </p>
           </div>
@@ -369,16 +369,16 @@ const ShoppingListPage: React.FC = () => {
                 {product.image_url ? (
                   <div
                     className="w-11 h-11 rounded-lg shrink-0 overflow-hidden flex items-center justify-center"
-                    style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)' }}
+                    style={{ backgroundColor: 'var(--color-bg-muted)', border: '1px solid var(--color-border)' }}
                   >
                     <img src={product.image_url} alt={product.product_name} className="w-full h-full object-contain" />
                   </div>
                 ) : (
                   <div
                     className="w-11 h-11 rounded-lg shrink-0 flex items-center justify-center"
-                    style={{ backgroundColor: '#F1F5F9' }}
+                    style={{ backgroundColor: 'var(--color-bg-subtle)' }}
                   >
-                    <Package className="w-5 h-5" style={{ color: '#CBD5E1' }} />
+                    <Package className="w-5 h-5" style={{ color: 'var(--color-icon-muted)' }} />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
@@ -392,14 +392,14 @@ const ShoppingListPage: React.FC = () => {
                     <span
                       className="text-xs px-1.5 py-0.5 rounded font-medium"
                       style={{
-                        backgroundColor: '#EFF6FF',
+                        backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))',
                         color: 'var(--color-primary)',
-                        border: '1px solid #BFDBFE',
+                        border: '1px solid color-mix(in srgb, var(--color-primary) 15%, var(--color-surface))',
                       }}
                     >
                       {product.unidade_comercial}
                     </span>
-                    <span className="text-xs" style={{ color: '#94A3B8' }}>
+                    <span className="text-xs" style={{ color: 'var(--color-text-light-muted)' }}>
                       R$ {product.min_price?.toFixed(2) || '0.00'} – {product.max_price?.toFixed(2) || '0.00'}
                     </span>
                   </div>
@@ -411,9 +411,9 @@ const ShoppingListPage: React.FC = () => {
               <button
                 onClick={() => removeFromShoppingList(product)}
                 className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg cursor-pointer transition-opacity duration-150 active:opacity-70"
-                style={{ backgroundColor: '#FEF2F2' }}
+                style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface))' }}
               >
-                <Trash2 className="w-4 h-4" style={{ color: '#EF4444' }} />
+                <Trash2 className="w-4 h-4" style={{ color: 'var(--color-error)' }} />
               </button>
             </div>
           ))
@@ -439,12 +439,12 @@ const ShoppingListPage: React.FC = () => {
           >
             <div
               className="flex items-center justify-center w-9 h-9 rounded-xl shrink-0"
-              style={{ backgroundColor: '#EFF6FF' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
             >
               <Store className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: '#94A3B8' }}>
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-light-muted)' }}>
                 Mercados
               </p>
               <p
@@ -485,7 +485,11 @@ const ShoppingListPage: React.FC = () => {
             {searchError && (
               <div
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                style={{ backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}
+                style={{
+                backgroundColor: 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))',
+                color: 'var(--color-error)',
+                border: '1px solid color-mix(in srgb, var(--color-error) 20%, var(--color-surface))',
+              }}
               >
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 {searchError}
@@ -503,7 +507,7 @@ const ShoppingListPage: React.FC = () => {
                 style={{
                   fontSize: '16px',
                   border: '1px solid var(--color-border)',
-                  backgroundColor: '#F8FAFC',
+                  backgroundColor: 'var(--color-bg-muted)',
                   color: 'var(--color-text)',
                   fontFamily: 'var(--font-body)',
                   outline: 'none',
@@ -535,12 +539,12 @@ const ShoppingListPage: React.FC = () => {
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     {product.image_url ? (
-                      <div className="w-10 h-10 rounded-lg shrink-0 overflow-hidden" style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)' }}>
+                      <div className="w-10 h-10 rounded-lg shrink-0 overflow-hidden" style={{ backgroundColor: 'var(--color-bg-muted)', border: '1px solid var(--color-border)' }}>
                         <img src={product.image_url} alt={product.product_name} className="w-full h-full object-contain" />
                       </div>
                     ) : (
-                      <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center" style={{ backgroundColor: '#F1F5F9' }}>
-                        <Package className="w-5 h-5" style={{ color: '#CBD5E1' }} />
+                      <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center" style={{ backgroundColor: 'var(--color-bg-subtle)' }}>
+                        <Package className="w-5 h-5" style={{ color: 'var(--color-icon-muted)' }} />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
@@ -583,7 +587,7 @@ const ShoppingListPage: React.FC = () => {
             </div>
           ) : marketsError ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-              <AlertCircle className="w-10 h-10 mb-3" style={{ color: '#EF4444' }} />
+              <AlertCircle className="w-10 h-10 mb-3" style={{ color: 'var(--color-error)' }} />
               <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
                 Falha ao carregar mercados
               </p>
@@ -604,9 +608,9 @@ const ShoppingListPage: React.FC = () => {
                   <div
                     className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium mb-1"
                     style={{
-                      backgroundColor: '#FEF2F2',
-                      border: '1px solid #FECACA',
-                      color: '#DC2626',
+                      backgroundColor: 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))',
+                      border: '1px solid color-mix(in srgb, var(--color-error) 20%, var(--color-surface))',
+                      color: 'var(--color-error)',
                     }}
                   >
                     <AlertCircle className="w-4 h-4 shrink-0" />
@@ -622,7 +626,7 @@ const ShoppingListPage: React.FC = () => {
                       onClick={() => handleToggleMarket(market.market_id)}
                       className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl cursor-pointer transition-opacity duration-150 active:opacity-70"
                       style={{
-                        backgroundColor: isSelected ? '#EFF6FF' : 'var(--color-surface)',
+                        backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' : 'var(--color-surface)',
                         border: `1px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
                       }}
                     >
@@ -658,7 +662,7 @@ const ShoppingListPage: React.FC = () => {
               </div>
               <div
                 className="p-4 shrink-0"
-                style={{ borderTop: '1px solid var(--color-border)', backgroundColor: '#F8FAFC' }}
+                style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-muted)' }}
               >
                 <button
                   onClick={() => setIsMarketModalOpen(false)}
@@ -745,22 +749,22 @@ const ShoppingListPage: React.FC = () => {
                   <div
                     className="flex items-center gap-3 p-3 pl-4"
                     style={{
-                      backgroundColor: '#EFF6FF',
-                      borderBottom: '1px solid #BFDBFE',
+                      backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))',
+                      borderBottom: '1px solid color-mix(in srgb, var(--color-primary) 15%, var(--color-surface))',
                       borderLeft: '4px solid var(--color-primary)',
                     }}
                   >
                     {row.image_url ? (
                       <div
                         className="w-10 h-10 rounded-lg overflow-hidden shrink-0"
-                        style={{ backgroundColor: 'white', border: '1px solid #DBEAFE' }}
+                        style={{ backgroundColor: 'var(--color-surface)', border: '1px solid color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))' }}
                       >
                         <img src={row.image_url} alt={row.product_name} className="w-full h-full object-contain" />
                       </div>
                     ) : (
                       <div
                         className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center"
-                        style={{ backgroundColor: '#DBEAFE' }}
+                        style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))' }}
                       >
                         <Package className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                       </div>
@@ -784,23 +788,23 @@ const ShoppingListPage: React.FC = () => {
                         className="flex items-center justify-between px-4 py-2.5"
                         style={{
                           borderTop: mIdx > 0 ? '1px solid var(--color-border)' : undefined,
-                          backgroundColor: isMin ? '#F0FDF4' : 'transparent',
+                          backgroundColor: isMin ? 'color-mix(in srgb, var(--color-success) 5%, var(--color-surface))' : 'transparent',
                         }}
                       >
                         <p
                           className="text-sm truncate flex-1 mr-3"
-                          style={{ color: isMin ? '#166534' : 'var(--color-text-muted)', fontWeight: isMin ? 600 : 400 }}
+                          style={{ color: isMin ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: isMin ? 600 : 400 }}
                         >
                           {mName}
                         </p>
                         {price == null ? (
-                          <span className="text-sm font-medium" style={{ color: '#CBD5E1' }}>—</span>
+                          <span className="text-sm font-medium" style={{ color: 'var(--color-icon-muted)' }}>—</span>
                         ) : (
                           <div className="flex items-center gap-2 shrink-0">
                             {isMin && (
                               <span
                                 className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
-                                style={{ backgroundColor: '#DCFCE7', color: '#166534' }}
+                                style={{ backgroundColor: 'color-mix(in srgb, var(--color-success) 10%, var(--color-surface))', color: 'var(--color-success)' }}
                               >
                                 Melhor
                               </span>
@@ -808,7 +812,7 @@ const ShoppingListPage: React.FC = () => {
                             <span
                               className="text-sm font-bold"
                               style={{
-                                color: isMin ? '#16A34A' : isMax ? '#EF4444' : 'var(--color-text)',
+                                color: isMin ? 'var(--color-success)' : isMax ? 'var(--color-error)' : 'var(--color-text)',
                               }}
                             >
                               R$ {price.toFixed(2)}
@@ -824,7 +828,7 @@ const ShoppingListPage: React.FC = () => {
               {/* Footer note */}
               <p
                 className="text-xs text-center pb-2"
-                style={{ color: '#94A3B8' }}
+                style={{ color: 'var(--color-text-light-muted)' }}
               >
                 "—" indica produto não encontrado neste mercado
               </p>
@@ -847,8 +851,8 @@ const ShoppingListPage: React.FC = () => {
                   <img src={selectedProduct.image_url} alt={selectedProduct.product_name} className="w-full h-full object-contain" />
                 </div>
               ) : (
-                <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center" style={{ backgroundColor: '#F1F5F9' }}>
-                  <Package className="w-5 h-5" style={{ color: '#CBD5E1' }} />
+                <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center" style={{ backgroundColor: 'var(--color-bg-subtle)' }}>
+                  <Package className="w-5 h-5" style={{ color: 'var(--color-icon-muted)' }} />
                 </div>
               )}
               <p className="text-sm font-semibold line-clamp-2 leading-tight" style={{ color: 'var(--color-text)' }}>
@@ -874,9 +878,30 @@ const ShoppingListPage: React.FC = () => {
                 const uniquePrices = Object.keys(priceGroups).sort((a, b) => parseFloat(a) - parseFloat(b));
 
                 const rankColors = [
-                  { bg: '#F0FDF4', border: '#BBF7D0', iconBg: '#16A34A', text: '#166534', priceBg: '#DCFCE7', priceText: '#15803D' },
-                  { bg: '#EFF6FF', border: '#BFDBFE', iconBg: '#2563EB', text: '#1E40AF', priceBg: '#DBEAFE', priceText: '#1D4ED8' },
-                  { bg: '#FFF7ED', border: '#FED7AA', iconBg: '#F97316', text: '#9A3412', priceBg: '#FFEDD5', priceText: '#C2410C' },
+                  {
+                    bg: 'color-mix(in srgb, var(--color-success) 5%, var(--color-surface))',
+                    border: 'color-mix(in srgb, var(--color-success) 15%, var(--color-surface))',
+                    iconBg: 'var(--color-success)',
+                    text: 'var(--color-success)',
+                    priceBg: 'color-mix(in srgb, var(--color-success) 10%, var(--color-surface))',
+                    priceText: 'var(--color-success)',
+                  },
+                  {
+                    bg: 'color-mix(in srgb, var(--color-primary) 5%, var(--color-surface))',
+                    border: 'color-mix(in srgb, var(--color-primary) 15%, var(--color-surface))',
+                    iconBg: 'var(--color-primary)',
+                    text: 'var(--color-primary)',
+                    priceBg: 'color-mix(in srgb, var(--color-primary) 10%, var(--color-surface))',
+                    priceText: 'var(--color-primary)',
+                  },
+                  {
+                    bg: 'color-mix(in srgb, var(--color-cta) 5%, var(--color-surface))',
+                    border: 'color-mix(in srgb, var(--color-cta) 15%, var(--color-surface))',
+                    iconBg: 'var(--color-cta)',
+                    text: 'var(--color-cta)',
+                    priceBg: 'color-mix(in srgb, var(--color-cta) 10%, var(--color-surface))',
+                    priceText: 'var(--color-cta)',
+                  },
                 ];
 
                 return uniquePrices.flatMap((priceKey, priceRank) =>
@@ -936,13 +961,13 @@ const ShoppingListPage: React.FC = () => {
               })()
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ backgroundColor: '#F8FAFC' }}>
-                  <Package className="w-7 h-7" style={{ color: '#CBD5E1' }} />
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ backgroundColor: 'var(--color-bg-muted)' }}>
+                  <Package className="w-7 h-7" style={{ color: 'var(--color-icon-muted)' }} />
                 </div>
                 <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
                   Produto não encontrado em nenhum mercado
                 </p>
-                <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-light-muted)' }}>
                   Tente escanear mais cupons fiscais
                 </p>
               </div>

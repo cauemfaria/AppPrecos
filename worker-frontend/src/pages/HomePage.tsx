@@ -100,7 +100,7 @@ const HomePage: React.FC = () => {
           <div className="flex items-center gap-3 min-w-0">
             <div
               className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-              style={{ backgroundColor: '#EFF6FF' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
             >
               <Store className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
             </div>
@@ -134,13 +134,13 @@ const HomePage: React.FC = () => {
           <div
             className="mt-2 flex items-center justify-between gap-3 p-3 rounded-xl"
             style={{
-              backgroundColor: '#FEF2F2',
-              border: '1px solid #FECACA',
+              backgroundColor: 'color-mix(in srgb, var(--color-error) 5%, var(--color-surface))',
+              border: '1px solid color-mix(in srgb, var(--color-error) 20%, var(--color-surface))',
             }}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <AlertCircle className="w-4 h-4 shrink-0" style={{ color: '#DC2626' }} />
-              <p className="text-xs font-medium truncate" style={{ color: '#991B1B' }}>
+              <AlertCircle className="w-4 h-4 shrink-0" style={{ color: 'var(--color-error)' }} />
+              <p className="text-xs font-medium truncate" style={{ color: 'var(--color-error)' }}>
                 {loadError}
               </p>
             </div>
@@ -148,7 +148,7 @@ const HomePage: React.FC = () => {
               type="button"
               onClick={handleRetryLoadMarkets}
               className="text-xs font-bold px-3 py-1 rounded-lg cursor-pointer shrink-0"
-              style={{ backgroundColor: '#DC2626', color: 'white' }}
+              style={{ backgroundColor: 'var(--color-error)', color: 'white' }}
             >
               Tentar novamente
             </button>
@@ -181,18 +181,18 @@ const HomePage: React.FC = () => {
                   className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer transition-colors duration-150"
                   style={{
                     borderBottom: isLast ? 'none' : '1px solid var(--color-border)',
-                    backgroundColor: isSelected ? '#EFF6FF' : 'transparent',
+                    backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' : 'transparent',
                   }}
-                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.backgroundColor = '#F8FAFC')}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-muted)')}
                   onMouseLeave={e => ((e.currentTarget as HTMLElement).style.backgroundColor =
-                    isSelected ? '#EFF6FF' : 'transparent'
+                    isSelected ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' : 'transparent'
                   )}
                 >
                   <div
                     className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
-                    style={{ backgroundColor: isSelected ? '#DBEAFE' : '#F1F5F9' }}
+                    style={{ backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))' : 'var(--color-bg-subtle)' }}
                   >
-                    <Store className="w-4 h-4" style={{ color: isSelected ? 'var(--color-primary)' : '#94A3B8' }} />
+                    <Store className="w-4 h-4" style={{ color: isSelected ? 'var(--color-primary)' : 'var(--color-text-light-muted)' }} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
@@ -227,7 +227,7 @@ const HomePage: React.FC = () => {
         >
           <div
             className="flex items-center justify-center w-9 h-9 rounded-lg mb-3"
-            style={{ backgroundColor: '#FFF7ED' }}
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))' }}
           >
             <ScanBarcode className="w-5 h-5" style={{ color: 'var(--color-cta)' }} />
           </div>
@@ -252,7 +252,7 @@ const HomePage: React.FC = () => {
         >
           <div
             className="flex items-center justify-center w-9 h-9 rounded-lg mb-3"
-            style={{ backgroundColor: '#EFF6FF' }}
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
           >
             <Store className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
           </div>
@@ -303,9 +303,9 @@ const HomePage: React.FC = () => {
           <div className="flex items-center gap-2">
             <div
               className="w-7 h-7 flex items-center justify-center rounded-lg"
-              style={{ backgroundColor: '#FFF7ED' }}
-            >
-              <Barcode className="w-3.5 h-3.5" style={{ color: 'var(--color-cta)' }} />
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))' }}
+          >
+            <Barcode className="w-3.5 h-3.5" style={{ color: 'var(--color-cta)' }} />
             </div>
             <h2
               className="text-sm font-semibold"
@@ -317,7 +317,7 @@ const HomePage: React.FC = () => {
           {recentScans.length > 0 && (
             <span
               className="text-xs font-bold px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: '#FFF7ED', color: 'var(--color-cta)' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))', color: 'var(--color-cta)' }}
             >
               {recentScans.length}
             </span>
@@ -328,14 +328,14 @@ const HomePage: React.FC = () => {
           <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
             <div
               className="w-12 h-12 flex items-center justify-center rounded-2xl mb-3"
-              style={{ backgroundColor: '#F8FAFC' }}
+              style={{ backgroundColor: 'var(--color-bg-muted)' }}
             >
-              <Barcode className="w-6 h-6" style={{ color: '#CBD5E1' }} />
+              <Barcode className="w-6 h-6" style={{ color: 'var(--color-icon-muted)' }} />
             </div>
             <p className="text-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>
               Nenhum escaneamento ainda
             </p>
-            <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-light-muted)' }}>
               Escaneie códigos de barras para vê-los aqui
             </p>
           </div>
@@ -346,9 +346,9 @@ const HomePage: React.FC = () => {
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
-                    style={{ backgroundColor: '#F0FDF4' }}
+                    style={{ backgroundColor: 'color-mix(in srgb, var(--color-success) 8%, var(--color-surface))' }}
                   >
-                    <Barcode className="w-4 h-4" style={{ color: '#16A34A' }} />
+                    <Barcode className="w-4 h-4" style={{ color: 'var(--color-success)' }} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-mono font-medium truncate" style={{ color: 'var(--color-text)' }}>

@@ -325,7 +325,7 @@ const QRScannerPage: React.FC = () => {
         <button
           onClick={handleClose}
           className="flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-all duration-200 hover:opacity-80"
-          style={{ backgroundColor: '#F1F5F9' }}
+          style={{ backgroundColor: 'var(--color-bg-subtle)' }}
           aria-label="Fechar"
         >
           <X className="w-5 h-5" style={{ color: 'var(--color-text)' }} />
@@ -342,7 +342,7 @@ const QRScannerPage: React.FC = () => {
         {scanCount > 0 ? (
           <div
             className="flex items-center justify-center h-9 px-3 rounded-full text-xs font-bold text-white"
-            style={{ backgroundColor: '#10B981', minWidth: '2.25rem' }}
+            style={{ backgroundColor: 'var(--color-text-info)', minWidth: '2.25rem' }}
           >
             {scanCount}
           </div>
@@ -491,7 +491,7 @@ const QRScannerPage: React.FC = () => {
               onClick={() => setShowManualInput(false)}
               className="flex-1 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-200"
               style={{
-                backgroundColor: '#F1F5F9',
+                backgroundColor: 'var(--color-bg-subtle)',
                 color: 'var(--color-text-muted)',
                 fontFamily: 'var(--font-body)',
               }}

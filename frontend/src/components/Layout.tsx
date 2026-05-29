@@ -27,7 +27,7 @@ const Layout: React.FC = () => {
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => navigate('/')}
           >
-            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#EFF6FF' }}>
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}>
               <img 
                 src="/app-logo.png" 
                 alt="economiX Logo" 
@@ -133,7 +133,7 @@ const DesktopNavLink: React.FC<NavLinkProps> = ({ to, icon, label, exact }) => (
       )
     }
     style={({ isActive }) => ({
-      backgroundColor: isActive ? '#EFF6FF' : 'transparent',
+      backgroundColor: isActive ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' : 'transparent',
       color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
       fontFamily: 'var(--font-body)',
     })}
@@ -160,12 +160,12 @@ const MobileNavLink: React.FC<NavLinkProps> = ({ to, icon, label, exact }) => (
       <>
         {React.cloneElement(icon, {
           size: 22,
-          style: { color: isActive ? 'var(--color-primary)' : '#94A3B8' },
+          style: { color: isActive ? 'var(--color-primary)' : 'var(--color-text-light-muted)' },
         } as LucideProps & { style: React.CSSProperties })}
         <span
           className="text-xs font-medium"
           style={{
-            color: isActive ? 'var(--color-primary)' : '#94A3B8',
+            color: isActive ? 'var(--color-primary)' : 'var(--color-text-light-muted)',
             fontFamily: 'var(--font-body)',
           }}
         >
