@@ -1,18 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 interface ReloadPromptProps {
   /**
    * When true, a detected update is applied immediately (page reload) with no prompt.
    * Use on screens where the user has no in-progress work that could be lost — i.e. the
-   * login page. When false (default), a dismissable bottom banner is shown instead.
+   * login page. When false (default), a persistent top banner is shown instead.
    */
   autoUpdate?: boolean
 }
 
 const ReloadPrompt = ({ autoUpdate = false }: ReloadPromptProps) => {
-  const [dismissed, setDismissed] = useState(false)
-
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
@@ -35,11 +33,15 @@ const ReloadPrompt = ({ autoUpdate = false }: ReloadPromptProps) => {
         navigator.serviceWorker.getRegistration().then(reg => {
           if (reg) reg.update()
         })
+      } else if (document.visibilityState === 'hidden' && needRefresh && !autoUpdate) {
+        // App minimized/backgrounded and there's a pending update for an authenticated user.
+        // Apply it silently so it's ready when they return.
+        updateServiceWorker(true)
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [])
+  }, [needRefresh, autoUpdate, updateServiceWorker])
 
   // Auto-reload when on the login page (autoUpdate=true) — safe, no user data at risk
   useEffect(() => {
@@ -48,63 +50,45 @@ const ReloadPrompt = ({ autoUpdate = false }: ReloadPromptProps) => {
     }
   }, [needRefresh, autoUpdate, updateServiceWorker])
 
-  // Reset dismissed state whenever a fresh update becomes available
-  useEffect(() => {
-    if (needRefresh) setDismissed(false)
-  }, [needRefresh])
+  // Nothing to render: no update or already auto-updating on login page
+  if (!needRefresh || autoUpdate) return null
 
-  // Nothing to render: no update, already auto-updating, or user dismissed
-  if (!needRefresh || autoUpdate || dismissed) return null
-
+  // Show persistent top banner (like a push notification) when user is logged in
   return (
     <div
-      className="fixed bottom-4 left-4 right-4 z-50 rounded-2xl p-4 flex items-center justify-between gap-3"
+      className="fixed top-0 left-0 right-0 z-50 p-3 flex items-center justify-between gap-3"
       style={{
-        backgroundColor: 'var(--color-surface)',
-        boxShadow: 'var(--shadow-lg)',
-        border: '1px solid var(--color-border)',
+        backgroundColor: 'var(--color-primary)',
+        boxShadow: 'var(--shadow-md)',
       }}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p
           className="text-sm font-semibold truncate"
-          style={{ color: 'var(--color-text)', fontFamily: 'var(--font-body)' }}
+          style={{ color: 'white', fontFamily: 'var(--font-body)' }}
         >
           Nova versão disponível
         </p>
         <p
-          className="text-xs mt-0.5"
-          style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}
+          className="text-xs mt-0.5 truncate"
+          style={{ color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--font-body)' }}
         >
-          Atualize para obter as últimas melhorias.
+          Termine o que está fazendo e atualize
         </p>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
-        <button
-          onClick={() => setDismissed(true)}
-          className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200"
-          style={{
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text-muted)',
-            backgroundColor: 'transparent',
-            fontFamily: 'var(--font-body)',
-          }}
-        >
-          Agora não
-        </button>
-        <button
-          onClick={() => updateServiceWorker(true)}
-          className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-[0.97]"
-          style={{
-            backgroundColor: 'var(--color-primary)',
-            color: 'white',
-            fontFamily: 'var(--font-body)',
-          }}
-        >
-          Atualizar
-        </button>
-      </div>
+      <button
+        onClick={() => updateServiceWorker(true)}
+        className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-[0.97]"
+        style={{
+          backgroundColor: 'rgba(255,255,255,0.2)',
+          color: 'white',
+          fontFamily: 'var(--font-body)',
+          backdropFilter: 'blur(4px)',
+        }}
+      >
+        Atualizar
+      </button>
     </div>
   )
 }
