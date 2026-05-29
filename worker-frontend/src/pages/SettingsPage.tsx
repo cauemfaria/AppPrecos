@@ -192,7 +192,7 @@ const SettingsItem: React.FC<SettingsItemProps> = ({
         backgroundColor: 'transparent',
       }}
       onMouseEnter={e => {
-        if (interactive) (e.currentTarget as HTMLElement).style.backgroundColor = '#F8FAFC';
+        if (interactive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-muted)';
       }}
       onMouseLeave={e => {
         if (interactive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
@@ -210,7 +210,7 @@ const SettingsItem: React.FC<SettingsItemProps> = ({
         </div>
         <span
           className="text-sm font-medium"
-          style={{ color: destructive ? '#DC2626' : 'var(--color-text)', fontFamily: 'var(--font-body)' }}
+          style={{ color: destructive ? 'var(--color-error)' : 'var(--color-text)', fontFamily: 'var(--font-body)' }}
         >
           {label}
         </span>
@@ -224,7 +224,7 @@ const SettingsItem: React.FC<SettingsItemProps> = ({
             {value}
           </span>
         )}
-        <ChevronRight className="w-4 h-4 shrink-0" style={{ color: '#CBD5E1' }} />
+        <ChevronRight className="w-4 h-4 shrink-0" style={{ color: 'var(--color-icon-muted)' }} />
       </div>
     </button>
   );
