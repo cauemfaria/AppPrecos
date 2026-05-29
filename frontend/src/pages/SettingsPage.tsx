@@ -1,9 +1,7 @@
 import React, { type ReactElement } from 'react';
 import {
-  User, Bell, Shield,
-  HelpCircle, Info, LogOut, ChevronRight,
-  Github, Globe, Heart, type LucideProps,
-  Trash2, Database,
+  User, LogOut, ChevronRight, Trash2,
+  type LucideProps,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -49,18 +47,6 @@ const SettingsPage: React.FC = () => {
           iconColor="var(--color-primary)"
           label={displayName}
           value={displayEmail}
-        />
-        <SettingsItem
-          icon={<Bell />}
-          iconBg="#FFF7ED"
-          iconColor="var(--color-cta)"
-          label="Notificações"
-        />
-        <SettingsItem
-          icon={<Shield />}
-          iconBg="#F0FDF4"
-          iconColor="#16A34A"
-          label="Privacidade e Segurança"
           isLast
         />
       </Section>
@@ -74,56 +60,6 @@ const SettingsPage: React.FC = () => {
           label="Limpar Dados Locais"
           onClick={handleClearData}
           destructive
-        />
-        <SettingsItem
-          icon={<Database />}
-          iconBg="#F8FAFC"
-          iconColor="#64748B"
-          label="Status do Banco de Dados"
-          value="Online"
-          valueColor="#16A34A"
-          isLast
-        />
-      </Section>
-
-      {/* APLICATIVO */}
-      <Section label="Aplicativo">
-        <SettingsItem
-          icon={<Globe />}
-          iconBg="#F5F3FF"
-          iconColor="#7C3AED"
-          label="Idioma"
-          value="Português (BR)"
-        />
-        <SettingsItem
-          icon={<Info />}
-          iconBg="#EFF6FF"
-          iconColor="var(--color-secondary)"
-          label="Versão"
-          value="1.0.0 (Web)"
-        />
-        <SettingsItem
-          icon={<Github />}
-          iconBg="#F1F5F9"
-          iconColor="#334155"
-          label="Código Fonte"
-          isLast
-        />
-      </Section>
-
-      {/* SUPORTE */}
-      <Section label="Suporte">
-        <SettingsItem
-          icon={<HelpCircle />}
-          iconBg="#F0FDF4"
-          iconColor="#0D9488"
-          label="Central de Ajuda"
-        />
-        <SettingsItem
-          icon={<Heart />}
-          iconBg="#FEF2F2"
-          iconColor="#EF4444"
-          label="Sobre o economiX"
           isLast
         />
       </Section>

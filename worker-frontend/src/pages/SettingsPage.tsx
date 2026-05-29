@@ -1,9 +1,7 @@
 import React, { type ReactElement } from 'react';
 import {
-  User, Bell, Shield,
-  HelpCircle, Info, LogOut,
-  Globe, Heart, type LucideProps,
-  ChevronRight, Database, Trash2, Store,
+  User, LogOut, ChevronRight, Trash2, Store,
+  type LucideProps,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -57,18 +55,6 @@ const SettingsPage: React.FC = () => {
           iconColor="var(--color-primary)"
           label={displayName}
           value={displayEmail}
-        />
-        <SettingsItem
-          icon={<Bell />}
-          iconBg="#FFF7ED"
-          iconColor="var(--color-cta)"
-          label="Notificações"
-        />
-        <SettingsItem
-          icon={<Shield />}
-          iconBg="#F0FDF4"
-          iconColor="#16A34A"
-          label="Privacidade e Segurança"
           isLast
         />
       </Section>
@@ -90,50 +76,6 @@ const SettingsPage: React.FC = () => {
           label="Limpar Histórico de Escaneamentos"
           onClick={handleClearScans}
           destructive
-          isLast
-        />
-      </Section>
-
-      {/* APLICATIVO */}
-      <Section label="Aplicativo">
-        <SettingsItem
-          icon={<Globe />}
-          iconBg="#F5F3FF"
-          iconColor="#7C3AED"
-          label="Idioma"
-          value="Português (BR)"
-        />
-        <SettingsItem
-          icon={<Database />}
-          iconBg="#F8FAFC"
-          iconColor="#64748B"
-          label="Status do Banco de Dados"
-          value="Online"
-          valueColor="#16A34A"
-        />
-        <SettingsItem
-          icon={<Info />}
-          iconBg="#EFF6FF"
-          iconColor="var(--color-secondary)"
-          label="Versão"
-          value="1.0.0 (Worker)"
-          isLast
-        />
-      </Section>
-
-      {/* SUPORTE */}
-      <Section label="Suporte">
-        <SettingsItem
-          icon={<HelpCircle />}
-          iconBg="#F0FDF4"
-          iconColor="#0D9488"
-          label="Central de Ajuda"
-        />
-        <SettingsItem
-          icon={<Heart />}
-          iconBg="#FEF2F2"
-          iconColor="#EF4444"
-          label="Sobre o economiX - Funcionário"
           isLast
         />
       </Section>
