@@ -175,6 +175,12 @@ $RECYCLE.BIN/
 
 node_modules/
 dist/
+
+# Unignore frontend src/lib (overrides the Python lib/ rule above)
+!frontend/src/lib/
+!frontend/src/lib/**
+!worker-frontend/src/lib/
+!worker-frontend/src/lib/**
 .env.local
 .env.development.local
 .env.test.local
