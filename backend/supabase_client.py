@@ -26,9 +26,9 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 
 if not SUPABASE_JWT_SECRET:
     print(
-        "[WARN] SUPABASE_JWT_SECRET is not set. "
-        "JWT authentication for /api/* routes will always return 401. "
-        "Set this variable in backend/.env (see .env.example)."
+        "[INFO] SUPABASE_JWT_SECRET is not set. "
+        "Token verification will use the JWKS endpoint (recommended for ECC keys). "
+        "Set this variable only if you are still on the legacy HS256 signing key."
     )
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
