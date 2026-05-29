@@ -57,6 +57,25 @@ CORS(app, resources={
     }
 })
 
+@app.route('/api/health', methods=['GET', 'OPTIONS'])
+def api_health():
+    """Lightweight health check for frontend — no auth required.
+    Used by frontends on app load to verify backend connectivity."""
+    try:
+        supabase.table('markets').select('id').limit(1).execute()
+        return jsonify({
+            'status': 'ok',
+            'connected': True,
+            'timestamp': _utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'connected': False,
+            'error': str(e)
+        }), 500
+
+
 UNPROTECTED_PATHS = {'/', '/health'}
 
 @app.before_request

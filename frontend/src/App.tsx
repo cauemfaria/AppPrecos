@@ -9,15 +9,23 @@ import SettingsPage from './pages/SettingsPage'
 import QueueManager from './components/QueueManager'
 import ReloadPrompt from './components/ReloadPrompt'
 import LoginPage from './pages/LoginPage'
+import ConnectionModal from './components/ConnectionModal'
 import { useAuthStore } from './store/useAuthStore'
+import { useBackendConnection } from './hooks/useBackendConnection'
 
 function App() {
   const { session, loading, initialize } = useAuthStore()
+  const { isConnected, isChecking, error } = useBackendConnection()
 
   useEffect(() => {
     const unsubscribe = initialize()
     return unsubscribe
   }, [initialize])
+
+  // Block everything until backend is connected (takes precedence over auth loading)
+  if (!isConnected || isChecking) {
+    return <ConnectionModal isConnected={isConnected} isChecking={isChecking} error={error} />
+  }
 
   if (loading) {
     return (
