@@ -13,6 +13,23 @@
   --color-error: #DC2626;
   --color-success: #16A34A;
 
+  /* Semantic colors for light theme */
+  --color-icon-muted: #CBD5E1;
+  --color-text-light-muted: #94A3B8;
+  --color-bg-subtle: #F1F5F9;
+  --color-bg-muted: #F8FAFC;
+  --color-bg-light: #FAFAFA;
+  --color-card-light: #EFF6FF;
+  --color-card-error: #FEF2F2;
+  --color-card-success: #F0FDF4;
+  --color-chart-success: #10B981;
+  --color-chart-error: #EF4444;
+  --color-chart-blue: #93C5FD;
+  --color-text-success: #22C55E;
+  --color-text-info: #10B981;
+  --color-info: #0D9488;
+  --color-accent: #7C3AED;
+
   --space-xs: 0.25rem;
   --space-sm: 0.5rem;
   --space-md: 1rem;
@@ -49,6 +66,23 @@
   --color-surface: #1E293B;
   --color-error: #FCA5A5;
   --color-success: #86EFAC;
+
+  /* Semantic colors for dark theme */
+  --color-icon-muted: #64748B;
+  --color-text-light-muted: #64748B;
+  --color-bg-subtle: #334155;
+  --color-bg-muted: #0F172A;
+  --color-bg-light: #1E293B;
+  --color-card-light: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))';
+  --color-card-error: 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface))';
+  --color-card-success: 'color-mix(in srgb, var(--color-success) 8%, var(--color-surface))';
+  --color-chart-success: #86EFAC;
+  --color-chart-error: #FCA5A5;
+  --color-chart-blue: #93C5FD;
+  --color-text-success: #86EFAC;
+  --color-text-info: #86EFAC;
+  --color-info: #14B8A6;
+  --color-accent: #A78BFA;
 }
 
 *, *::before, *::after {
