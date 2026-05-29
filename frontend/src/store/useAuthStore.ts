@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Session, User } from '@supabase/supabase-js'
+import type { Session, User, AuthChangeEvent } from '@supabase/supabase-js'
 import { supabase, type Profile } from '../lib/supabase'
 
 interface AuthState {
@@ -28,7 +28,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: true,
 
   initialize: () => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       set({ session, user: session?.user ?? null, loading: false })
       if (session?.user) {
         fetchProfile(session.user.id).then(profile => set({ profile }))
@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (_event: AuthChangeEvent, session: Session | null) => {
         set({ session, user: session?.user ?? null, loading: false })
         if (session?.user) {
           const profile = await fetchProfile(session.user.id)
@@ -50,7 +50,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     return () => subscription.unsubscribe()
   },
 
-  setProfile: (profile) => set({ profile }),
+  setProfile: (profile: Profile | null) => set({ profile }),
 
   signOut: async () => {
     await supabase.auth.signOut()
