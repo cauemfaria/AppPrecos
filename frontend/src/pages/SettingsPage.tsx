@@ -1,18 +1,16 @@
-import React, { type ReactElement, useState } from 'react';
+import React, { type ReactElement } from 'react';
 import {
   User, Bell, Shield,
   HelpCircle, Info, LogOut, ChevronRight,
   Github, Globe, Heart, type LucideProps,
-  Trash2, Database, Sparkles, Loader2,
+  Trash2, Database,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { enrichmentService } from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
 
 const SettingsPage: React.FC = () => {
   const { clearShoppingList, clearMarketSelection } = useStore();
   const { profile, user, signOut } = useAuthStore();
-  const [isEnriching, setIsEnriching] = useState(false);
 
   const displayName = profile?.full_name || user?.email || 'Usuário Convidado';
   const displayEmail = user?.email || '';
@@ -22,18 +20,6 @@ const SettingsPage: React.FC = () => {
       clearShoppingList();
       clearMarketSelection();
       alert('Dados locais limpos com sucesso.');
-    }
-  };
-
-  const handleTriggerEnrichment = async () => {
-    setIsEnriching(true);
-    try {
-      const response = await enrichmentService.triggerEnrichment();
-      alert(response.message);
-    } catch (error: any) {
-      alert('Falha ao iniciar sincronização: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setIsEnriching(false);
     }
   };
 
@@ -81,14 +67,6 @@ const SettingsPage: React.FC = () => {
 
       {/* ARMAZENAMENTO E DADOS */}
       <Section label="Armazenamento e Dados">
-        <SettingsItem
-          icon={isEnriching ? <Loader2 className="animate-spin" /> : <Sparkles />}
-          iconBg="#EFF6FF"
-          iconColor="var(--color-primary)"
-          label="Sincronizar Dados"
-          value={isEnriching ? 'Processando...' : 'Iniciar'}
-          onClick={handleTriggerEnrichment}
-        />
         <SettingsItem
           icon={<Trash2 />}
           iconBg="#FEF2F2"
