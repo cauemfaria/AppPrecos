@@ -667,7 +667,7 @@ const ShoppingListPage: React.FC = () => {
                 <button
                   onClick={() => setIsMarketModalOpen(false)}
                   className="w-full py-3 rounded-xl font-bold text-sm cursor-pointer transition-opacity duration-150 active:opacity-80"
-                  style={{ backgroundColor: 'var(--color-text)', color: 'white', fontFamily: 'var(--font-body)' }}
+                  style={{ backgroundColor: 'var(--color-primary)', color: 'white', fontFamily: 'var(--font-body)' }}
                 >
                   Pronto ({selectedMarketIds.length})
                 </button>
