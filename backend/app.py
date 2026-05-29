@@ -77,14 +77,17 @@ def api_health():
 
 
 UNPROTECTED_PATHS = {'/', '/health'}
+UNPROTECTED_API_PATHS = {'/api/health'}
 
 @app.before_request
 def authenticate_api():
-    """Require a valid JWT for all /api/* routes except OPTIONS (CORS preflight)."""
+    """Require a valid JWT for all /api/* routes except OPTIONS and whitelisted paths."""
     if request.method == 'OPTIONS':
         return  # CORS preflight — let Flask-CORS handle it
     if not request.path.startswith('/api/'):
-        return  # health check and root liveness are open
+        return  # root liveness and non-api paths are open
+    if request.path in UNPROTECTED_API_PATHS:
+        return  # explicitly unauthenticated endpoints (e.g. /api/health)
     user_id = get_user_id_from_token()
     if user_id is None:
         return jsonify({'error': 'Autenticação necessária'}), 401

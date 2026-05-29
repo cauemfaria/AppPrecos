@@ -19,32 +19,24 @@ function App() {
     return unsubscribe
   }, [initialize])
 
-  // Block everything until backend is connected (takes precedence over auth loading)
-  if (!isConnected || isChecking) {
-    return <ConnectionModal isConnected={isConnected} isChecking={isChecking} error={error} />
-  }
+  // ReloadPrompt (PWA updates) always mounts regardless of connection/auth state
 
-  if (loading) {
+  if (loading || !isConnected || isChecking) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: 'var(--color-background)' }}
-      >
-        <div className="flex flex-col items-center gap-3">
-          <span
-            className="w-8 h-8 border-4 rounded-full animate-spin"
-            style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
-          />
-          <p className="text-sm" style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}>
-            Carregando...
-          </p>
-        </div>
-      </div>
+      <>
+        <ReloadPrompt />
+        <ConnectionModal isConnected={isConnected && !loading} isChecking={isChecking || loading} error={error} />
+      </>
     )
   }
 
   if (!session) {
-    return <LoginPage />
+    return (
+      <>
+        <ReloadPrompt />
+        <LoginPage />
+      </>
+    )
   }
 
   return (

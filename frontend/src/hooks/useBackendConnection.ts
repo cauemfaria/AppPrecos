@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import api from '../services/api'
+import axios from 'axios'
+
+// Plain instance with no auth interceptors — health check must work before any session exists
+const healthApi = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://appprecos.onrender.com/api',
+  timeout: 8000,
+})
 
 export function useBackendConnection() {
   const [isConnected, setIsConnected] = useState(false)
@@ -10,13 +16,13 @@ export function useBackendConnection() {
     let isMounted = true
     let retryCount = 0
     const maxRetries = 5
-    const retryDelay = 1500
+    const retryDelay = 3000
 
     const checkConnection = async () => {
       try {
         setIsChecking(true)
         setError(null)
-        const response = await api.get('/health', { timeout: 5000 })
+        const response = await healthApi.get('/health')
         if (isMounted && response.data?.connected === true) {
           setIsConnected(true)
           setIsChecking(false)
@@ -25,13 +31,15 @@ export function useBackendConnection() {
         if (!isMounted) return
 
         retryCount++
-        const message = err.message || 'Servidor inacessível'
+        const message = err.code === 'ECONNABORTED'
+          ? 'Tempo esgotado'
+          : 'Servidor inacessível'
 
         if (retryCount < maxRetries) {
-          setError(`${message} (tentativa ${retryCount}/${maxRetries})`)
+          setError(`${message} — tentando novamente (${retryCount}/${maxRetries})`)
           setTimeout(checkConnection, retryDelay)
         } else {
-          setError(`Não foi possível conectar ao servidor. Verifique sua conexão e recarregue a página.`)
+          setError('Não foi possível conectar ao servidor. Verifique sua conexão e recarregue a página.')
           setIsChecking(false)
         }
       }
