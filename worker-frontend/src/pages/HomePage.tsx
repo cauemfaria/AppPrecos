@@ -3,16 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { Store, ScanBarcode, ChevronDown, Barcode, MapPin, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { marketService } from '../services/api';
+import { useConnection } from '../contexts/ConnectionContext';
 import type { Market } from '../types';
 
 const HomePage: React.FC = () => {
+  const { isConnected } = useConnection();
   const navigate = useNavigate();
   const { selectedMarket, setSelectedMarket, scanCount, recentScans } = useStore();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,7 +28,7 @@ const HomePage: React.FC = () => {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [reloadKey]);
+  }, [isConnected]);
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -55,7 +56,13 @@ const HomePage: React.FC = () => {
   const handleRetryLoadMarkets = () => {
     setLoading(true);
     setLoadError(null);
-    setReloadKey(k => k + 1);
+    marketService.getMarkets()
+      .then(data => setMarkets(data))
+      .catch(err => {
+        console.error('Failed to load markets', err);
+        setLoadError('Não foi possível carregar a lista de mercados.');
+      })
+      .finally(() => setLoading(false));
   };
 
   return (

@@ -60,20 +60,18 @@ CORS(app, resources={
 @app.route('/api/health', methods=['GET', 'OPTIONS'])
 def api_health():
     """Lightweight health check for frontend — no auth required.
-    Used by frontends on app load to verify backend connectivity."""
-    try:
-        supabase.table('markets').select('id').limit(1).execute()
-        return jsonify({
-            'status': 'ok',
-            'connected': True,
-            'timestamp': _utcnow().isoformat()
-        }), 200
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'connected': False,
-            'error': str(e)
-        }), 500
+    Used by frontends to verify that the backend process is reachable.
+
+    Keep this endpoint independent of Supabase/database checks. A short database
+    hiccup should be handled by the specific API call that needs the database,
+    not by globally blocking an already-loaded app as "backend disconnected".
+    Use /health for deep uptime monitoring instead.
+    """
+    return jsonify({
+        'status': 'ok',
+        'connected': True,
+        'timestamp': _utcnow().isoformat()
+    }), 200
 
 
 UNPROTECTED_PATHS = {'/', '/health'}

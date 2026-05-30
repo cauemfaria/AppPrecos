@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { productService, marketService } from '../services/api';
 import type { ProductSearchItem, Market, CompareResponse, BestMarketsResponse } from '../types';
+import { useConnection } from '../contexts/ConnectionContext';
 import {
   Search, Plus, Trash2, Store,
   ArrowRightLeft, Check, X,
@@ -128,6 +129,7 @@ const ModalHeader: React.FC<{
 /* ─── Main page ────────────────────────────────────────────── */
 
 const ShoppingListPage: React.FC = () => {
+  const { isConnected } = useConnection();
   const {
     shoppingList, addToShoppingList, removeFromShoppingList, clearShoppingList,
     selectedMarketIds, toggleMarketSelection,
@@ -159,7 +161,7 @@ const ShoppingListPage: React.FC = () => {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { fetchMarkets(); }, []);
+  useEffect(() => { fetchMarkets(); }, [isConnected]);
 
   // Lock body scroll when any sheet is open
   useEffect(() => {

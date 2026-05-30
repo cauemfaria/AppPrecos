@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { nfceService } from '../services/api';
 import type { ProcessingItem } from '../types';
+import { useConnection } from '../contexts/ConnectionContext';
 
 const STALE_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
 const POLL_INTERVAL_MS = 3000;
 
 const QueueManager: React.FC = () => {
+  const { isConnected } = useConnection();
   const {
     processingQueue,
     updateProcessingItem,
@@ -18,7 +20,7 @@ const QueueManager: React.FC = () => {
   const queueRef = useRef(processingQueue);
   queueRef.current = processingQueue;
 
-  // Stale item cleanup + initial backend sync (runs once on mount)
+  // Stale item cleanup + initial backend sync (refetch when connection restores)
   useEffect(() => {
     const init = async () => {
       const now = Date.now();
@@ -66,7 +68,7 @@ const QueueManager: React.FC = () => {
     };
 
     init();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isConnected, setProcessingQueue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Single polling interval that uses a stable ref (never re-created)
   useEffect(() => {

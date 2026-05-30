@@ -11,6 +11,7 @@ import {
 import { marketService, productService } from '../services/api';
 import type { Market, Product, PriceHistoryItem } from '../types';
 import { Store, Search, Package, MapPin, X, ArrowLeft, TrendingUp, Barcode } from 'lucide-react';
+import { useConnection } from '../contexts/ConnectionContext';
 
 /* ─── helpers ─────────────────────────────────────────────── */
 
@@ -390,6 +391,7 @@ const ProductDetailSheet: React.FC<ProductDetailProps> = ({ product, marketName,
 /* ─── main page ───────────────────────────────────────────── */
 
 const MarketsPage: React.FC = () => {
+  const { isConnected } = useConnection();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
@@ -443,7 +445,7 @@ const MarketsPage: React.FC = () => {
 
   useEffect(() => {
     fetchMarkets();
-  }, []);
+  }, [isConnected]);
 
   // Lock body scroll whenever any sheet is open so the background page doesn't scroll
   useEffect(() => {

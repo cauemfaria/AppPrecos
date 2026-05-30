@@ -12,10 +12,11 @@ import LoginPage from './pages/LoginPage'
 import ConnectionModal from './components/ConnectionModal'
 import { useAuthStore } from './store/useAuthStore'
 import { useBackendConnection } from './hooks/useBackendConnection'
+import { ConnectionProvider } from './contexts/ConnectionContext'
 
 function App() {
   const { session, loading, initialize } = useAuthStore()
-  const { isConnected, isChecking, error, retry } = useBackendConnection()
+  const { isConnected, hasConnectedOnce, isChecking, error, retry } = useBackendConnection()
 
   // [] is correct — initialize is a stable Zustand action ref, never changes
   useEffect(() => {
@@ -44,25 +45,33 @@ function App() {
       return <LoginPage />
     }
 
-    // Step 3: Signed in, backend not yet available
-    if (!isConnected || isChecking) {
+    // Step 3: Signed in, backend not yet available for the first time
+    if (!hasConnectedOnce && (!isConnected || isChecking)) {
       return <ConnectionModal isChecking={isChecking} error={error} onRetry={retry} />
     }
 
-    // Step 4: Fully ready
+    // Step 4: Keep the app mounted after the first successful connection. If the
+    // backend later becomes unavailable, show the reconnect UI as an overlay.
     return (
-      <BrowserRouter>
-        <QueueManager />
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="scanner" element={<QRScannerPage />} />
-            <Route path="markets" element={<MarketsPage />} />
-            <Route path="shopping-list" element={<ShoppingListPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <ConnectionProvider isConnected={isConnected}>
+        <>
+          <BrowserRouter>
+            <QueueManager />
+            <Routes>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<DashboardPage />} />
+                <Route path="scanner" element={<QRScannerPage />} />
+                <Route path="markets" element={<MarketsPage />} />
+                <Route path="shopping-list" element={<ShoppingListPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+          {(!isConnected || isChecking) && (
+            <ConnectionModal isChecking={isChecking} error={error} onRetry={retry} />
+          )}
+        </>
+      </ConnectionProvider>
     )
   }
 
