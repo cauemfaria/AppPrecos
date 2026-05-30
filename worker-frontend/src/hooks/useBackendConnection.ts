@@ -1,33 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 
-// Plain instance — no auth interceptors so the health check works before any session exists
+// Plain instance — no auth interceptors so the health check works before any session exists.
 const healthApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://appprecos.onrender.com/api',
-  timeout: 8000,
+  timeout: 10_000,
 })
 
-/**
- * Exponential backoff schedule for initial "fast" retries.
- * Total covered window: ~50s, which handles Render free-tier cold starts (30–60s).
- * Index 0 is the delay after the 1st failure, index 4 after the 5th.
- */
-const FAST_BACKOFF_MS = [3_000, 5_000, 8_000, 13_000, 21_000]
-
-/** After all fast retries are exhausted, poll every 30s indefinitely. */
-const SLOW_RETRY_MS = 30_000
-
-/** Once connected, run a silent background health check on this interval. */
-const BACKGROUND_CHECK_MS = 60_000
+// While disconnected, poll quickly so we unblock the instant the server wakes from sleep.
+const RETRY_WHILE_DOWN_MS = 3_000
+// While healthy, verify periodically in the background.
+const VERIFY_WHILE_UP_MS = 25_000
+// Mid-session, require this many consecutive failures before blocking the UI
+// (avoids flicker on a single transient blip). The very first load blocks immediately.
+const FAILURES_BEFORE_BLOCK = 2
 
 export function useBackendConnection() {
   const [isConnected, setIsConnected] = useState(false)
-  const [isChecking, setIsChecking] = useState(true)
+  const [hasConnectedOnce, setHasConnectedOnce] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const mountedRef = useRef(true)
-  const attemptRef = useRef(0)
+  const inFlightRef = useRef(false)
+  const failuresRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Mirror of isConnected for scheduling decisions without stale closures.
+  const connectedRef = useRef(false)
 
   const clearTimer = () => {
     if (timerRef.current !== null) {
@@ -36,85 +34,90 @@ export function useBackendConnection() {
     }
   }
 
-  /**
-   * Core check function.
-   * @param background - When true, a successful check updates state silently; a failed
-   *   check surfaces the error and restarts the fast-retry cycle from the beginning.
-   *   When false (foreground), isChecking=true is set and progress messages are shown.
-   */
-  const checkConnection = useCallback(async (background = false) => {
-    if (!mountedRef.current) return
-
-    if (!background) {
-      setIsChecking(true)
-      // Keep the existing error message visible while retrying so the user
-      // can see "reconnecting (N/5)..." rather than a blank spinner
-    }
+  // The single source of truth. Always reschedules itself, so the loop can
+  // never silently die — recovery is guaranteed and fully automatic.
+  const check = useCallback(async () => {
+    if (!mountedRef.current || inFlightRef.current) return
+    inFlightRef.current = true
 
     try {
-      const response = await healthApi.get('/health')
-
+      const res = await healthApi.get('/health')
       if (!mountedRef.current) return
 
-      if (response.data?.connected === true) {
-        setIsConnected(true)
-        setIsChecking(false)
-        setError(null)
-        attemptRef.current = 0
-        // Schedule next silent background health check
-        clearTimer()
-        timerRef.current = setTimeout(() => checkConnection(true), BACKGROUND_CHECK_MS)
+      if (res.data?.connected === false) {
+        throw new Error('Backend reported not connected')
       }
+
+      // Success — unblock immediately.
+      failuresRef.current = 0
+      connectedRef.current = true
+      setIsConnected(true)
+      setHasConnectedOnce(true)
+      setError(null)
     } catch (err: unknown) {
       if (!mountedRef.current) return
 
-      if (background) {
-        // Background check failed — surface the modal and restart fast retries
+      failuresRef.current += 1
+      const offline = typeof navigator !== 'undefined' && !navigator.onLine
+      const timedOut = (err as { code?: string })?.code === 'ECONNABORTED'
+
+      // Block on the very first load (never connected) or after repeated failures.
+      if (!connectedRef.current || failuresRef.current >= FAILURES_BEFORE_BLOCK) {
+        connectedRef.current = false
         setIsConnected(false)
-        setIsChecking(false)
-        setError('Conexão com o servidor perdida.')
-        attemptRef.current = 0
-        clearTimer()
-        timerRef.current = setTimeout(() => checkConnection(false), FAST_BACKOFF_MS[0])
-        return
+        setError(
+          offline
+            ? 'Sem conexão com a internet. Aguardando reconexão...'
+            : timedOut
+              ? 'Servidor iniciando... Isso pode levar até 1 minuto.'
+              : 'Conectando ao servidor... Isso pode levar até 1 minuto.',
+        )
       }
-
-      // Foreground retry
-      attemptRef.current++
-      const isTimeout = (err as { code?: string })?.code === 'ECONNABORTED'
-      const reason = isTimeout ? 'Tempo esgotado' : 'Servidor inacessível'
-
-      if (attemptRef.current <= FAST_BACKOFF_MS.length) {
-        const delay = FAST_BACKOFF_MS[attemptRef.current - 1]
-        setError(`${reason} — reconectando (${attemptRef.current}/${FAST_BACKOFF_MS.length})...`)
-        setIsChecking(false)
+    } finally {
+      inFlightRef.current = false
+      if (mountedRef.current) {
         clearTimer()
-        timerRef.current = setTimeout(() => checkConnection(false), delay)
-      } else {
-        // Fast retries exhausted — keep trying slowly, indefinitely
-        setError('Servidor demorou para responder. Tentando novamente em instantes...')
-        setIsChecking(false)
-        clearTimer()
-        timerRef.current = setTimeout(() => checkConnection(false), SLOW_RETRY_MS)
+        // Poll fast while down or after any failure; slow only when fully healthy.
+        const healthy = connectedRef.current && failuresRef.current === 0
+        const delay = healthy ? VERIFY_WHILE_UP_MS : RETRY_WHILE_DOWN_MS
+        timerRef.current = setTimeout(check, delay)
       }
     }
   }, [])
 
-  /** Manual retry: resets the attempt counter and fires immediately. */
+  // Force an immediate check (manual button, regained focus, back online).
   const retry = useCallback(() => {
+    if (inFlightRef.current) return
     clearTimer()
-    attemptRef.current = 0
-    checkConnection(false)
-  }, [checkConnection])
+    check()
+  }, [check])
 
   useEffect(() => {
     mountedRef.current = true
-    checkConnection(false)
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') retry()
+    }
+
+    // Re-check the instant the user returns to the app or the network comes back.
+    // This is what makes "open the app after Render slept" recover on its own,
+    // without needing to leave and come back.
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', retry)
+    window.addEventListener('online', retry)
+
+    check()
+
     return () => {
       mountedRef.current = false
       clearTimer()
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', retry)
+      window.removeEventListener('online', retry)
     }
-  }, [])
+  }, [check, retry])
 
-  return { isConnected, isChecking, error, retry }
+  // isChecking stays true the whole time we are not connected, so the modal
+  // shows a continuous loading state rather than flickering into an error view.
+  return { isConnected, hasConnectedOnce, isChecking: !isConnected, error, retry }
 }
