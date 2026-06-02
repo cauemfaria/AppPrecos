@@ -17,7 +17,10 @@ const HomePage: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isConnected) return;
     let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
     marketService.getMarkets()
       .then(data => { if (!cancelled) setMarkets(data); })
       .catch(err => {

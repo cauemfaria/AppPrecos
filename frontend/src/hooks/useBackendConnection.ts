@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
+import { supabase } from '../lib/supabase'
+import { verifyBackendReady } from '../services/api'
 
 // Plain instance — no auth interceptors so the health check works before any session exists.
 const healthApi = axios.create({
@@ -48,7 +50,20 @@ export function useBackendConnection() {
         throw new Error('Backend reported not connected')
       }
 
-      // Success — unblock immediately.
+      // Health is OK — now probe the real authenticated API.
+      const needsRealProbe = !connectedRef.current || failuresRef.current > 0
+      if (needsRealProbe) {
+        // Check if the session is available (synchronously from localStorage).
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          // Health OK but session not yet available — reschedule, count no failure.
+          return
+        }
+        // Session exists — probe the authenticated API.
+        await verifyBackendReady()
+      }
+      if (!mountedRef.current) return
+
       failuresRef.current = 0
       connectedRef.current = true
       setIsConnected(true)

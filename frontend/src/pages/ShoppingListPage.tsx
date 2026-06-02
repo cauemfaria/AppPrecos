@@ -161,7 +161,10 @@ const ShoppingListPage: React.FC = () => {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { fetchMarkets(); }, [isConnected]);
+  useEffect(() => {
+    if (!isConnected) return;
+    fetchMarkets();
+  }, [isConnected]);
 
   // Lock body scroll when any sheet is open
   useEffect(() => {

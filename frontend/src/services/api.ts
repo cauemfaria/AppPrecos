@@ -72,6 +72,11 @@ api.interceptors.response.use(
   }
 );
 
+/** Verifies the authenticated backend API is ready (same probe as market lists). */
+export async function verifyBackendReady(): Promise<void> {
+  await api.get('/markets', { timeout: 15_000 });
+}
+
 export const marketService = {
   getMarkets: async () => {
     const response = await api.get<Market[]>('/markets');

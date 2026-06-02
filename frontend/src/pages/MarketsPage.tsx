@@ -444,6 +444,8 @@ const MarketsPage: React.FC = () => {
   }, [selectedMarket]);
 
   useEffect(() => {
+    if (!isConnected) return;
+    setLoading(true);
     fetchMarkets();
   }, [isConnected]);
 

@@ -22,6 +22,7 @@ const QueueManager: React.FC = () => {
 
   // Stale item cleanup + initial backend sync (refetch when connection restores)
   useEffect(() => {
+    if (!isConnected) return;
     const init = async () => {
       const now = Date.now();
       const current = useStore.getState().processingQueue;
