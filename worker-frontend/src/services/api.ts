@@ -7,8 +7,10 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://appprecos.onr
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 30000,
 });
 
 // Attach JWT to every request. Uses getSessionSafe so a stalled auth lock can
