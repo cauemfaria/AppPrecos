@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import { supabase } from '../lib/supabase'
+import { getSessionSafe } from '../lib/supabase'
 import { verifyBackendReady } from '../services/api'
 
 // Plain instance — no auth interceptors so the health check works before any session exists.
@@ -53,10 +53,11 @@ export function useBackendConnection() {
       // Health is OK — now probe the real authenticated API.
       const needsRealProbe = !connectedRef.current || failuresRef.current > 0
       if (needsRealProbe) {
-        // Check if the session is available (synchronously from localStorage).
-        const { data: { session } } = await supabase.auth.getSession()
+        // Read the session in a way that can never hang (see getSessionSafe).
+        const session = await getSessionSafe()
         if (!session) {
-          // Health OK but session not yet available — reschedule, count no failure.
+          // Health OK but session not yet available (or auth read stalled) —
+          // reschedule without counting a failure so the loop keeps polling.
           return
         }
         // Session exists — probe the authenticated API.

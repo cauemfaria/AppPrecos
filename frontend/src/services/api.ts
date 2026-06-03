@@ -12,7 +12,7 @@ import type {
   BestMarketsResponse,
   PriceHistoryResponse
 } from '../types';
-import { supabase } from '../lib/supabase';
+import { supabase, getSessionSafe } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Use environment variable for API base URL, fallback to existing one
@@ -26,9 +26,10 @@ const api = axios.create({
   timeout: 30000, // 30 second timeout
 });
 
-// Attach JWT to every request
+// Attach JWT to every request. Uses getSessionSafe so a stalled auth lock can
+// never hang an outgoing request before it even reaches the network.
 api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getSessionSafe();
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
   }

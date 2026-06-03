@@ -36,11 +36,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event: AuthChangeEvent, session: Session | null) => {
+      (_event: AuthChangeEvent, session: Session | null) => {
         set({ session, user: session?.user ?? null, loading: false })
         if (session?.user) {
-          const profile = await fetchProfile(session.user.id)
-          set({ profile })
+          // Defer the profile fetch OUT of this callback. supabase-js holds an
+          // internal auth lock while the callback runs; calling another supabase
+          // method (the profiles query) synchronously here can deadlock the lock,
+          // hanging every future getSession()/token refresh until a full reload.
+          const userId = session.user.id
+          setTimeout(() => {
+            fetchProfile(userId).then((profile) => set({ profile }))
+          }, 0)
         } else {
           set({ profile: null })
         }

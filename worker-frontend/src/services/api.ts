@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { Market, SaveScanResponse } from '../types';
-import { supabase } from '../lib/supabase';
+import { supabase, getSessionSafe } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://appprecos.onrender.com/api';
@@ -11,9 +11,10 @@ const api = axios.create({
   timeout: 15000,
 });
 
-// Attach JWT to every request
+// Attach JWT to every request. Uses getSessionSafe so a stalled auth lock can
+// never hang an outgoing request before it even reaches the network.
 api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getSessionSafe();
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
   }
