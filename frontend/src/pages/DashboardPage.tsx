@@ -158,27 +158,27 @@ const QueueItem: React.FC<{ item: ProcessingItem }> = ({ item }) => {
 
 const DashboardPage: React.FC = () => {
   const { processingQueue: rawQueue } = useStore();
-  const { totalScans, credits, loading: statsLoading } = useUserStats();
+  const { totalScans, credits } = useUserStats();
   const processingQueue = rawQueue.filter(item => item.status !== 'duplicate');
 
   const stats = useMemo(
     () => [
       {
         label: 'Total Escaneados',
-        value: statsLoading ? '…' : String(totalScans),
+        value: String(totalScans),
         icon: Receipt,
         accent: 'var(--color-primary)',
         bg: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))',
       },
       {
         label: 'Créditos',
-        value: statsLoading ? '…' : String(credits),
+        value: String(credits),
         icon: Coins,
         accent: 'var(--color-cta)',
         bg: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))',
       },
     ],
-    [totalScans, credits, statsLoading],
+    [totalScans, credits],
   );
 
   return (

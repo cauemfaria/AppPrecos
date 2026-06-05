@@ -11,7 +11,7 @@ const HomePage: React.FC = () => {
   const { isConnected } = useConnection();
   const navigate = useNavigate();
   const { selectedMarket, setSelectedMarket, recentScans } = useStore();
-  const { totalScans, credits, loading: statsLoading } = useUserStats();
+  const { totalScans, credits } = useUserStats();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -250,7 +250,7 @@ const HomePage: React.FC = () => {
             className="text-2xl font-bold"
             style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
           >
-            {statsLoading ? '…' : totalScans}
+            {totalScans}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
             Total Escaneados
@@ -275,7 +275,7 @@ const HomePage: React.FC = () => {
             className="text-2xl font-bold"
             style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-cta)' }}
           >
-            {statsLoading ? '…' : credits}
+            {credits}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
             Créditos
