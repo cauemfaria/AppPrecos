@@ -28,7 +28,21 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: true,
 
   initialize: () => {
+    // Safety watchdog: on mobile after a long sleep, supabase.auth.getSession()
+    // can stall while refreshing an expired token (holds the auth lock during a
+    // slow network request). onAuthStateChange waits on the same lock, so both
+    // paths that clear `loading` can be stuck. After 8s, force loading=false so
+    // the user sees the connection modal or login instead of an infinite spinner.
+    // When the refresh eventually completes, onAuthStateChange fires and correctly
+    // restores the session without requiring a manual refresh.
+    let settled = false
+    const watchdog = setTimeout(() => {
+      if (!settled) set({ loading: false })
+    }, 8000)
+
     supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
+      settled = true
+      clearTimeout(watchdog)
       set({ session, user: session?.user ?? null, loading: false })
       if (session?.user) {
         fetchProfile(session.user.id).then(profile => set({ profile }))
@@ -37,6 +51,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, session: Session | null) => {
+        settled = true
+        clearTimeout(watchdog)
         set({ session, user: session?.user ?? null, loading: false })
         if (session?.user) {
           // Defer the profile fetch OUT of this callback. supabase-js holds an
@@ -53,7 +69,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      clearTimeout(watchdog)
+      subscription.unsubscribe()
+    }
   },
 
   setProfile: (profile: Profile | null) => set({ profile }),
