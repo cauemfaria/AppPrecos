@@ -1,28 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useStore } from '../store/useStore';
+import { useUserStats } from '../hooks/useUserStats';
 import {
   CheckCircle2, XCircle, Clock,
   AlertCircle,
   Receipt, Coins, Store,
 } from 'lucide-react';
 import type { ProcessingItem } from '../types';
-
-const STATS = [
-  {
-    label: 'Total Escaneados',
-    value: '142',
-    icon: Receipt,
-    accent: 'var(--color-primary)',
-    bg: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))',
-  },
-  {
-    label: 'Créditos',
-    value: '85',
-    icon: Coins,
-    accent: 'var(--color-cta)',
-    bg: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))',
-  },
-];
 
 // Extract a short readable label from a NFCe URL
 const domainFromUrl = (url: string) => {
@@ -174,7 +158,28 @@ const QueueItem: React.FC<{ item: ProcessingItem }> = ({ item }) => {
 
 const DashboardPage: React.FC = () => {
   const { processingQueue: rawQueue } = useStore();
+  const { totalScans, credits, loading: statsLoading } = useUserStats();
   const processingQueue = rawQueue.filter(item => item.status !== 'duplicate');
+
+  const stats = useMemo(
+    () => [
+      {
+        label: 'Total Escaneados',
+        value: statsLoading ? '…' : String(totalScans),
+        icon: Receipt,
+        accent: 'var(--color-primary)',
+        bg: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))',
+      },
+      {
+        label: 'Créditos',
+        value: statsLoading ? '…' : String(credits),
+        icon: Coins,
+        accent: 'var(--color-cta)',
+        bg: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))',
+      },
+    ],
+    [totalScans, credits, statsLoading],
+  );
 
   return (
     <div
@@ -196,7 +201,7 @@ const DashboardPage: React.FC = () => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
-        {STATS.map(({ label, value, icon: Icon, accent, bg }) => (
+        {stats.map(({ label, value, icon: Icon, accent, bg }) => (
           <div
             key={label}
             className="rounded-xl p-4"

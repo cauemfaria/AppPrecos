@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, ScanBarcode, ChevronDown, Barcode, MapPin, AlertCircle } from 'lucide-react';
+import { Store, ScanBarcode, ChevronDown, Barcode, MapPin, AlertCircle, Receipt, Coins } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useUserStats } from '../hooks/useUserStats';
 import { marketService } from '../services/api';
 import { useConnection } from '../contexts/ConnectionContext';
 import type { Market } from '../types';
@@ -9,7 +10,8 @@ import type { Market } from '../types';
 const HomePage: React.FC = () => {
   const { isConnected } = useConnection();
   const navigate = useNavigate();
-  const { selectedMarket, setSelectedMarket, scanCount, recentScans } = useStore();
+  const { selectedMarket, setSelectedMarket, recentScans } = useStore();
+  const { totalScans, credits, loading: statsLoading } = useUserStats();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -240,18 +242,18 @@ const HomePage: React.FC = () => {
         >
           <div
             className="flex items-center justify-center w-9 h-9 rounded-lg mb-3"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))' }}
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
           >
-            <ScanBarcode className="w-5 h-5" style={{ color: 'var(--color-cta)' }} />
+            <Receipt className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
           </div>
           <p
             className="text-2xl font-bold"
-            style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-cta)' }}
+            style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
           >
-            {scanCount}
+            {statsLoading ? '…' : totalScans}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-            Produtos Escaneados
+            Total Escaneados
           </p>
         </div>
 
@@ -265,19 +267,18 @@ const HomePage: React.FC = () => {
         >
           <div
             className="flex items-center justify-center w-9 h-9 rounded-lg mb-3"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' }}
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-cta) 8%, var(--color-surface))' }}
           >
-            <Store className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+            <Coins className="w-5 h-5" style={{ color: 'var(--color-cta)' }} />
           </div>
           <p
-            className="text-lg font-bold truncate"
-            style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}
-            title={selectedMarket?.name}
+            className="text-2xl font-bold"
+            style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-cta)' }}
           >
-            {selectedMarket ? selectedMarket.name : 'Nenhum'}
+            {statsLoading ? '…' : credits}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-            Mercado Ativo
+            Créditos
           </p>
         </div>
       </div>
