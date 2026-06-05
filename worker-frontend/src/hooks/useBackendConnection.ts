@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { getSessionSafe } from '../lib/supabase'
-import { useAuthStore } from '../store/useAuthStore'
 import { verifyBackendReady } from '../services/api'
 
 // Plain instance — no auth interceptors so the health check works before any session exists.
@@ -54,19 +53,14 @@ export function useBackendConnection() {
       // Health is OK — now probe the real authenticated API.
       const needsRealProbe = !connectedRef.current || failuresRef.current > 0
       if (needsRealProbe) {
-        const { session: storeSession, loading: authLoading } = useAuthStore.getState()
-        // Wait until auth bootstrap finishes so we don't false-negative on getSessionSafe.
-        if (authLoading) return
-
-        let session = storeSession
-        if (!session) {
-          session = await getSessionSafe()
-        }
+        // Read the session in a way that can never hang (see getSessionSafe).
+        const session = await getSessionSafe()
         if (!session) {
           // Health OK but session not yet available (or auth read stalled) —
           // reschedule without counting a failure so the loop keeps polling.
           return
         }
+        // Session exists — probe the authenticated API.
         await verifyBackendReady()
       }
       if (!mountedRef.current) return
